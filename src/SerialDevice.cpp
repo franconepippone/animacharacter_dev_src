@@ -31,7 +31,8 @@ bool _debug_triggerLargeTx(SerialDevice* dev) {
     delay(100);
     _debug_blink_builtin(20, 20);
     delay(100);
-    static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
+    //static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
+    static const char text[] = "ad";
 
     auto size = dev->sendLarge((byte*)text, sizeof(text), 5);
     delay(1000);
@@ -56,6 +57,12 @@ bool _handlePing(SerialDevice* dev) {
     return false;
 }
 
+bool _handleInfoRqst(SerialDevice* dev) {
+    _debug_blink_builtin(20, 20);
+    dev->sendLarge((byte*)BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON), PACKID_DEV_INFO_RESP);
+    return false;
+}
+
 
 
 // ======================= SERIAL DEVICE IMPLEMENTATION =======================
@@ -67,6 +74,8 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     // assigns internal callbacks
     on(PACKID_IDENT_RQST, _handleAuthRqst);
     on(PACKID_PING, _handlePing);
+    on(PACKID_DEV_INFO_RQST, _handleInfoRqst);
+    // assign debug triggers callbacks
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
     on(PACKID_DEBUG_TRIGGER_LARGE_TX, _debug_triggerLargeTx);
     txf.begin(*ser);

@@ -13,13 +13,15 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 #define LARGE_TRANSFER_CHUNK_SIZE 20
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 
-// ======================= DEFAULT PACKET IDs =======================
+// ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
-// default packets IDs (reserved 200-220)
+// default packets IDs (reserved 200-219)
 #define PACKID_IDENT_RQST 200
 #define PACKID_IDENT_RESP 201
 #define PACKID_DIAGNOSTIC 202
 #define PACKID_PING 203
+#define PACKID_DEV_INFO_RQST 209
+#define PACKID_DEV_INFO_RESP 210
 // packets for large transfer
 #define PACKID_LARGETX_BEGIN 204
 #define PACKID_LARGETX_CHUNK 205
@@ -27,9 +29,9 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 #define PACKID_LARGETX_ACK 207
 #define PACKID_LARGETX_END 208
 
-// debug hooks
-#define PACKID_DEBUG_TRIGGER_IDENT_RQST 210
-#define PACKID_DEBUG_TRIGGER_LARGE_TX 211
+// debug hooks (reserved 220-230)
+#define PACKID_DEBUG_TRIGGER_IDENT_RQST 220
+#define PACKID_DEBUG_TRIGGER_LARGE_TX 221
 
 /*  THESE FUNCTIONS ARE INTERNAL AND NOT NEEDED IN THIS FILE, WHY PUT THEM HERE AT ALL?
 // ======================= DEBUG FUNCTIONS =======================

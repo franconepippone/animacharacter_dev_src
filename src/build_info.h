@@ -87,7 +87,7 @@
 /* =========================================================
  * JSON build info string
  * ========================================================= */
-static const char BUILD_INFO_JSON[] BI_STORAGE =
+static const char BUILD_INFO_JSON[] =
 "{"
   "\"build\":{"
     "\"date\":\"" __DATE__ "\"," 
