@@ -2,13 +2,15 @@
 #include <Arduino.h>
 #include "SerialTransfer.h"
 
-// ======================= STRUCTS / TYPEDEFS =======================
+// ======================= CONSTANTS / TYPEDEFS =======================
 
 class SerialDevice;
 
 typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
 typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t pack_id);
+
+#define LARGE_TRANSFER_CHUNK_SIZE 240
 
 // ======================= DEFAULT PACKET IDs =======================
 
@@ -55,6 +57,8 @@ private:
     PacketHandler handlers[MAX_HANDLERS] = {nullptr};
     WidePacketHandler baseHandler = nullptr;
     LargePacketHandler largeRecvHandler = nullptr;
+    byte* largeRxBuff = nullptr;
+    uint32_t largeRxBuffSize = 0;
 
 public:
     SerialTransfer txf;
@@ -76,8 +80,11 @@ public:
     // Registers a handler function for any received packet from Large Transfers
     void onLargeRecv(LargePacketHandler handler);
     
+    // Assigns a buffer to store packets received from Large Transfers (required for LT to work)
+    void bindLargeRxBuff(byte* buffer, uint32_t maxSize);
+
     // polls the serial stream and calls the appropriate handler if a full packet has been received.
-    // If no handler was called, returns the amount of payload bytes read from the buffer
+    // If no handler was called, returns the amount of payload bytes in the buffer.
     uint8_t poll();
 
     // Sends an identification request to peer; returns true if peer responded
@@ -85,6 +92,9 @@ public:
 
     // Blocks execution until a packet is received, returns remaining time until timeout
     uint64_t waitPacket(uint64_t timeoutMs);
+
+    // Similar to wait packet, excepts it waits for a packet of specific id (ignores all other packets)
+    uint64_t waitPacketOfId(uint8_t packId, uint64_t timeoutMs);
 
     // Parses incoming serial data. Returns amount of payload bytes if successful
     // NOTE: This bypasses handlers! Use this if you want to process packets manually,
@@ -105,19 +115,21 @@ public:
 
     // ======================= LARGE TRANSFER PROTOCOL =======================
 
-    auto sendLarge(const byte *buffer, size_t size, uint8_t packId = 0);
+    uint32_t sendLarge(const byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 5000);
 
     // ======================= RECEIVE API =======================
 
     template <typename T>
+    // recv arbitrary object from rx buffer
     size_t recvPacket(T& obj);
 
+    // recv bytes from rx buffer
     size_t recvBytes(byte* dst, size_t cap);
 
-    void recvPacket(char* dst, size_t cap);
+    size_t recvPacket(char* dst, size_t cap);
 
     template <size_t N>
-    void recvPacket(char (&dst)[N]);
+    size_t recvPacket(char (&dst)[N]);
 
     // clears buffers and resets the device
     void reset();

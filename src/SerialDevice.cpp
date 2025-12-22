@@ -1,6 +1,19 @@
 #include <Arduino.h>
 #include "SerialDevice.h"
 
+// structure of large transfer begin message
+struct LargePckBeginFrame {
+    uint32_t totSize;
+    uint32_t numChunks;
+};
+
+// structure of large transfer chunk
+struct LargePckChunkFrame {
+    uint32_t chunkN;
+    byte* payload;
+};
+
+
 // ======================= DEBUG FUNCTIONS =======================
 
 bool _debug_blink_builtin(int times, int period) {
@@ -42,6 +55,7 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     : ser(&serial)
 {
     strncpy(deviceName, name, sizeof(deviceName));
+    // assigns internal callbacks
     on(PACKID_IDENT_RQST, _handleAuthRqst);
     on(PACKID_PING, _handlePing);
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
@@ -60,6 +74,15 @@ void SerialDevice::on(uint8_t packetId, PacketHandler handler) {
 
 void SerialDevice::onAny(WidePacketHandler handler) {
     baseHandler = handler;
+}
+
+void SerialDevice::onLargeRecv(LargePacketHandler handler) {
+    largeRecvHandler = handler;
+}
+
+void SerialDevice::bindLargeRxBuff(byte* buffer, uint32_t maxSize) {
+    largeRxBuff = buffer;
+    largeRxBuffSize = maxSize;
 }
 
 uint8_t SerialDevice::poll() {
@@ -84,6 +107,10 @@ uint8_t SerialDevice::available() {
 bool SerialDevice::requestPeername(uint32_t timeoutMs) {
     sendPacket(deviceName, PACKID_IDENT_RQST);
 
+    auto remaining = waitPacketOfId(PACKID_IDENT_RESP, timeoutMs);
+    if (!remaining) return false;
+    recvPacket(peerName); 
+
     while (1) {
         timeoutMs = waitPacket(timeoutMs);
         if (!timeoutMs) return false;
@@ -92,6 +119,18 @@ bool SerialDevice::requestPeername(uint32_t timeoutMs) {
         if (packId == PACKID_IDENT_RESP) {
             recvPacket(peerName);
             return true;
+        }
+    }
+}
+
+uint64_t SerialDevice::waitPacketOfId(uint8_t packId, uint64_t timeoutMs) {
+    while (1) {
+        timeoutMs = waitPacket(timeoutMs);
+        if (!timeoutMs) return 0;
+
+        const uint8_t id = txf.currentPacketID();
+        if (packId == id) {
+            return timeoutMs;
         }
     }
 }
@@ -132,6 +171,19 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
     return sendBytes((byte*)str, size, packId);
 }
 
+// ======================= LARGE TRANSFER =======================
+ 
+
+uint32_t SerialDevice::sendLarge(const byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 5000) {
+    
+    uint32_t numChunks = size / LARGE_TRANSFER_CHUNK_SIZE;
+    LargePckBeginFrame temp = {size, numChunks};
+    sendPacket(temp, PACKID_LARGETX_BEGIN);
+
+    waitPacket()
+}
+
+
 // ======================= RECEIVE API =======================
 
 template <typename T>
@@ -145,7 +197,7 @@ size_t SerialDevice::recvBytes(byte* dst, size_t cap) {
     return n;
 }
 
-void SerialDevice::recvPacket(char* dst, size_t cap) {
+size_t SerialDevice::recvPacket(char* dst, size_t cap) {
     if (!dst || !cap) return;
 
     size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
@@ -153,15 +205,17 @@ void SerialDevice::recvPacket(char* dst, size_t cap) {
 
     memcpy(dst, txf.packet.rxBuff, n);
     dst[n] = '\0';
+    return n;
 }
 
 template <size_t N>
-void SerialDevice::recvPacket(char (&dst)[N]) {
+size_t SerialDevice::recvPacket(char (&dst)[N]) {
     size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
     if (n >= N) n = N - 1;
 
     memcpy(dst, txf.packet.rxBuff, n);
     dst[n] = '\0';
+    return n;
 }
 
 // ======================= RESET =======================
