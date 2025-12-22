@@ -10,7 +10,7 @@ typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
 typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
-#define LARGE_TRANSFER_CHUNK_SIZE 240
+#define LARGE_TRANSFER_CHUNK_SIZE 20
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 
 // ======================= DEFAULT PACKET IDs =======================
@@ -31,6 +31,7 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 210
 #define PACKID_DEBUG_TRIGGER_LARGE_TX 211
 
+/*  THESE FUNCTIONS ARE INTERNAL AND NOT NEEDED IN THIS FILE, WHY PUT THEM HERE AT ALL?
 // ======================= DEBUG FUNCTIONS =======================
 
 // Blinks the built-in LED a number of times
@@ -41,10 +42,11 @@ bool _debug_triggerIdent(SerialDevice* dev);
 
 // ======================= DEFAULT PACK HANDLERS =======================
 // Handler for ping
-bool handlePing(SerialDevice* dev);
+bool _handlePing(SerialDevice* dev);
 
 // Handler for device identification protocol
 bool handleAuthRqst(SerialDevice* dev);
+*/
 
 // ======================= SERIAL DEVICE CLASS =======================
 

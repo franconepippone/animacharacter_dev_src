@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "SerialDevice.h"
-
+#include "build_info.h"
 
 // ======================= DEBUG FUNCTIONS =======================
 
@@ -31,13 +31,9 @@ bool _debug_triggerLargeTx(SerialDevice* dev) {
     delay(100);
     _debug_blink_builtin(20, 20);
     delay(100);
-    const int SIZE = 15;
-    byte buffer[SIZE];
+    static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
 
-    for (int i = 0; i < SIZE; i++) {
-        buffer[i] = (byte)random(0, 256);  // random byte 0–255
-    }
-    auto size = dev->sendLarge(buffer, 15, 5);
+    auto size = dev->sendLarge((byte*)text, sizeof(text), 5);
     delay(1000);
     _debug_blink_builtin(20, 20);
     delay(100);
@@ -59,6 +55,7 @@ bool _handlePing(SerialDevice* dev) {
     if (respond) dev->sendPacket(false, PACKID_PING);
     return false;
 }
+
 
 
 // ======================= SERIAL DEVICE IMPLEMENTATION =======================
@@ -230,20 +227,12 @@ size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32
 
         for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
             // fills the tx buffer
-            auto idx1 = txObj(offset);
-            _debug_blink_builtin(idx1, 200);
-            delay(500);
-            idx1 = txBytes(buffer + offset, chunkSize);
-            _debug_blink_builtin(idx1, 250);
-            delay(500);
+            txObj(offset);
+            txBytes(buffer + offset, chunkSize);
             send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
-            _debug_blink_builtin(idx1, 200);
 
             rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
-            if (rmning) {
-                delay(50);
-                break;
-            }
+            if (rmning) break;
         }
         if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
         offset += chunkSize;
