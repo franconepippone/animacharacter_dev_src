@@ -8,7 +8,7 @@ class SerialDevice;
 
 typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
-typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t pack_id);
+typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
 #define LARGE_TRANSFER_CHUNK_SIZE 240
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
@@ -29,11 +29,12 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t pack_id);
 
 // debug hooks
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 210
+#define PACKID_DEBUG_TRIGGER_LARGE_TX 211
 
 // ======================= DEBUG FUNCTIONS =======================
 
 // Blinks the built-in LED a number of times
-bool _debug_blink_builtin(int times, int period = 100);
+void _debug_blink_builtin(int times, int period = 100);
 
 // used to trigger device to perform a peername request (used for debugging)
 bool _debug_triggerIdent(SerialDevice* dev);
@@ -133,7 +134,7 @@ public:
 
     // ======================= LARGE TRANSFER PROTOCOL =======================
 
-    uint32_t sendLarge(const byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 5000);
+    size_t sendLarge(byte *buffer, size_t size, uint8_t packId = 0, uint32_t timeoutMs = 500);
 
     // ======================= RECEIVE API =======================
 

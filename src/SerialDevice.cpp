@@ -1,16 +1,10 @@
 #include <Arduino.h>
 #include "SerialDevice.h"
 
-// structure of large transfer begin message
-struct __attribute__((packed)) LargePckBeginFrame {
-    uint32_t totSize;
-    uint32_t numChunks;
-};
-
 
 // ======================= DEBUG FUNCTIONS =======================
 
-bool _debug_blink_builtin(int times, int period) {
+void _debug_blink_builtin(int times, int period) {
     for (int i = 0; i < times; i++) {
         digitalWrite(13, HIGH);
         delay(period);
@@ -26,6 +20,28 @@ bool _debug_triggerIdent(SerialDevice* dev) {
     dev->sendPacket(dev->peerName);
     _debug_blink_builtin(20, 20);
     delay(100);
+    return false;
+}
+
+bool _debug_onLargeRx(byte* buff, size_t size, uint8_t packId) {
+    _debug_blink_builtin(packId, 200);
+} 
+
+bool _debug_triggerLargeTx(SerialDevice* dev) {
+    delay(100);
+    _debug_blink_builtin(20, 20);
+    delay(100);
+    const int SIZE = 15;
+    byte buffer[SIZE];
+
+    for (int i = 0; i < SIZE; i++) {
+        buffer[i] = (byte)random(0, 256);  // random byte 0–255
+    }
+    auto size = dev->sendLarge(buffer, 15, 5);
+    delay(1000);
+    _debug_blink_builtin(20, 20);
+    delay(100);
+    return false;
 }
 
 // ======================== DEFAULT CALLBACKS ========================
@@ -33,6 +49,7 @@ bool _debug_triggerIdent(SerialDevice* dev) {
 bool _handleAuthRqst(SerialDevice* dev) {
     dev->recvPacket(dev->peerName); // stores name string in the peerName variable 
     dev->sendPacket(dev->deviceName, PACKID_IDENT_RESP);
+    return false;
 }
 
 bool _handlePing(SerialDevice* dev) {
@@ -40,6 +57,7 @@ bool _handlePing(SerialDevice* dev) {
     bool respond;
     dev->recvPacket(respond);
     if (respond) dev->sendPacket(false, PACKID_PING);
+    return false;
 }
 
 
@@ -53,6 +71,7 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     on(PACKID_IDENT_RQST, _handleAuthRqst);
     on(PACKID_PING, _handlePing);
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
+    on(PACKID_DEBUG_TRIGGER_LARGE_TX, _debug_triggerLargeTx);
     txf.begin(*ser);
 }
 
@@ -104,7 +123,7 @@ bool SerialDevice::requestPeername(uint32_t timeoutMs) {
     auto remaining = waitPacketOfId(PACKID_IDENT_RESP, timeoutMs);
     if (!remaining) return false;
     recvPacket(peerName); 
-
+    return true;
 }
 
 uint64_t SerialDevice::waitPacketOfId(uint8_t packId, uint64_t timeoutMs) {
@@ -137,13 +156,13 @@ inline void SerialDevice::clearTxBuff() {
     txBuffNextIdx = 0;
 }
 
-// appends object bytes in the tx buffer (returns 0, fails if buffer overflow)
+// appends object bytes in the tx buffer (returns 0 and fails if buffer overflow)
 // returns next index (always non-zero) if ok
 template <typename T>
 uint8_t SerialDevice::txObj(T& obj, const uint16_t &len = sizeof(T)) {
     if (len + txBuffNextIdx > sizeof(txf.packet.txBuff)) return 0; //overflow
 
-    txBuffNextIdx = txf.txObj(obj, len);
+    txBuffNextIdx = txf.txObj(obj, txBuffNextIdx, len);
     return txBuffNextIdx; 
 }
 
@@ -157,10 +176,10 @@ uint8_t SerialDevice::txBytes(byte* buff, size_t size) {
 }
 
 // sends all bytes in the tx buffer, and clears the buffer
-uint8_t SerialDevice::send(uint8_t packId = 0) {
+uint8_t SerialDevice::send(uint8_t packId) {
     auto tmp = txf.sendData(txBuffNextIdx, packId);
     clearTxBuff();
-    return;
+    return tmp;
 }
 
 // ======================= SEND API =======================
@@ -191,10 +210,9 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
 // ======================= LARGE TRANSFER =======================
  
 
-size_t SerialDevice::sendLarge(const byte *buffer, size_t size, uint8_t packId = 0, uint32_t timeoutMs = 500) {
-    uint32_t numChunks = size / LARGE_TRANSFER_CHUNK_SIZE;
-    LargePckBeginFrame temp = {size, numChunks};
-    sendPacket(temp, PACKID_LARGETX_BEGIN);
+size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32_t timeoutMs) {
+    //uint32_t numChunks = size / LARGE_TRANSFER_CHUNK_SIZE;
+    sendBytes((byte*)&size, sizeof(size), PACKID_LARGETX_BEGIN);
 
     auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
     if (!rmning) return 0;  // if response times out
@@ -204,30 +222,35 @@ size_t SerialDevice::sendLarge(const byte *buffer, size_t size, uint8_t packId =
     if (!transfOk) return 0;
 
     uint32_t offset = 0;
-
+    size_t chunkSize;
     while (offset < size)
     {
-        size_t chunkSize = min(LARGE_TRANSFER_CHUNK_SIZE, size - offset);
-        // fills the tx buffer
-        auto nxtIdx = txf.txObj(offset);
-        memcpy((byte*)buffer + offset, txf.packet.rxBuff + nxtIdx, chunkSize);
+        chunkSize = min(LARGE_TRANSFER_CHUNK_SIZE, size - offset);
+        clearTxBuff(); // make sure tx buffer is clear
 
         for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
-            txf.sendData(sizeof(offset) + chunkSize, PACKID_LARGETX_CHUNK);
-            
+            // fills the tx buffer
+            auto idx1 = txObj(offset);
+            _debug_blink_builtin(idx1, 200);
+            delay(500);
+            idx1 = txBytes(buffer + offset, chunkSize);
+            _debug_blink_builtin(idx1, 250);
+            delay(500);
+            send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
+            _debug_blink_builtin(idx1, 200);
+
             rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
-            if (rmning) break;
+            if (rmning) {
+                delay(50);
+                break;
+            }
         }
         if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
         offset += chunkSize;
     }
 
-    sendPacket()
-
-
-    }
-
-    
+    sendPacket(packId, PACKID_LARGETX_END);
+    return offset + chunkSize;
 }
 
 
@@ -245,7 +268,7 @@ size_t SerialDevice::recvBytes(byte* dst, size_t cap) {
 }
 
 size_t SerialDevice::recvPacket(char* dst, size_t cap) {
-    if (!dst || !cap) return;
+    if (!dst || !cap) return 0;
 
     size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
     if (n >= cap) n = cap - 1;
