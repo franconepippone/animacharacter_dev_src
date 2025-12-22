@@ -2,15 +2,9 @@
 #include "SerialDevice.h"
 
 // structure of large transfer begin message
-struct LargePckBeginFrame {
+struct __attribute__((packed)) LargePckBeginFrame {
     uint32_t totSize;
     uint32_t numChunks;
-};
-
-// structure of large transfer chunk
-struct LargePckChunkFrame {
-    uint32_t chunkN;
-    byte* payload;
 };
 
 
@@ -111,16 +105,6 @@ bool SerialDevice::requestPeername(uint32_t timeoutMs) {
     if (!remaining) return false;
     recvPacket(peerName); 
 
-    while (1) {
-        timeoutMs = waitPacket(timeoutMs);
-        if (!timeoutMs) return false;
-
-        const uint8_t packId = txf.currentPacketID();
-        if (packId == PACKID_IDENT_RESP) {
-            recvPacket(peerName);
-            return true;
-        }
-    }
 }
 
 uint64_t SerialDevice::waitPacketOfId(uint8_t packId, uint64_t timeoutMs) {
@@ -144,6 +128,39 @@ uint64_t SerialDevice::waitPacket(uint64_t timeoutMs) {
         if (available()) return remaining;
     }
     return 0;
+}
+
+// ======================= TX + SEND API (inspired to original library) =======================
+
+// clear the tx buffer (just resets the internal pointer)
+inline void SerialDevice::clearTxBuff() {
+    txBuffNextIdx = 0;
+}
+
+// appends object bytes in the tx buffer (returns 0, fails if buffer overflow)
+// returns next index (always non-zero) if ok
+template <typename T>
+uint8_t SerialDevice::txObj(T& obj, const uint16_t &len = sizeof(T)) {
+    if (len + txBuffNextIdx > sizeof(txf.packet.txBuff)) return 0; //overflow
+
+    txBuffNextIdx = txf.txObj(obj, len);
+    return txBuffNextIdx; 
+}
+
+// appends bytes in the tx buffer
+uint8_t SerialDevice::txBytes(byte* buff, size_t size) {
+    if (size + txBuffNextIdx > sizeof(txf.packet.txBuff)) return 0; //overflow
+    
+    memcpy(txf.packet.txBuff + txBuffNextIdx, buff, size);
+    txBuffNextIdx += size;
+    return txBuffNextIdx;
+}
+
+// sends all bytes in the tx buffer, and clears the buffer
+uint8_t SerialDevice::send(uint8_t packId = 0) {
+    auto tmp = txf.sendData(txBuffNextIdx, packId);
+    clearTxBuff();
+    return;
 }
 
 // ======================= SEND API =======================
@@ -174,13 +191,43 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
 // ======================= LARGE TRANSFER =======================
  
 
-uint32_t SerialDevice::sendLarge(const byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 5000) {
-    
+size_t SerialDevice::sendLarge(const byte *buffer, size_t size, uint8_t packId = 0, uint32_t timeoutMs = 500) {
     uint32_t numChunks = size / LARGE_TRANSFER_CHUNK_SIZE;
     LargePckBeginFrame temp = {size, numChunks};
     sendPacket(temp, PACKID_LARGETX_BEGIN);
 
-    waitPacket()
+    auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
+    if (!rmning) return 0;  // if response times out
+
+    bool transfOk; // if peer has agreed to the transfer 
+    recvPacket(transfOk);
+    if (!transfOk) return 0;
+
+    uint32_t offset = 0;
+
+    while (offset < size)
+    {
+        size_t chunkSize = min(LARGE_TRANSFER_CHUNK_SIZE, size - offset);
+        // fills the tx buffer
+        auto nxtIdx = txf.txObj(offset);
+        memcpy((byte*)buffer + offset, txf.packet.rxBuff + nxtIdx, chunkSize);
+
+        for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
+            txf.sendData(sizeof(offset) + chunkSize, PACKID_LARGETX_CHUNK);
+            
+            rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
+            if (rmning) break;
+        }
+        if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
+        offset += chunkSize;
+    }
+
+    sendPacket()
+
+
+    }
+
+    
 }
 
 

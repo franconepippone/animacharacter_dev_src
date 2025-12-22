@@ -11,6 +11,7 @@ typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
 typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t pack_id);
 
 #define LARGE_TRANSFER_CHUNK_SIZE 240
+#define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 
 // ======================= DEFAULT PACKET IDs =======================
 
@@ -22,8 +23,9 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t pack_id);
 // packets for large transfer
 #define PACKID_LARGETX_BEGIN 204
 #define PACKID_LARGETX_CHUNK 205
-#define PACKID_LARGETX_ACK 206
-#define PACKID_LARGETX_END
+#define PACKID_LARGETX_BEGIN_RESP 206
+#define PACKID_LARGETX_ACK 207
+#define PACKID_LARGETX_END 208
 
 // debug hooks
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 210
@@ -59,6 +61,7 @@ private:
     LargePacketHandler largeRecvHandler = nullptr;
     byte* largeRxBuff = nullptr;
     uint32_t largeRxBuffSize = 0;
+    size_t txBuffNextIdx = 0;   // used with txObj, txBytes, send (keeps track of objects in tx buff)
 
 public:
     SerialTransfer txf;
@@ -100,6 +103,21 @@ public:
     // NOTE: This bypasses handlers! Use this if you want to process packets manually,
     // otherwise, use poll()
     inline uint8_t available();
+
+    // ======================= TX + SEND API (inspired to original library) =======================
+
+    // clear the tx buffer (just resets the internal pointer)
+    void clearTxBuff();
+
+    // appends object bytes in the tx buffer
+    template <typename T>
+    uint8_t txObj(T& obj, const uint16_t &len = sizeof(T));
+
+    // copies and appends bytes in the tx buffer
+    uint8_t txBytes(byte* buff, size_t len);
+
+    // sends all bytes in the tx buffer, and clears the buffer
+    uint8_t send(uint8_t packId = 0);
 
     // ======================= SEND API =======================
 
