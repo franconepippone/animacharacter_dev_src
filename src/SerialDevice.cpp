@@ -1,6 +1,20 @@
 #include <Arduino.h>
 #include "SerialDevice.h"
 #include "build_info.h"
+#include <Hashtable.h>
+
+// for some reasons on these architectures min and max are renamed _min and _max, so we just redefine them here
+#if defined(ESP8266) || defined(ESP32)
+
+  #ifndef min
+    #define min(a,b) ((a) < (b) ? (a) : (b))
+  #endif
+
+  #ifndef max
+    #define max(a,b) ((a) > (b) ? (a) : (b))
+  #endif
+
+#endif
 
 // ======================= DEBUG FUNCTIONS =======================
 
@@ -25,6 +39,7 @@ bool _debug_triggerIdent(SerialDevice* dev) {
 
 bool _debug_onLargeRx(byte* buff, size_t size, uint8_t packId) {
     _debug_blink_builtin(packId, 200);
+    return false;
 } 
 
 bool _debug_triggerLargeTx(SerialDevice* dev) {
@@ -58,7 +73,6 @@ bool _handlePing(SerialDevice* dev) {
 }
 
 bool _handleInfoRqst(SerialDevice* dev) {
-    _debug_blink_builtin(20, 20);
     dev->sendLarge((byte*)BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON), PACKID_DEV_INFO_RESP);
     return false;
 }
@@ -165,9 +179,9 @@ inline void SerialDevice::clearTxBuff() {
 // appends object bytes in the tx buffer (returns 0 and fails if buffer overflow)
 // returns next index (always non-zero) if ok
 template <typename T>
-uint8_t SerialDevice::txObj(T& obj, const uint16_t &len = sizeof(T)) {
+uint8_t SerialDevice::txObj(T& obj, const uint16_t &len) {
     if (len + txBuffNextIdx > sizeof(txf.packet.txBuff)) return 0; //overflow
-
+    
     txBuffNextIdx = txf.txObj(obj, txBuffNextIdx, len);
     return txBuffNextIdx; 
 }

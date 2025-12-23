@@ -10,8 +10,9 @@ typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
 typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
-#define LARGE_TRANSFER_CHUNK_SIZE 20
+#define LARGE_TRANSFER_CHUNK_SIZE 240
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
+
 
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
