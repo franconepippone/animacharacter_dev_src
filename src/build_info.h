@@ -70,24 +70,23 @@
 #endif
 
 /* =========================================================
- * PROGMEM selection
+ * PROGMEM selection for cross-platform compatibility
  * ========================================================= */
-#if defined(ESP32) || defined(ESP8266)
-  // These boards allow memory-mapped PROGMEM access
+#if defined(ARDUINO_ARCH_AVR)
+  #include <avr/pgmspace.h>
+  #define BI_STORAGE PROGMEM
+#elif defined(ESP8266) || defined(ESP32)
   #include <pgmspace.h>
   #define BI_STORAGE PROGMEM
-#elif defined(ARDUINO_ARCH_AVR)
-  // AVR requires copying → fallback to RAM
-  #define BI_STORAGE
 #else
-  // Other architectures: normal RAM
   #define BI_STORAGE
 #endif
+
 
 /* =========================================================
  * JSON build info string
  * ========================================================= */
-static const char BUILD_INFO_JSON[] =
+static const char BUILD_INFO_JSON[] BI_STORAGE =
 "{"
   "\"build\":{"
     "\"date\":\"" __DATE__ "\"," 
@@ -104,3 +103,18 @@ static const char BUILD_INFO_JSON[] =
     "\"cpu\":\"" BI_CPU_FREQ "\""
   "}"
 "}";
+
+
+/* =========================================================
+ * Optional: raw pointer accessor
+ * Copies to buffer you provide (size must be >= sizeof(BUILD_INFO_JSON))
+ * ========================================================= */
+inline void getBuildInfoJson(char* outBuffer, size_t bufferSize) {
+    if (bufferSize < sizeof(BUILD_INFO_JSON)) return;
+#if defined(ARDUINO_ARCH_AVR)
+    // progmem is not memory mapped on AVR, we need to copy
+    memcpy_P(outBuffer, BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON));
+#else
+    memcpy(outBuffer, BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON));
+#endif
+}

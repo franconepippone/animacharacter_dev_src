@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "SerialTransfer.h"
+#include <Hashtable.h>
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
@@ -12,7 +13,7 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
 #define LARGE_TRANSFER_CHUNK_SIZE 240
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
-
+#define MAX_PACK_ID 255 // 0-255
 
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
@@ -34,35 +35,17 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 220
 #define PACKID_DEBUG_TRIGGER_LARGE_TX 221
 
-/*  THESE FUNCTIONS ARE INTERNAL AND NOT NEEDED IN THIS FILE, WHY PUT THEM HERE AT ALL?
-// ======================= DEBUG FUNCTIONS =======================
-
-// Blinks the built-in LED a number of times
-void _debug_blink_builtin(int times, int period = 100);
-
-// used to trigger device to perform a peername request (used for debugging)
-bool _debug_triggerIdent(SerialDevice* dev);
-
-// ======================= DEFAULT PACK HANDLERS =======================
-// Handler for ping
-bool _handlePing(SerialDevice* dev);
-
-// Handler for device identification protocol
-bool handleAuthRqst(SerialDevice* dev);
-*/
-
 // ======================= SERIAL DEVICE CLASS =======================
 
 /// @brief Allows interaction over a serial stream in a packet oriented way. Uses the SerialTransfer object from
 /// SerialTransfer library (features packetized serial transactions up to payloads of 254 bytes,
-/// using of COBS and CRC). This class has better support for callback-based usage and device identification, and aims
-/// at slightly improving ease-of-use. 
+/// using of COBS and CRC). This class has better support for callback-based usage, device identification, and
+// large data transfers (automatic fragmentation into packets), aiming at slightly improving ease-of-use. 
 /// SerialTransfer repository: https://github.com/PowerBroker2/SerialTransfer
 class SerialDevice {
 private:
-
-    static const int MAX_HANDLERS = 256;  // category IDs are bytes
-    PacketHandler handlers[MAX_HANDLERS] = {nullptr};
+    // forced to use int instead of uint8_t, because there's no builting template specialization in the library
+    Hashtable<int, PacketHandler> handlersTable;
     WidePacketHandler baseHandler = nullptr;
     LargePacketHandler largeRecvHandler = nullptr;
     byte* largeRxBuff = nullptr;

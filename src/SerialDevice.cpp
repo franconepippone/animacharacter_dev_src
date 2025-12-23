@@ -5,15 +5,8 @@
 
 // for some reasons on these architectures min and max are renamed _min and _max, so we just redefine them here
 #if defined(ESP8266) || defined(ESP32)
-
-  #ifndef min
     #define min(a,b) ((a) < (b) ? (a) : (b))
-  #endif
-
-  #ifndef max
     #define max(a,b) ((a) > (b) ? (a) : (b))
-  #endif
-
 #endif
 
 // ======================= DEBUG FUNCTIONS =======================
@@ -46,10 +39,10 @@ bool _debug_triggerLargeTx(SerialDevice* dev) {
     delay(100);
     _debug_blink_builtin(20, 20);
     delay(100);
-    //static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
-    static const char text[] = "ad";
+    static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
+    //static const char text[] = "ad";
 
-    auto size = dev->sendLarge((byte*)text, sizeof(text), 5);
+    dev->sendLarge((byte*)text, sizeof(text), 5);
     delay(1000);
     _debug_blink_builtin(20, 20);
     delay(100);
@@ -73,7 +66,10 @@ bool _handlePing(SerialDevice* dev) {
 }
 
 bool _handleInfoRqst(SerialDevice* dev) {
-    dev->sendLarge((byte*)BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON), PACKID_DEV_INFO_RESP);
+    // NOTE that this may cause stack overflow
+    static char jsonInfoBuff[sizeof(BUILD_INFO_JSON)];
+    getBuildInfoJson(jsonInfoBuff, sizeof(BUILD_INFO_JSON));
+    dev->sendLarge((byte*)jsonInfoBuff, sizeof(jsonInfoBuff), PACKID_DEV_INFO_RESP);
     return false;
 }
 
@@ -100,8 +96,8 @@ void SerialDevice::begin(unsigned long baud) {
 }
 
 void SerialDevice::on(uint8_t packetId, PacketHandler handler) {
-    if (packetId < MAX_HANDLERS) {
-        handlers[packetId] = handler;
+    if (packetId <= MAX_PACK_ID) {
+        handlersTable.put(packetId, handler);
     }
 }
 
@@ -122,8 +118,9 @@ uint8_t SerialDevice::poll() {
     uint8_t amount = available();
     if (amount) {
         const uint8_t latestPackId = txf.currentPacketID();
-        if (handlers[latestPackId]) {
-            handlers[latestPackId](this);
+        PacketHandler *hndlr = handlersTable.get(latestPackId);
+        if (hndlr) {
+            (*hndlr)(this);
             return 0;
         } else if (baseHandler) {
             baseHandler(latestPackId, this);
@@ -163,7 +160,7 @@ uint64_t SerialDevice::waitPacket(uint64_t timeoutMs) {
     uint64_t remaining = timeoutMs;
     while (remaining) {
         auto elapsed = millis() - start;
-        remaining = max(0, timeoutMs - elapsed);
+        remaining = max((uint64_t)0, timeoutMs - elapsed);
         if (available()) return remaining;
     }
     return 0;
@@ -245,7 +242,7 @@ size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32
     size_t chunkSize;
     while (offset < size)
     {
-        chunkSize = min(LARGE_TRANSFER_CHUNK_SIZE, size - offset);
+        chunkSize = min((size_t)LARGE_TRANSFER_CHUNK_SIZE, size - offset);
         clearTxBuff(); // make sure tx buffer is clear
 
         for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
