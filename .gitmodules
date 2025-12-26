@@ -1,0 +1,3 @@
+[submodule "libs/pySerialTransfer"]
+	path = libs/pySerialTransfer
+	url = https://github.com/franconepippone/pySerialTransfer
