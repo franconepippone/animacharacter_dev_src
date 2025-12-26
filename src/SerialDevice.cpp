@@ -239,7 +239,7 @@ size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32
     if (!transfOk) return 0;
 
     uint32_t offset = 0;
-    size_t chunkSize;
+    size_t chunkSize = 0;
     while (offset < size)
     {
         chunkSize = min((size_t)LARGE_TRANSFER_CHUNK_SIZE, size - offset);
