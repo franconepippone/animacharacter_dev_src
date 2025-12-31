@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include "SerialTransfer.h"
 #include <Hashtable.h>
+#include <timer/Timer.h>
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
@@ -11,9 +12,16 @@ typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
 typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
+#define LARGERX_CHUNK_TIMEOUT_MS 3000 // large transfer chunks can be received at max 3 seconds apart
 #define LARGE_TRANSFER_CHUNK_SIZE 240
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 #define MAX_PACK_ID 255 // 0-255
+
+// keep track of large transfer rx state
+enum LargeRxState {
+    IDLE = 0,
+    RECVING = 1,
+};
 
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
@@ -47,12 +55,19 @@ private:
     // forced to use int instead of uint8_t, because there's no builting template specialization in the library
     Hashtable<int, PacketHandler> handlersTable;
     WidePacketHandler baseHandler = nullptr;
-    LargePacketHandler largeRecvHandler = nullptr;
-    byte* largeRxBuff = nullptr;
-    uint32_t largeRxBuffSize = 0;
     size_t txBuffNextIdx = 0;   // used with txObj, txBytes, send (keeps track of objects in tx buff)
+    // attributes for large transfer rx state machine
+    
+    public:
+    // consider making this a private struct
+    struct {
+        Timer timer = Timer(LARGERX_CHUNK_TIMEOUT_MS); // 500ms timeout for large transfer reception
+        LargeRxState state = LargeRxState::IDLE;
+        byte* RxBuff = nullptr;
+        uint32_t RxBuffSize = 0;
+        LargePacketHandler RecvHandler = nullptr;
+    } largeRxCtx;
 
-public:
     SerialTransfer txf;
     char peerName[32] = "";
     char deviceName[32]; // used for authentication with the other device.

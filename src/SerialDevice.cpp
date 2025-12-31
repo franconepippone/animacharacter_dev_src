@@ -2,6 +2,7 @@
 #include "SerialDevice.h"
 #include "build_info.h"
 #include <Hashtable.h>
+#include <timer/Timer.h>
 
 // for some reasons on these architectures min and max are renamed _min and _max, so we just redefine them here
 #if defined(ESP8266) || defined(ESP32)
@@ -73,7 +74,101 @@ bool _handleInfoRqst(SerialDevice* dev) {
     return false;
 }
 
+// ======= FOR LARGE SERIAL TRANSFER RX ========
 
+bool _handleLargeTxBegin(SerialDevice* dev) {
+    /*
+    This is the packet used by the peer device to initate a large transfer
+    from him to us. We are expecting the payload to be a unit32 representing
+    the total size of the large payload to be sent.
+    We respond with a single byte packet: 1 = ok to receive, 0 = cannot receive
+    */
+
+    // reads size of incoming transfer
+    uint32_t size;
+    dev->recvPacket(size);
+    // checks if buffer is bound and large enough
+    if (!dev->largeRxCtx.RxBuff && dev->largeRxCtx.RxBuffSize < size) {
+        // send negative response
+        dev->sendPacket((uint8_t)0, PACKID_LARGETX_BEGIN_RESP);
+        return false;
+    }
+    // prepares internal state for receiving
+    dev->largeRxCtx.state = LargeRxState::RECVING;
+    // send positive response
+    dev->sendPacket((uint8_t)1, PACKID_LARGETX_BEGIN_RESP);
+    dev->largeRxCtx.timer.start(LARGERX_CHUNK_TIMEOUT_MS); // start timeout timer
+    return false;
+}
+
+bool _handleLargeTxChunk(SerialDevice* dev) {
+    /*
+    This handler is called when a chunk of a large transfer is received.
+    The payload contains the chunk data.
+    We need to copy it into the bound buffer at the correct offset,
+    and send an ack packet back to the sender.
+    */
+
+    // checks if we are in receiving state
+    if (dev->largeRxCtx.state != LargeRxState::RECVING) {
+        // ignore packet
+        return false;
+    }
+
+    if (dev->largeRxCtx.timer.timedOut()) {
+        // timeout occurred, reset state
+        // too much time as passed since last chunk, transfer invalidated
+        dev->largeRxCtx.state = LargeRxState::IDLE;
+        return false;
+    }
+
+    // reads chunk into buffer at correct offset
+    size_t offset;
+    dev->recvPacket(offset); // first read offset
+
+    // subtract 4 bytes used by offset itself
+    size_t chunkSize = dev->txf.packet.bytesRead - 4;
+    // clamp chunk size if offset + chunkSize exceeds buffer size
+    if (dev->largeRxCtx.RxBuff) {
+        chunkSize = min(chunkSize, (size_t)(dev->largeRxCtx.RxBuffSize - offset));
+    }
+    // check again if pointer is set (redundant, just for safety)
+    if (dev->largeRxCtx.RxBuff) {
+        memcpy(dev->largeRxCtx.RxBuff + offset, dev->txf.packet.txBuff + 4, chunkSize);
+    }
+
+    // send ack with attached chunk size (not used for now)
+    dev->sendPacket(chunkSize, PACKID_LARGETX_ACK);
+    
+    // restart timeout timer
+    dev->largeRxCtx.timer.start(LARGERX_CHUNK_TIMEOUT_MS);
+    return false;
+}
+
+bool _handleLargeTxEnd(SerialDevice* dev) {
+    /*
+    This handler is called when the sender indicates the end of a large transfer.
+    We just need to reset our internal state.
+    */
+
+    // checks if we are in receiving state
+    if (dev->largeRxCtx.state != LargeRxState::RECVING) {
+        // ignore packet
+        return false;
+    }
+
+    uint8_t packId;
+    dev->recvPacket(packId); // original packet id
+
+    // this should always be true at this point
+    if (dev->largeRxCtx.RecvHandler) {
+        // call user handler for large transfers
+        dev->largeRxCtx.RecvHandler(dev->largeRxCtx.RxBuff, dev->largeRxCtx.RxBuffSize, packId);
+    }
+    // reset state
+    dev->largeRxCtx.state = LargeRxState::IDLE;
+    return false;
+}
 
 // ======================= SERIAL DEVICE IMPLEMENTATION =======================
 
@@ -106,12 +201,12 @@ void SerialDevice::onAny(WidePacketHandler handler) {
 }
 
 void SerialDevice::onLargeRecv(LargePacketHandler handler) {
-    largeRecvHandler = handler;
+    largeRxCtx.RecvHandler = handler;
 }
 
 void SerialDevice::bindLargeRxBuff(byte* buffer, uint32_t maxSize) {
-    largeRxBuff = buffer;
-    largeRxBuffSize = maxSize;
+    largeRxCtx.RxBuff = buffer;
+    largeRxCtx.RxBuffSize = maxSize;
 }
 
 uint8_t SerialDevice::poll() {
