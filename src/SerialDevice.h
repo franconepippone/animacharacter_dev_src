@@ -6,11 +6,13 @@
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
+void _debug_blink_builtin(int times, int period);
+
 class SerialDevice;
 
 typedef bool (*PacketHandler)(SerialDevice*);
 typedef bool (*WidePacketHandler)(uint8_t, SerialDevice*);
-typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
+typedef void (*LargePacketHandler)(SerialDevice* dev, byte *buffer, uint32_t size, uint8_t packId);
 
 #define LARGERX_CHUNK_TIMEOUT_MS 3000 // large transfer chunks can be received at max 3 seconds apart
 #define LARGE_TRANSFER_CHUNK_SIZE 240
@@ -19,7 +21,7 @@ typedef void (*LargePacketHandler)(byte *buffer, size_t size, uint8_t packId);
 
 // keep track of large transfer rx state
 enum LargeRxState {
-    IDLE = 0,
+    READY = 0,
     RECVING = 1,
 };
 
@@ -58,14 +60,15 @@ private:
     size_t txBuffNextIdx = 0;   // used with txObj, txBytes, send (keeps track of objects in tx buff)
     // attributes for large transfer rx state machine
     
-    public:
+public:
     // consider making this a private struct
     struct {
         Timer timer = Timer(LARGERX_CHUNK_TIMEOUT_MS); // 500ms timeout for large transfer reception
-        LargeRxState state = LargeRxState::IDLE;
+        LargeRxState state = LargeRxState::READY;
         byte* RxBuff = nullptr;
         uint32_t RxBuffSize = 0;
         LargePacketHandler RecvHandler = nullptr;
+        uint32_t ExpectedSize = 0;
     } largeRxCtx;
 
     SerialTransfer txf;
@@ -88,7 +91,7 @@ private:
     void onLargeRecv(LargePacketHandler handler);
     
     // Assigns a buffer to store packets received from Large Transfers (required for LT to work)
-    void bindLargeRxBuff(byte* buffer, uint32_t maxSize);
+    void configLargeRx(byte* buffer, uint32_t maxSize);
 
     // polls the serial stream and calls the appropriate handler if a full packet has been received.
     // If no handler was called, returns the amount of payload bytes in the buffer.
@@ -137,7 +140,7 @@ private:
 
     // ======================= LARGE TRANSFER PROTOCOL =======================
 
-    size_t sendLarge(byte *buffer, size_t size, uint8_t packId = 0, uint32_t timeoutMs = 500);
+    uint32_t sendLarge(byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 500, uint8_t chunkSize = LARGE_TRANSFER_CHUNK_SIZE);
 
     // ======================= RECEIVE API =======================
 

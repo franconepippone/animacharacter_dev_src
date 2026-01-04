@@ -10,15 +10,28 @@
     #define max(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-// ======================= DEBUG FUNCTIONS =======================
+#if defined(ESP8266) || defined(ESP32)
+  #define LED_ON  LOW
+  #define LED_OFF HIGH
+#else
+  #define LED_ON  HIGH
+  #define LED_OFF LOW
+#endif
+
+
+// you can define IGNORE_SERIAL_DEVICE_DEBUG_CODE to completely remove debug code, slithly lighter binary
+#ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
+// =====defined================== DEBUG FUNCTIONS =======================
 
 void _debug_blink_builtin(int times, int period) {
+    pinMode(LED_BUILTIN, OUTPUT);
     for (int i = 0; i < times; i++) {
-        digitalWrite(13, HIGH);
+        digitalWrite(LED_BUILTIN, LED_ON);
         delay(period);
-        digitalWrite(13, LOW);
+        digitalWrite(LED_BUILTIN, LED_OFF);
         delay(period);
     }
+    digitalWrite(LED_BUILTIN, LED_OFF);
 }
 
 bool _debug_triggerIdent(SerialDevice* dev) {
@@ -26,29 +39,32 @@ bool _debug_triggerIdent(SerialDevice* dev) {
     dev->requestPeername(1000);
     _debug_blink_builtin(5, 200);
     dev->sendPacket(dev->peerName);
+    delay(200);
     _debug_blink_builtin(20, 20);
     delay(100);
     return false;
 }
 
-bool _debug_onLargeRx(byte* buff, size_t size, uint8_t packId) {
+void _debug_onLargeRx(SerialDevice* dev, byte* buff, uint32_t size, uint8_t packId) {
     _debug_blink_builtin(packId, 200);
-    return false;
+    dev->sendBytes(buff, size, packId);
 } 
 
 bool _debug_triggerLargeTx(SerialDevice* dev) {
     delay(100);
     _debug_blink_builtin(20, 20);
     delay(100);
-    static const char text[] = "Hello! This msg was sent using LargeTransfer; if you see this, LT from ME to YOU is ok!";
+    static const char text[] = "Hi from large transfer!";
     //static const char text[] = "ad";
 
-    dev->sendLarge((byte*)text, sizeof(text), 5);
+    dev->sendLarge((byte*)text, sizeof(text), 5, 500, 3);
     delay(1000);
     _debug_blink_builtin(20, 20);
     delay(100);
     return false;
 }
+
+#endif
 
 // ======================== DEFAULT CALLBACKS ========================
 
@@ -84,11 +100,17 @@ bool _handleLargeTxBegin(SerialDevice* dev) {
     We respond with a single byte packet: 1 = ok to receive, 0 = cannot receive
     */
 
+    // guards against invalid states and reset state if timer has timed out
+    if (dev->largeRxCtx.timer.timedOut()) dev->largeRxCtx.state = LargeRxState::READY;
+    if (dev->largeRxCtx.state != LargeRxState::READY) return false;
+
     // reads size of incoming transfer
     uint32_t size;
     dev->recvPacket(size);
+    dev->largeRxCtx.ExpectedSize = size;
+
     // checks if buffer is bound and large enough
-    if (!dev->largeRxCtx.RxBuff && dev->largeRxCtx.RxBuffSize < size) {
+    if (!dev->largeRxCtx.RxBuff || dev->largeRxCtx.RxBuffSize < size) {
         // send negative response
         dev->sendPacket((uint8_t)0, PACKID_LARGETX_BEGIN_RESP);
         return false;
@@ -97,7 +119,7 @@ bool _handleLargeTxBegin(SerialDevice* dev) {
     dev->largeRxCtx.state = LargeRxState::RECVING;
     // send positive response
     dev->sendPacket((uint8_t)1, PACKID_LARGETX_BEGIN_RESP);
-    dev->largeRxCtx.timer.start(LARGERX_CHUNK_TIMEOUT_MS); // start timeout timer
+    dev->largeRxCtx.timer.start(); // start timeout timer
     return false;
 }
 
@@ -109,53 +131,43 @@ bool _handleLargeTxChunk(SerialDevice* dev) {
     and send an ack packet back to the sender.
     */
 
-    // checks if we are in receiving state
-    if (dev->largeRxCtx.state != LargeRxState::RECVING) {
-        // ignore packet
-        return false;
-    }
+    // too much time as passed since last chunk, transfer invalidated
+    if (dev->largeRxCtx.timer.timedOut()) dev->largeRxCtx.state = LargeRxState::READY;
+    if (dev->largeRxCtx.state != LargeRxState::RECVING) return false;
 
-    if (dev->largeRxCtx.timer.timedOut()) {
-        // timeout occurred, reset state
-        // too much time as passed since last chunk, transfer invalidated
-        dev->largeRxCtx.state = LargeRxState::IDLE;
-        return false;
-    }
-
-    // reads chunk into buffer at correct offset
-    size_t offset;
+    uint32_t offset;
     dev->recvPacket(offset); // first read offset
 
     // subtract 4 bytes used by offset itself
-    size_t chunkSize = dev->txf.packet.bytesRead - 4;
+    uint32_t chunkSize = dev->txf.packet.bytesRead - 4;
     // clamp chunk size if offset + chunkSize exceeds buffer size
     if (dev->largeRxCtx.RxBuff) {
-        chunkSize = min(chunkSize, (size_t)(dev->largeRxCtx.RxBuffSize - offset));
+        chunkSize = min(chunkSize, (uint32_t)(dev->largeRxCtx.RxBuffSize - offset));
+    } else {
+        // transfer is invalid, no valid buffer
+        //dev->largeRxCtx.state = LargeRxState::READY;
+        return false;
     }
-    // check again if pointer is set (redundant, just for safety)
-    if (dev->largeRxCtx.RxBuff) {
-        memcpy(dev->largeRxCtx.RxBuff + offset, dev->txf.packet.txBuff + 4, chunkSize);
-    }
-
+    // this is guarded by the previous check, so we don't write into invaid memory
+    dev->recvBytes(dev->largeRxCtx.RxBuff + offset, chunkSize);
+    
     // send ack with attached chunk size (not used for now)
     dev->sendPacket(chunkSize, PACKID_LARGETX_ACK);
     
     // restart timeout timer
-    dev->largeRxCtx.timer.start(LARGERX_CHUNK_TIMEOUT_MS);
+    dev->largeRxCtx.timer.start();
     return false;
 }
 
 bool _handleLargeTxEnd(SerialDevice* dev) {
     /*
-    This handler is called when the sender indicates the end of a large transfer.
-    We just need to reset our internal state.
+    This handler is called when the sender indicates the end of a large transfer,
+    it resets the internal state and calls the user handler if assigned.
     */
 
-    // checks if we are in receiving state
-    if (dev->largeRxCtx.state != LargeRxState::RECVING) {
-        // ignore packet
-        return false;
-    }
+    // too much time as passed since last chunk, transfer invalidated
+    if (dev->largeRxCtx.timer.timedOut()) dev->largeRxCtx.state = LargeRxState::READY;
+    if (dev->largeRxCtx.state != LargeRxState::RECVING) return false;
 
     uint8_t packId;
     dev->recvPacket(packId); // original packet id
@@ -163,10 +175,10 @@ bool _handleLargeTxEnd(SerialDevice* dev) {
     // this should always be true at this point
     if (dev->largeRxCtx.RecvHandler) {
         // call user handler for large transfers
-        dev->largeRxCtx.RecvHandler(dev->largeRxCtx.RxBuff, dev->largeRxCtx.RxBuffSize, packId);
+        dev->largeRxCtx.RecvHandler(dev, dev->largeRxCtx.RxBuff, dev->largeRxCtx.ExpectedSize, packId);
     }
     // reset state
-    dev->largeRxCtx.state = LargeRxState::IDLE;
+    dev->largeRxCtx.state = LargeRxState::READY;
     return false;
 }
 
@@ -180,10 +192,18 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     on(PACKID_IDENT_RQST, _handleAuthRqst);
     on(PACKID_PING, _handlePing);
     on(PACKID_DEV_INFO_RQST, _handleInfoRqst);
+    on(PACKID_LARGETX_BEGIN, _handleLargeTxBegin);
+    on(PACKID_LARGETX_CHUNK, _handleLargeTxChunk);
+    on(PACKID_LARGETX_END, _handleLargeTxEnd);
+    txf.begin(*ser);
+
+    #ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
     // assign debug triggers callbacks
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
     on(PACKID_DEBUG_TRIGGER_LARGE_TX, _debug_triggerLargeTx);
-    txf.begin(*ser);
+    // assign debug large rx handler (this is ment to be overwritten by user)
+    onLargeRecv(_debug_onLargeRx);
+    #endif
 }
 
 void SerialDevice::begin(unsigned long baud) {
@@ -204,7 +224,7 @@ void SerialDevice::onLargeRecv(LargePacketHandler handler) {
     largeRxCtx.RecvHandler = handler;
 }
 
-void SerialDevice::bindLargeRxBuff(byte* buffer, uint32_t maxSize) {
+void SerialDevice::configLargeRx(byte* buffer, uint32_t maxSize) {
     largeRxCtx.RxBuff = buffer;
     largeRxCtx.RxBuffSize = maxSize;
 }
@@ -315,16 +335,17 @@ uint8_t SerialDevice::sendPacket(const T& obj, uint8_t packId) {
 }
 
 uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
-    uint16_t size = strlen(str);
+    uint16_t size = strnlen(str, 254);
     return sendBytes((byte*)str, size, packId);
 }
 
 // ======================= LARGE TRANSFER =======================
  
 
-size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32_t timeoutMs) {
-    //uint32_t numChunks = size / LARGE_TRANSFER_CHUNK_SIZE;
-    sendBytes((byte*)&size, sizeof(size), PACKID_LARGETX_BEGIN);
+uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, uint32_t timeoutMs, uint8_t chunkSize) 
+{
+    sendPacket(size, PACKID_LARGETX_BEGIN);
+    //sendBytes((byte*)&size, sizeof(size), PACKID_LARGETX_BEGIN);
 
     auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
     if (!rmning) return 0;  // if response times out
@@ -334,27 +355,27 @@ size_t SerialDevice::sendLarge(byte *buffer, size_t size, uint8_t packId, uint32
     if (!transfOk) return 0;
 
     uint32_t offset = 0;
-    size_t chunkSize = 0;
+    uint32_t actualChunkSize = 0;
     while (offset < size)
     {
-        chunkSize = min((size_t)LARGE_TRANSFER_CHUNK_SIZE, size - offset);
+        actualChunkSize = min((uint32_t)chunkSize, size - offset);
         clearTxBuff(); // make sure tx buffer is clear
 
         for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
             // fills the tx buffer
             txObj(offset);
-            txBytes(buffer + offset, chunkSize);
+            txBytes(buffer + offset, actualChunkSize);
             send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
 
             rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
             if (rmning) break;
         }
         if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
-        offset += chunkSize;
+        offset += actualChunkSize;
     }
 
     sendPacket(packId, PACKID_LARGETX_END);
-    return offset + chunkSize;
+    return offset + actualChunkSize;
 }
 
 
