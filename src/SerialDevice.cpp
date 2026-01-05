@@ -109,7 +109,7 @@ bool _handleLargeTxBegin(SerialDevice* dev) {
     if (dev->largeRxCtx.state != LargeRxState::READY) return false;
 
     // reads size of incoming transfer
-    uint32_t size;
+    uint32_t size = UINT32_MAX;
     dev->recvPacket(size);
     dev->largeRxCtx.ExpectedSize = size;
 
@@ -139,7 +139,7 @@ bool _handleLargeTxChunk(SerialDevice* dev) {
     if (dev->largeRxCtx.timer.timedOut()) dev->largeRxCtx.state = LargeRxState::READY;
     if (dev->largeRxCtx.state != LargeRxState::RECVING) return false;
 
-    uint32_t offset;
+    uint32_t offset = 0;
     dev->recvPacket(offset); // first read offset
     offset = min(offset, dev->largeRxCtx.RxBuffSize); // makes sure offset is not out of bounds
 
@@ -177,7 +177,7 @@ bool _handleLargeTxEnd(SerialDevice* dev) {
     if (dev->largeRxCtx.timer.timedOut()) dev->largeRxCtx.state = LargeRxState::READY;
     if (dev->largeRxCtx.state != LargeRxState::RECVING) return false;
 
-    uint8_t packId;
+    uint8_t packId = PACKID_INVALID_PACKET;
     dev->recvPacket(packId); // original packet id
 
     // this should always be true at this point

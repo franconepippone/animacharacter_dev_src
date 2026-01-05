@@ -34,6 +34,8 @@ enum LargeRxState {
 #define PACKID_PING 203
 #define PACKID_DEV_INFO_RQST 209
 #define PACKID_DEV_INFO_RESP 210
+#define PACKID_INVALID_PACKET 211
+
 // packets for large transfer
 #define PACKID_LARGETX_BEGIN 204
 #define PACKID_LARGETX_CHUNK 205
