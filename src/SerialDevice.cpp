@@ -51,7 +51,7 @@ bool _debug_triggerIdent(SerialDevice* dev) {
 
 void _debug_onLargeRx(SerialDevice* dev, byte* buff, uint32_t size, uint8_t packId) {
     _debug_blink_builtin(packId, 200);
-    dev->sendBytes(buff, size, packId);
+    dev->sendBytes(buff, max(255, size), packId);
 } 
 
 bool _debug_triggerLargeTx(SerialDevice* dev) {
@@ -180,12 +180,12 @@ bool _handleLargeTxEnd(SerialDevice* dev) {
     uint8_t packId = PACKID_INVALID_PACKET;
     dev->recvPacket(packId); // original packet id
 
-    // this should always be true at this point
     if (dev->largeRxCtx.RecvHandler) {
         // call user handler for large transfers
         dev->largeRxCtx.RecvHandler(dev, dev->largeRxCtx.RxBuff, dev->largeRxCtx.ExpectedSize, packId);
     }
     // reset state
+    dev->largeRxCtx.timer.fire();
     dev->largeRxCtx.state = LargeRxState::READY;
     return false;
 }
