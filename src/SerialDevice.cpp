@@ -19,8 +19,9 @@
 #endif
 
 
+//#define IGNORE_SERIAL_DEVICE_DEBUG_CODE
+
 // you can define IGNORE_SERIAL_DEVICE_DEBUG_CODE to completely remove debug code, slithly lighter binary
-#ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 // =====defined================== DEBUG FUNCTIONS =======================
 
 void _debug_blink_builtin(int times, int period) {
@@ -33,6 +34,9 @@ void _debug_blink_builtin(int times, int period) {
     }
     digitalWrite(LED_BUILTIN, LED_OFF);
 }
+
+
+#ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
 bool _debug_triggerIdent(SerialDevice* dev) {
     _debug_blink_builtin(20, 20);
@@ -137,20 +141,24 @@ bool _handleLargeTxChunk(SerialDevice* dev) {
 
     uint32_t offset;
     dev->recvPacket(offset); // first read offset
+    offset = min(offset, dev->largeRxCtx.RxBuffSize); // makes sure offset is not out of bounds
 
     // subtract 4 bytes used by offset itself
     uint32_t chunkSize = dev->txf.packet.bytesRead - 4;
     // clamp chunk size if offset + chunkSize exceeds buffer size
     if (dev->largeRxCtx.RxBuff) {
+        // this can be at min 0
         chunkSize = min(chunkSize, (uint32_t)(dev->largeRxCtx.RxBuffSize - offset));
     } else {
         // transfer is invalid, no valid buffer
-        //dev->largeRxCtx.state = LargeRxState::READY;
+        dev->largeRxCtx.timer.fire();
+        dev->largeRxCtx.state = LargeRxState::READY;
         return false;
     }
     // this is guarded by the previous check, so we don't write into invaid memory
-    dev->recvBytes(dev->largeRxCtx.RxBuff + offset, chunkSize);
-    
+    //dev->recvBytes(dev->largeRxCtx.RxBuff + offset, chunkSize); // WE 
+    memcpy(dev->largeRxCtx.RxBuff + offset, dev->txf.packet.rxBuff + 4, chunkSize);
+
     // send ack with attached chunk size (not used for now)
     dev->sendPacket(chunkSize, PACKID_LARGETX_ACK);
     

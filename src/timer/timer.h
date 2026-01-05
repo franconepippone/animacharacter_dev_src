@@ -14,6 +14,10 @@ class Timer {
         bool timedOut() {
             return millis() >= fireTime;
         }
+
+        void fire() {
+            fireTime = millis();
+        }
     
     private:
         unsigned long duration;
