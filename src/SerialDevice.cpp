@@ -51,7 +51,7 @@ bool _debug_triggerIdent(SerialDevice* dev) {
 
 void _debug_onLargeRx(SerialDevice* dev, byte* buff, uint32_t size, uint8_t packId) {
     _debug_blink_builtin(packId, 200);
-    dev->sendBytes(buff, max(255, size), packId);
+    dev->sendBytes(buff, min(255, size), packId);
 } 
 
 bool _debug_triggerLargeTx(SerialDevice* dev) {
