@@ -1,3 +1,0 @@
-# those commands needs to be run in order to use the local python packages inside the ros2 python packages
-
-python3 -m pip install --break-system-packages -e libs/pySerialDevice/

@@ -5,14 +5,20 @@ FROM ros:jazzy-ros-base
 RUN apt update && apt install -y \
     python3-colcon-common-extensions \
     python3-argcomplete \
-    git \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy required python libraries
-COPY libs pylibs
+
+WORKDIR /app
+# Copy and install required python libraries
+COPY libs libs
+
+RUN pip install --break-system-packages libs/pySerialTransfer 
+RUN pip install --break-system-packages libs/pySerialDevice
+
 
 # Workspace location
-ENV ROS_WS=/ros2_ws
+ENV ROS_WS=ros2_ws
 WORKDIR $ROS_WS
 COPY ros2_ws/src src
 
