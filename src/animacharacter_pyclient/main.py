@@ -1,3 +1,6 @@
+from pysafeudp import SafeUdpSock
+
+
 def main():
     print("Hello from animacharacter-pyclient!")
 

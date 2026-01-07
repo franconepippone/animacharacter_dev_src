@@ -1,6 +1,6 @@
 [submodule "animacharacter_server"]
-	path = animacharacter_server
+	path = src/animacharacter_server
 	url = https://github.com/franconepippone/animacharacter_server
 [submodule "animacharacter_pyclient"]
-	path = animacharacter_pyclient
+	path = src/animacharacter_pyclient
 	url = https://github.com/franconepippone/animacharacter_pyclient
