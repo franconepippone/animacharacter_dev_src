@@ -1,3 +1,6 @@
 [submodule "libs/pySerialTransfer"]
 	path = libs/pySerialTransfer
 	url = https://github.com/franconepippone/pySerialTransfer
+[submodule "libs/pySerialDevice"]
+	path = libs/pySerialDevice
+	url = https://github.com/franconepippone/pySerialDevice
