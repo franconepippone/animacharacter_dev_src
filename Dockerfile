@@ -8,13 +8,18 @@ RUN apt update && apt install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy required python libraries
+COPY libs pylibs
+
 # Workspace location
 ENV ROS_WS=/ros2_ws
 WORKDIR $ROS_WS
 COPY ros2_ws/src src
 
+
 # Auto-source ROS environment
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+
 
 # Build workspace
 #RUN colcon build --symlink-install
