@@ -13,8 +13,7 @@ WORKDIR /app
 # Copy and install required python libraries
 COPY libs libs
 
-RUN pip install --break-system-packages libs/pySerialTransfer 
-RUN pip install --break-system-packages libs/pySerialDevice
+RUN pip install --break-system-packages libs/pySerialDevice 
 
 
 # Workspace location
@@ -27,10 +26,11 @@ COPY ros2_ws/src src
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 
 
-# Build workspace
-#RUN colcon build --symlink-install
+# Build and source workspace
+RUN colcon build
 
-#RUN source /ros2_ws/install/setup.bash
+# Auto-source workspace for interactive shells
+RUN echo "source install/setup.bash" >> /root/.bashrc
 
 # Default to interactive shell
 CMD ["bash"]
