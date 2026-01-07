@@ -1,11 +1,17 @@
+# my_package/node.py
 import rclpy
+from rclpy.node import Node
 
-import sys
-print(sys.executable)
+class Talker(Node):
+    def __init__(self):
+        super().__init__('talker')
+        self.timer = self.create_timer(1.0, self.tick)
+
+    def tick(self):
+        self.get_logger().info('Hello from Jazzy')
 
 def main():
     rclpy.init()
-    node = rclpy.create_node('my_node')
+    node = Talker()
     rclpy.spin(node)
-    node.destroy_node()
     rclpy.shutdown()

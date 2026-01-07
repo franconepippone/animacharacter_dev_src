@@ -1,0 +1,25 @@
+# ROS 2 Jazzy base (Ubuntu 24.04)
+FROM ros:jazzy-ros-base
+
+# Install useful dev tools
+RUN apt update && apt install -y \
+    python3-colcon-common-extensions \
+    python3-argcomplete \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Workspace location
+ENV ROS_WS=/ros2_ws
+WORKDIR $ROS_WS
+COPY ros2_ws/src src
+
+# Auto-source ROS environment
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+
+# Build workspace
+#RUN colcon build --symlink-install
+
+#RUN source /ros2_ws/install/setup.bash
+
+# Default to interactive shell
+CMD ["bash"]

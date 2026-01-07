@@ -1,3 +1,3 @@
-#import rclpy
+import rclpy
 
 from pySerialDevice import SerialDevice
