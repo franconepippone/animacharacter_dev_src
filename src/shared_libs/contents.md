@@ -1,1 +1,1 @@
-Here go all the shared packages between the client and server
+Here go all the shared local packages between the client and server
