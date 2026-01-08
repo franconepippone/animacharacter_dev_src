@@ -20,9 +20,12 @@ with SafeUdpSock(b'ciccio', 8080) as sock:
     sock.set_peer(("localhost", 8000))
 
     while True:
-        resp = sock.saferecv(recv_from=pysafeudp.RCV_OWN_PEER)
+        resp = sock.recv()
+        if not resp:
+            print("timed")
+            continue
         addr = sock.get_latest_sender_address()
         print("received:", resp, "from", addr)
-        out = sock.safesend(resp + b" echo", to=addr)
-        print("sent echo:", out)
+        #out = sock.send(resp + b" echo", to=addr)
+        #print("sent echo:", out)
         print(sock._seq_num_map)

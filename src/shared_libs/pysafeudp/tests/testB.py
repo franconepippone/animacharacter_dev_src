@@ -29,9 +29,9 @@ with SafeUdpSock(b'wrong key', OWN_PORT) as sock:
     sock.set_peer(("localhost", PEER_PORT))
 
     print("sending to localhost:8080")
-    sock.safesend(f"WRONG KEY".encode())
+    sock.send(f"WRONG KEY".encode())
     try:
-        resp = sock.saferecv(timeout=1, recv_from=pysafeudp.RCV_EVERYONE)
+        resp = sock.recv(timeout=1, recv_from=pysafeudp.RCV_EVERYONE)
     except Exception as e:
         print("no response received (as expected with wrong key)", e)
 
@@ -40,7 +40,7 @@ def spam_socket():
     with SafeUdpSock(b'wrong key', OWN_PORT + 1) as sock:
         print(f"spamming localhost:{PEER_PORT} with wrong key")
         while True:
-            sock.safesend(f"WRONG KEY SPAM".encode(), to=("localhost", PEER_PORT))
+            sock.send(f"WRONG KEY SPAM".encode(), to=("localhost", PEER_PORT))
             #time.sleep(0.1)
 
 # to test if system is robust to spamming
@@ -52,6 +52,7 @@ time.sleep(1)
 with SafeUdpSock(b'ciccio', OWN_PORT) as sock:
     print(f"sending to localhost:{PEER_PORT}")
     i = 0
+    sock.set_peer(("127.0.0.1", PEER_PORT))
 
     #sock.set_peer(("localhost", 8080))
 
@@ -63,21 +64,22 @@ with SafeUdpSock(b'ciccio', OWN_PORT) as sock:
 
     with open("B_session.json", "r") as f:
         sess = json.load(f)
-    sock.override_outbound_seqnum(("127.0.0.1", PEER_PORT), sess["outbound"])
+    sock.override_outbound_seqnum(sock.peer, sess["outbound"])
     
     while True:
-        sock.safesend(f"porcoddio {i}".encode(), to=("localhost", PEER_PORT))
+        sock.send(f"porcoddio {i}".encode(), to=("localhost", PEER_PORT))
         print("sent:", f"porcoddio {i}")
         try:
-            resp = sock.saferecv(timeout=0.2, recv_from=("localhost", PEER_PORT))
-            print("received:", resp)    
+            #resp = sock.recv(timeout=0.2, recv_from=("localhost", PEER_PORT))
+            pass
+            #print("received:", resp)    
         except Exception as e:
             print("no response received", e)
         
-        sess["outbound"] = sock._get_outbound_seqnum(("127.0.0.1", PEER_PORT))
+        sess["outbound"] = sock.get_outbound_seqnum(("127.0.0.1", PEER_PORT))
         with open("B_session.json", "w") as f:
             json.dump(sess, f)
 
         print(sock._seq_num_map, "\n")
-        time.sleep(1)
+        #time.sleep(1)
         i += 1
