@@ -35,9 +35,6 @@ class SafeUdpSock:
     SEQ_NUM_SIZE_BYTES = 8
     MAX_RECV_BUFF_SIZE = 4096
 
-    peer: SocketAddress | None = None
-    _latest_sender: SocketAddress | None = None
-
     def __init__(self, secret_key: bytes, port: int | None = None) -> None:
         """ Initializes SafeUdpSock with a given secret key for HMAC signing.
         If port is provided, binds the socket to that port immediately.
@@ -49,12 +46,16 @@ class SafeUdpSock:
         if port is not None:
             self.bind(port)
 
+        self._latest_sender: SocketAddress | None = None
+        self.peer: SocketAddress | None = None
+
     def close(self):
         """ Closes the underlying UDP socket """
         self.udp_sock.close()
 
-    def bind(self, port: int = 0, ip: str = "localhost") -> int:
-        """ binds socket to ip and port. Default ip is 'localhost'. If no port is
+    def bind(self, port: int = 0, ip: str = "0.0.0.0") -> int:
+        """ 
+        binds socket to ip and port. Default ip is '0.0.0.0'. If no port is
         provided, a random one will be assigned and returned by this method.
         """
         self.udp_sock.bind((ip, port))
