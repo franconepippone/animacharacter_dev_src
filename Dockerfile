@@ -13,6 +13,7 @@ WORKDIR /app
 # Copy and install required python libraries
 COPY libs libs
 
+# hacky way to install it in the global ros2 python
 RUN pip install --break-system-packages libs/pySerialDevice 
 
 
