@@ -1,7 +1,5 @@
 from typing import Tuple, Callable
 import time
-from serial import Serial
-import random
 import math
 import logging
 
@@ -9,18 +7,14 @@ from pySerialDevice import SerialDevice
 
 from .utils import *
 
-"""This file contains all API classes that manage and simplify the interactions between the core application and the main hardware components (head, arms, torso, ...).
-Interactions with MCUs should always happen through these interface classes, never directly.
-"""
-
-# PSP packet ids
+# Serial packet ids
 PACK_ID_MOTION = 0x10
 PACK_ID_LEDS = 0x9
 PACK_ID_CONTROL = 0x07
 PACK_ID_MOTION_PARAMETERS = 0x08
 PACK_ID_DIAGNOSTIC = 0x05
 
-# PSP control flags 
+# Control flags 
 PSP_INIT_HARDWARE = bytes([1])
 PSP_DEINIT = bytes([2])
 PSP_BEGIN_ALL = bytes([4])
@@ -42,6 +36,7 @@ class HeadMcuDriver:
     _NECK_TILT_SCALE = 35
     _NECK_L_OFFSET = 150
     _NECK_R_OFFSET = 270
+    _SEMI_IPDmm = 75 # half of inter pupillar distance in mm
 
     _DEFAULT_BAUDRATE = 115200
     _DEFAULT_NAME = "master"    # our serial device name
@@ -171,8 +166,11 @@ class HeadMcuDriver:
         self.mp_buff_mv[9:11] =  to_int16(self.eyes_pitch)
         self._updt_servos = True
     
-    def lookat(self, elevation_ang: float, lateral_ang: float, r: float, semi_IPDmm: float = 75):
+    def lookat(self, elevation_ang: float, lateral_ang: float, r: float, semi_IPDmm: float = -1):
         """Look at a point at distance r (centimeters). Angles are in degrees."""
+        if semi_IPDmm <= 0:
+            semi_IPDmm = self._SEMI_IPDmm
+
         DEG_TO_RAD = math.radians(1)
         R = 10 * r
         yaw_left = math.degrees(1) * math.atan2(R * math.sin(lateral_ang * DEG_TO_RAD) - semi_IPDmm, R * math.cos(lateral_ang * DEG_TO_RAD))
@@ -218,5 +216,5 @@ class HeadMcuDriver:
             data = to_uint16(self.led_r) + to_uint16(self.led_g) + to_uint16(self.led_b)
             data += to_uint16(self.led_l1) + to_uint16(self.led_l2)
             
-            self.esp32.send_packet(PACK_ID_LEDS, data) # sends packet to esp32 over serial
+            self.esp32.send_object(data, PACK_ID_LEDS) # sends packet to esp32 over serial
             self._updt_leds = False

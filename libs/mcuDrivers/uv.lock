@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 
 [[package]]
 name = "click"
@@ -43,8 +43,16 @@ dependencies = [
     { name = "pyserialdevice" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "mcudrivers" },
+]
+
 [package.metadata]
 requires-dist = [{ name = "pyserialdevice", editable = "../pySerialDevice" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "mcudrivers", editable = "." }]
 
 [[package]]
 name = "mdurl"
