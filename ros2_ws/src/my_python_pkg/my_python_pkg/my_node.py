@@ -2,6 +2,8 @@
 import rclpy
 from rclpy.node import Node
 
+from interfaces.srv import Customservice
+
 import pySerialDevice as dev
 
 class Talker(Node):

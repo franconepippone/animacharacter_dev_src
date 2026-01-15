@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import pathlib
+import sys
+
+try:
+    from rosidl_generator_mypy import generate
+except ImportError:
+    # NOTE: Modifying sys.path and importing the Python package with the same
+    # name as this script does not work on Windows
+    # Use the same way as:
+    # https://github.com/ros2/rosidl_python/blob/5b9fe9cad6876e877cbbcf17950c47a9e753c6e6/rosidl_generator_py/bin/rosidl_generator_py#L10-L21  # NOQA
+    module_name = "rosidl_generator_mypy"
+    root_path = pathlib.Path(__file__).resolve().parents[1]
+    init_path = os.path.join(root_path, "rosidl_generator_mypy", "__init__.py")
+    if not os.path.exists(init_path):
+        raise FileNotFoundError("{} doesn't exist".format(init_path))
+
+    from importlib.machinery import SourceFileLoader
+
+    loader = SourceFileLoader(module_name, init_path)
+    rosidl_generator_mypy = loader.load_module()
+    generate = rosidl_generator_mypy.generate
+
+
+def main(argv=sys.argv[1:]):
+    parser = argparse.ArgumentParser(
+        description="Generate stub files for the Python ROS interfaces."
+    )
+    parser.add_argument(
+        "--generator-arguments-file",
+        required=True,
+        help="The location of the file containing the generator arguments",
+    )
+    args = parser.parse_args(argv)
+
+    generate(args.generator_arguments_file)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
