@@ -1,0 +1,5 @@
+---
+bool success
+string token
+string nng_address
+string udp_address

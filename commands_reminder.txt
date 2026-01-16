@@ -1,4 +1,13 @@
-# just a reminder
+
+Rosdep commands
+---
+# this installs all dependencies listed in the package.xml files, ignore-src make it so we can define dependencies on local packages
+rosdep install --from-paths ros2_ws/src --ignore-src
+
+
+
+Docker Commands
+---
 
 # to build the image
 docker build -t ros2-jazzy-dev .

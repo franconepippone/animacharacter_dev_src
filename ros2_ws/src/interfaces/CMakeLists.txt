@@ -16,6 +16,7 @@ find_package(rosidl_generator_mypy REQUIRED)
 # Generate interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Customservice.srv"
+  "srv/CreateSession.srv"
 )
 
 if(BUILD_TESTING)
