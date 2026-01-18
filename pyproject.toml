@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pysafeudp",
+    "requests>=2.32.5",
 ]
 
 [tool.uv.sources]
