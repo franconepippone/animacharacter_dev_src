@@ -13,10 +13,7 @@ class RosServiceNode(Node):
         super().__init__('fastapi_ros_node')
         self.cli = self.create_client(CreateSession, SERVICE_NAME)
 
-        while not self.cli.wait_for_service(timeout_sec=5.0):
-            self.get_logger().info('Waiting for service to become available...')
-
-    def make_session_creation_request(self) -> CreateSession.Response: 
+    def make_session_creation_request(self, timeout_sec: float = 5) -> CreateSession.Response: 
         """
         Create a session by making an asynchronous ROS2 service call.
         This method sends a CreateSession request to the ROS2 service and waits
@@ -25,9 +22,13 @@ class RosServiceNode(Node):
             CreateSession.Response: The response object from the CreateSession service,
                                    containing the session creation result.
         """
+        if not self.cli.service_is_ready():
+            self.get_logger().warning('A request to create a session has been made, but service was not ready yet.')
+            return CreateSession.Response(success=False)
+        
         request = CreateSession.Request()
         future = self.cli.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
         result = future.result()
         
         if result is None:
@@ -46,10 +47,10 @@ def get_node() -> RosServiceNode:
 
 def spin():
     rclpy.init()  # only once in your process
-    global ros_node
     ros_node = get_node()
     executor = SingleThreadedExecutor()
     executor.add_node(ros_node)
+    executor.spin()
     rclpy.shutdown()
 
 def spin_threaded():

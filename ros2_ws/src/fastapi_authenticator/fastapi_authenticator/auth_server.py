@@ -2,13 +2,26 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ValidationError
 import uvicorn
 import logging
-import requests
 
 # main.py
 from fastapi import FastAPI
-from fastapi.concurrency import run_in_threadpool
 from .ros_node import spin_threaded, get_node
 
+# TODO: Security improvements
+# - Move SECRET_KEY and CLIENT_KEY to environment variables (e.g., os.getenv)
+# - Implement JWT-based authentication using python-jose for token generation/validation
+# - Sanitize logs to avoid exposing sensitive data (e.g., session tokens, addresses)
+#
+# TODO: Architecture and robustness
+# - Use context manager for ROS2 node lifecycle in ros_node.py for proper init/shutdown
+# - Add FastAPI middleware for rate limiting, CORS, and request validation
+# - Implement health endpoints (e.g., /health) to monitor ROS2 service availability
+# - Introduce circuit breakers or retries for ROS2 service calls
+#
+# TODO: Testing and deployment
+# - Add unit tests for FastAPI routes and ROS2 interactions using pytest and ROS2 tools
+# - Consider containerization (e.g., Docker) with security scans
+#
 
 ### LOGGING CONFIGURATION
 
@@ -56,8 +69,8 @@ def auth(req: AuthRequest):
 
     logger.info("Got valid auth request, attempting session creation")
     sess_resp = get_node().make_session_creation_request()
+    
     logger.info(f"Session response from node is: {sess_resp}")
-
     http_response = SessionCreationResponse(
         outcome=sess_resp.success,
         nng_address=sess_resp.nng_address,
@@ -66,9 +79,9 @@ def auth(req: AuthRequest):
     )
 
     if sess_resp.success:
-        logging.info("Session created successfully, sending session data to client")
+        logging.info("Session created successfully, sending session data to client: %s", http_response)
     else:
-        logger.warning("Request to create a new session failed")
+        logger.warning("Request to create a new session failed: %s", http_response)
 
     # send response to client
     return http_response
