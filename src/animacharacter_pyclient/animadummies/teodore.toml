@@ -1,0 +1,48 @@
+channels = [
+  { id = 1,  name = "EYES_H",         type = "int16" },
+  { id = 2,  name = "EYES_V",         type = "int16" },
+  { id = 3,  name = "EYES_FOCUS",     type = "int16" },
+
+  # EYELIDS
+  { id = 4,  name = "EYELID_TR",      type = "int16" },
+  { id = 5,  name = "EYELID_TL",      type = "int16" },
+  { id = 6,  name = "EYELID_BR",      type = "int16" },
+  { id = 7,  name = "EYELID_BL",      type = "int16" },
+
+  # EARS
+  { id = 8,  name = "EAR_LEFT",       type = "int16" },
+  { id = 9,  name = "EAR_RIGHT",      type = "int16" },
+
+  # MOUTH
+  { id = 10, name = "MOUTH",          type = "int16" },
+
+  # NECK
+  { id = 11, name = "SERVO_NECK_R",   type = "int16" },
+  { id = 12, name = "SERVO_NECK_L",   type = "int16" },
+  { id = 13, name = "NECK_ROTATION",  type = "int16" },
+
+  # ARM RIGHT
+  { id = 14, name = "ARMR_STEPPERA",  type = "int16" },
+  { id = 15, name = "ARMR_STEPPERB",  type = "int16" },
+  { id = 16, name = "ARMR_ELBOW",     type = "int16" },
+  { id = 17, name = "ARMR_WRIST",     type = "int16" },
+  { id = 18, name = "ARMR_ROTATION",  type = "int16" },
+
+  # ARM LEFT
+  { id = 19, name = "ARML_STEPPERA",  type = "int16" },
+  { id = 20, name = "ARML_STEPPERB",  type = "int16" },
+  { id = 21, name = "ARML_ELBOW",     type = "int16" },
+  { id = 22, name = "ARML_WRIST",     type = "int16" },
+  { id = 23, name = "ARML_ROTATION",  type = "int16" },
+
+  # BODY
+  { id = 24, name = "BODY_LEAN",      type = "int16" },
+  { id = 25, name = "BODY_ROTATION",  type = "int16" },
+
+  # LEDS
+  { id = 26, name = "LED_IRIS_LEFT",  type = "uint8" },
+  { id = 27, name = "LED_IRIS_RIGHT", type = "uint8" },
+  { id = 28, name = "EYELED_R",       type = "uint8" },
+  { id = 29, name = "EYELED_G",       type = "uint8" },
+  { id = 30, name = "EYELED_B",       type = "uint8" }
+]
