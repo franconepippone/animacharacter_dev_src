@@ -1,4 +1,4 @@
-# ros_node.py
+
 import threading
 import rclpy
 from rclpy.node import Node
