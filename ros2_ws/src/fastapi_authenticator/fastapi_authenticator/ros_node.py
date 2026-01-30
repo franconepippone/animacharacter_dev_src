@@ -1,30 +1,45 @@
-
 import threading
+from typing import TYPE_CHECKING, cast, Any
+from pydantic import BaseModel
+
 import rclpy
+from rclpy.client import Client
 from rclpy.node import Node
 from interfaces.srv import CreateSession  # replace with your service type
 from rclpy.executors import SingleThreadedExecutor
 import yaml
 
+if TYPE_CHECKING:
+    from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
+    from interfaces.srv._create_session import CreateSession_Response as CreateSessionResponse
+
 SERVICE_NAME = "some_topic"
+
+
+class SessionCreationHttpResponse(BaseModel):
+    success: bool
+    msg: str = ""
+    nng_port: int = -1
+    udp_port: int = -1
+    udp_secret_ket: bytes = b""
+    token: str = ""
 
 class RosServiceNode(Node):
     def __init__(self):
         super().__init__('fastapi_ros_node')
         self.cli = self.create_client(CreateSession, SERVICE_NAME)
 
-    def make_session_creation_request(self, timeout_sec: float = 5) -> CreateSession.Response: 
+    def make_session_creation_request(self, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
         """
-        Create a session by making an asynchronous ROS2 service call.
+        Create a session by making a ROS2 service call to the session manager node.
         This method sends a CreateSession request to the ROS2 service and waits
         for the response to complete before returning.
         Returns:
-            CreateSession.Response: The response object from the CreateSession service,
-                                   containing the session creation result.
+            SessionCreationHttpResponse: A pydantic model response ready to be sent back to the http client.
         """
         if not self.cli.service_is_ready():
             self.get_logger().warning('A request to create a session has been made, but service was not ready yet.')
-            return CreateSession.Response(success=False)
+            return SessionCreationHttpResponse(success=False)
         
         request = CreateSession.Request()
         future = self.cli.call_async(request)
@@ -32,9 +47,18 @@ class RosServiceNode(Node):
         result = future.result()
         
         if result is None:
-            return CreateSession.Response(success=False)
+            return SessionCreationHttpResponse(success=False)
 
-        return result
+        typed_result: CreateSessionResponse = cast(CreateSessionResponse, result)
+        
+        return SessionCreationHttpResponse(
+            success=typed_result.success,
+            msg=typed_result.msg,
+            nng_port=typed_result.nng_port,
+            udp_port=typed_result.sudp_port,
+            udp_secret_ket=typed_result.sudp_secret_key.tobytes(),
+            token=typed_result.token
+        )
 
 
 ros_node: RosServiceNode | None = None

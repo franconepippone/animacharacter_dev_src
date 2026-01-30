@@ -5,7 +5,7 @@ import logging
 
 # main.py
 from fastapi import FastAPI
-from .ros_node import spin_threaded, get_node
+from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse
 
 # TODO: Security improvements
 # - Move SECRET_KEY and CLIENT_KEY to environment variables (e.g., os.getenv)
@@ -51,40 +51,28 @@ CLIENT_KEY = "supersecret-client-key"
 
 # MODELS
 
-class SessionCreationResponse(BaseModel):
-    outcome: bool
-    nng_address: str = ""
-    udp_address: str = ""
-    token: str = ""
-
 class AuthRequest(BaseModel):
-    key: str
+    apikey: str
 
 
 @app.post("/auth")
 def auth(req: AuthRequest):
-    # make this more robus, use hashes?
-    if req.key != CLIENT_KEY:
-        raise HTTPException(401, "Invalid key")
+    # make this more robust, use hashes?
+    if req.apikey != CLIENT_KEY:
+        return SessionCreationHttpResponse(success=False, msg="Wrong API key")
 
     logger.info("Got valid auth request, attempting session creation")
-    sess_resp = get_node().make_session_creation_request()
+    sess_resp: SessionCreationHttpResponse = get_node().make_session_creation_request()
     
     logger.info(f"Session response from node is: {sess_resp}")
-    http_response = SessionCreationResponse(
-        outcome=sess_resp.success,
-        nng_address=sess_resp.nng_address,
-        udp_address=sess_resp.udp_address,
-        token=sess_resp.token
-    )
 
     if sess_resp.success:
-        logging.info("Session created successfully, sending session data to client: %s", http_response)
+        logging.info("Session created successfully, sending session data to client: %s", sess_resp)
     else:
-        logger.warning("Request to create a new session failed: %s", http_response)
+        logger.warning("Request to create a new session failed: %s", sess_resp)
 
     # send response to client
-    return http_response
+    return sess_resp
 
 
 

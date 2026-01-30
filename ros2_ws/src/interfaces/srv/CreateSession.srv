@@ -1,5 +1,8 @@
+string client_info
 ---
 bool success
+string msg
 string token
-string nng_address
-string udp_address
+uint8[] sudp_secret_key
+uint16 nng_port
+uint16 sudp_port
