@@ -58,11 +58,12 @@ class Actuator:
 
 class ActuatorGroup(ABC):
     """
-    Base class for all kinds of actuator groups. Use `setfrom(<group>)` to copy the values from `<group>` and move the animatronic.
-    Use `posefrom(<group>)` to copy the values from `<group>` to this group (only changes the local state of the dummy).
+    Base class for all kinds of actuator groups, can be thought as a 'dummy' of a part of a robotic system.
+    Use `posefrom(<group>)` to copy the actuator values from `<group>` to this group (only changes the local state of the dummy).
+    The copy operation is based on actuator IDs, so only actuators contained in this group or its subgroups with matching IDs will be updated.
 
     NOTE: actuators groups are ment to be immutable, so once initialized, their contents should not be changed.
-    It's recommended to subclass this to create custom groups with fixed contents and members for easier access to actuators and subgroups.
+    It's recommended to subclass this to create custom groups with fixed contents and members for easier and typed access to actuators and subgroups.
     """
 
     def __init__(self, contents: Iterable[Actuator | ActuatorGroup]) -> None:
