@@ -1,9 +1,9 @@
 import threading
 from typing import TYPE_CHECKING, cast, Any
 from pydantic import BaseModel
-
+from array import array
 import rclpy
-from rclpy.client import Client
+from rclpy.logging import get_logger
 from rclpy.node import Node
 from interfaces.srv import CreateSession  # replace with your service type
 from rclpy.executors import SingleThreadedExecutor
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
     from interfaces.srv._create_session import CreateSession_Response as CreateSessionResponse
 
-SERVICE_NAME = "some_topic"
+SERVICE_NAME = "create_session"
 
 
 class SessionCreationHttpResponse(BaseModel):
@@ -21,7 +21,7 @@ class SessionCreationHttpResponse(BaseModel):
     msg: str = ""
     nng_port: int = -1
     udp_port: int = -1
-    udp_secret_ket: bytes = b""
+    udp_secret_key: str = ""
     token: str = ""
 
 class RosServiceNode(Node):
@@ -29,7 +29,7 @@ class RosServiceNode(Node):
         super().__init__('fastapi_ros_node')
         self.cli = self.create_client(CreateSession, SERVICE_NAME)
 
-    def make_session_creation_request(self, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
+    def make_session_creation_request(self, client_info: str, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
         """
         Create a session by making a ROS2 service call to the session manager node.
         This method sends a CreateSession request to the ROS2 service and waits
@@ -42,6 +42,7 @@ class RosServiceNode(Node):
             return SessionCreationHttpResponse(success=False)
         
         request = CreateSession.Request()
+        request.client_info = client_info
         future = self.cli.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
         result = future.result()
@@ -49,14 +50,14 @@ class RosServiceNode(Node):
         if result is None:
             return SessionCreationHttpResponse(success=False)
 
-        typed_result: CreateSessionResponse = cast(CreateSessionResponse, result)
+        typed_result: CreateSessionResponse = result
         
         return SessionCreationHttpResponse(
             success=typed_result.success,
             msg=typed_result.msg,
             nng_port=typed_result.nng_port,
             udp_port=typed_result.sudp_port,
-            udp_secret_ket=typed_result.sudp_secret_key.tobytes(),
+            udp_secret_key=typed_result.sudp_secret_key,
             token=typed_result.token
         )
 

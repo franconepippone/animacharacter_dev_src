@@ -3,6 +3,6 @@ string client_info
 bool success
 string msg
 string token
-uint8[] sudp_secret_key
+string sudp_secret_key
 uint16 nng_port
 uint16 sudp_port

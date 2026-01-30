@@ -14,19 +14,23 @@ if TYPE_CHECKING:
     from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
     from interfaces.srv._create_session import CreateSession_Response as CreateSessionResponse
 
+
+SRV_NAME = 'create_session'
+
 class SessManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("sess_manager_node")
-        self.sess_creator = SessionCreator(self.get_logger())
-        self.get_logger().info("Session Manager Node instantiated.")
-        self.sess_runner = SessionRunner(self.get_logger())
-        self.get_logger().info("Session Runner Node instantiated.")
+        self.sess_creator = SessionCreator()
+        self.get_logger().debug("Session Creator object instantiated.")
+        self.sess_runner = SessionRunner()
+        self.get_logger().debug("Session Runner object instantiated.")
 
         self.srv = self.create_service(
             CreateSession,
-            'create_session',
+            SRV_NAME,
             self.create_session_cb
         )
+        self.get_logger().info(F"Session manager node initialized.")
 
     def create_session_cb(self, request: CreateSessionRequest, response: CreateSessionResponse) -> CreateSessionResponse:
         """
@@ -51,7 +55,7 @@ class SessManagerNode(Node):
         if not result.success or result.context is None:
             response.success = False
             response.msg = result.error_msg if result.error_msg else "Unknown error"
-            self.get_logger().error(f"Session creation failed: {response.msg}")
+            self.get_logger().warning(f"Session creation failed: {response.msg}")
             return response
             
         # type hints now provided via TYPE_CHECKING imports
@@ -60,7 +64,7 @@ class SessManagerNode(Node):
         response.sudp_port = result.context.stream_port
         response.sudp_secret_key = result.context.stream_secret_key
         response.token = result.context.secret_token
-        self.get_logger().info("Session created successfully.")
+        self.get_logger().info("Session context created successfully (sockets opened).")
 
         # OPT.A in here we should start the session runner with the context (in a separate thread)
         #  

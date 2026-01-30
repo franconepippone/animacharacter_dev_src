@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from http import client
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, ValidationError
 import uvicorn
 import logging
 
 # main.py
 from fastapi import FastAPI
-from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse
+from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse, get_logger
 
 # TODO: Security improvements
 # - Move SECRET_KEY and CLIENT_KEY to environment variables (e.g., os.getenv)
@@ -25,20 +26,7 @@ from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse
 
 ### LOGGING CONFIGURATION
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # minimum level to handle
-
-# Create a console handler
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)  # minimum level to emit
-
-# Optional: formatter
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-ch.setFormatter(formatter)
-
-# Add the handler to your logger
-logger.addHandler(ch)
-
+logger = get_logger("fastapi_authenticator")
 
 
 # FASTAPI APP 
@@ -56,20 +44,28 @@ class AuthRequest(BaseModel):
 
 
 @app.post("/auth")
-def auth(req: AuthRequest):
+def auth(req: AuthRequest, rqst: Request):
     # make this more robust, use hashes?
     if req.apikey != CLIENT_KEY:
         return SessionCreationHttpResponse(success=False, msg="Wrong API key")
-
-    logger.info("Got valid auth request, attempting session creation")
-    sess_resp: SessionCreationHttpResponse = get_node().make_session_creation_request()
     
-    logger.info(f"Session response from node is: {sess_resp}")
-
-    if sess_resp.success:
-        logging.info("Session created successfully, sending session data to client: %s", sess_resp)
+    if rqst.client is not None:
+        client_info = f"({rqst.client.host}:{rqst.client.port})"
     else:
-        logger.warning("Request to create a new session failed: %s", sess_resp)
+        client_info = "unknown-client-info"
+
+    logger.info("Got auth request with valid API key, sending internal session creation request.")
+    sess_resp: SessionCreationHttpResponse = get_node().make_session_creation_request(client_info)
+    
+    logger.debug(f"Session response from node is: {sess_resp}")
+
+    # log outcome
+    if sess_resp.success:
+        logger.info(f"Session created successfully, sending session data to remote client.")
+        logger.debug(f"Session data: {sess_resp}")
+    else:
+        logger.warning(f"Request to create a new session failed, sending failure response to remote client - Reason: {sess_resp.msg}")
+        logger.debug(f"Session failure response data: {sess_resp}")
 
     # send response to client
     return sess_resp

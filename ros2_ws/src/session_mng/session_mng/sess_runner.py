@@ -1,15 +1,16 @@
-
+from rclpy.logging import RcutilsLogger, get_logger
 import threading
+import pynng
 import time
-from sess_creator import SessionContext
+from .sess_creator import SessionContext
 import logging
 
 SESS_CREATE_SERVER_PORT = 9000
 
 
 class SessionRunner:
-    def __init__(self, logger):
-        self.logger = logger
+    def __init__(self):
+        self.logger = get_logger("session_runner")
         self.crnt_ctx: SessionContext | None = None
     
     def run(self, ctx: SessionContext):
@@ -19,7 +20,16 @@ class SessionRunner:
         # also start the stream (udp) packet forwarder here?
 
     def _run_session(self, ctx: SessionContext):
-        
+        self.logger.info("Session runner started")
+        # example nng echo server
+        while True:
+            try:
+                data = ctx.nng_sock.recv(True)
+            except pynng.Timeout:
+                continue
+            
+            self.logger.info(f"Received data from client: {data}")
+            ctx.nng_sock.send(data)
         
 
         # implement session running logic here
@@ -112,7 +122,7 @@ def bin_packet_forwader(conn, session_running: threading.Event):
         if rec_server.is_recording():
             rec_server.record(motionframe)
 
-def run_session(ctx: SessionContext, SM: SessionManager):
+def run_session(ctx: SessionContext):
 
     dev = ctx.pnp_dev   # maybe create this here, to decouple the session manager 
     bin_conn = ctx.udp_sock
@@ -136,14 +146,3 @@ def process_packet(packet) -> bool:
         case SessionEnd():
             return True
 
-
-
-
-if __name__ == "__main__":
-    #main()
-
-    ssmng = SessionManager(max_sessions=1)
-
-    sess_creation_rqst_handler = HTTPSessionCreationServer(ssmng)
-    t = sess_creation_rqst_handler.run_threaded(port=SESS_CREATE_SERVER_PORT)  # runs in background thread
-    t.join()

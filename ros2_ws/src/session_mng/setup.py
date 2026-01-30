@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'start = session_mng.sess_manager_node:main'
         ],
     },
 )

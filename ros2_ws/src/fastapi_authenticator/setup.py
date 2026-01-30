@@ -28,7 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'serve = fastapi_authenticator.auth_server:main'
+            'start = fastapi_authenticator.auth_server:main'
         ],
     },
 )
