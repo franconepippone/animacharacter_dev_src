@@ -1,18 +1,33 @@
-from rclpy.logging import RcutilsLogger, get_logger
+from typing import Callable, Any
+from rclpy.logging import get_logger
 import threading
 import pynng
 import time
 from .sess_creator import SessionContext
 import logging
 
-SESS_CREATE_SERVER_PORT = 9000
-
+### NOTE this class also needs to have a ros2 publisher access to publish data to the correct topics,
+# we can pass it as a parameter to the constructor, or have a setter method
 
 class SessionRunner:
     def __init__(self):
         self.logger = get_logger("session_runner")
         self.crnt_ctx: SessionContext | None = None
+        self.on_termination_cb: Callable[[SessionContext], bool] | None = None
     
+    def on_session_termination(self, cb: Callable[[SessionContext], bool]) -> None:
+        """
+        Register a function to be executed when a session needs to be terminated. This delegates
+        the handling of session destruction to an external entity; this class
+        simply signals the "intent" of termination via the callback.
+
+        TODO also stops the runner??
+        
+        :param cb: Callback function to be called upon session termination
+        :type cb: Callable[[SessionContext], None]
+        """
+        self.on_termination_cb = cb
+
     def run(self, ctx: SessionContext):
         self.crnt_ctx = ctx
         thread = threading.Thread(target=self._run_session, args=(ctx,))

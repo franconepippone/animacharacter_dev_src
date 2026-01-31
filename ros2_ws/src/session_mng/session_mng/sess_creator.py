@@ -1,16 +1,17 @@
-from typing import Callable, Any
 from dataclasses import dataclass
 import secrets
 import pynng
-from rclpy.logging import get_logger, RcutilsLogger
+from rclpy.logging import get_logger
 
 from pysafeudp import SafeUdpSock
 
-import logging
-from concurrent.futures import Future, CancelledError, TimeoutError
 
 @dataclass
 class SessionContext:
+    """
+    Container class for a session's data: includes open sockets, ports, secret keys/tokens.
+    This is only a (dataclass) container, does not implement any logic.
+    """
     nng_sock: pynng.Pair0
     nng_port: int
     stream_sock: SafeUdpSock
@@ -21,36 +22,51 @@ class SessionContext:
 
 @dataclass
 class SessionCreationResult:
+    """
+    Result of a session creation attempt. Contains success flag, session context if successful, and error message if any.
+    """
     success: bool
     context: SessionContext | None
     error_msg: str | None = None
 
-# MAYBE THIS SHOULD NOT BE A NODE; just a regular class? external "master" node
-# that host ros services and calls this class methods?
 
 class SessionCreator:
+    """
+    This class implements the mechanics of creating and destroying session contexts. It is used by
+    an external entity (e.g. SessManagerNode) to create or end sessions as needed.
+    
+    It exposes two symmetrical methods: 
+    - create_session() -> SessionCreationResult 
+    - destroy_session(context: SessionContext) -> bool
+
+    This class is also stateless; it does not track active sessions internally.
+    """
+
     def __init__(self) -> None:
         self.logger = get_logger("session_creator")
-        self.active_session: SessionContext | None = None
 
-    def close_session(self) -> bool:
-        ...
+    def destroy_session(self, context: SessionContext) -> bool:
+        """
+        Attempts destruction of a session context.  
+        Frees sockets and other resources.
+        """
+        try:
+            context.nng_sock.close()
+            context.stream_sock.close()
+            self.logger.info("Session destroyed successfully.")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to destroy session: {e}")
+            return False
 
     def create_session(self) -> SessionCreationResult:
         """
+        Attempts construction of a new session context.
+
         Opens sockets and returns session context.
         Returns None if a session could not be created.
         """
-
-        if self.active_session is not None:
-            return SessionCreationResult(
-                success=False,
-                context=None,
-                error_msg="A session request was made during an already ongoing session, rejecting."
-            )
-        
-
-        # XXX in here we should probably check if hardware is OK before starting a session
+    
         try:
             sess_token = secrets.token_urlsafe(64)
 
