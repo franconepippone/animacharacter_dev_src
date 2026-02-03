@@ -1,8 +1,6 @@
 import requests
 from dataclasses import dataclass
 import pynng
-import time
-import logging
 
 @dataclass  
 class SessionData:
@@ -15,6 +13,13 @@ class SessionData:
 
 
 class ACRemoteClient:
+    """
+    This class is intended to act as a abstraction layer to the animacharacter communication channels,
+    handling session creation via HTTP requests to the authenticator server, and managing the underlying
+    pynng and udp sockets for communication once a session is established.
+    
+    This class should not be instantiated directly; instead, use the higher-level ACClient class that wraps this one
+    """
     def __init__(self, ip: str) -> None:
         self.ip = ip
         self.base_url = f"http://{self.ip}:8000/auth"
@@ -52,6 +57,10 @@ if __name__ == "__main__":
     client =    ACRemoteClient("127.0.0.1")
     client.attempt_session_http_rqst("supersecret-client-key")
 
+    if not client.session_data.success:
+        print("Failed to establish session")
+        exit(1)
+    
     with pynng.Pair0(dial=f"tcp://127.0.0.1:{client.session_data.nng_port}") as pynng_sock:
         pynng_sock.send(b"Hello from client")
         data = pynng_sock.recv(True)
