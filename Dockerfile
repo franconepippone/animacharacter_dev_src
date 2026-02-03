@@ -1,37 +1,42 @@
-# ROS 2 Jazzy base (Ubuntu 24.04)
+# ROS 2 Jazzy – Raspberry Pi (ARM64) Deployment Image
 FROM ros:jazzy-ros-base
 
-# Install useful dev tools
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build + runtime dependencies
 RUN apt update && apt install -y \
-    python3-colcon-common-extensions \
-    python3-argcomplete \
     python3-pip \
+    python3-argcomplete \
+    python3-colcon-common-extensions \
+    ros-jazzy-ament-cmake \
+    build-essential \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 
+# Install local Python libraries into system Python
+# (ROS Python uses system site-packages)
 WORKDIR /app
-# Copy and install required python libraries
 COPY libs libs
+RUN pip install --no-cache-dir --break-system-packages ./libs/pySerialDevice
 
-# hacky way to install it in the global ros2 python
-RUN pip install --break-system-packages libs/pySerialDevice 
+# ROS 2 workspace
+ENV ROS_WS=/opt/ros2_ws
+WORKDIR ${ROS_WS}
 
+COPY ros2_ws/src ./src
 
-# Workspace location
-ENV ROS_WS=ros2_ws
-WORKDIR $ROS_WS
-COPY ros2_ws/src src
+# Build workspace
+SHELL ["/bin/bash", "-c"]
 
+RUN source /opt/ros/jazzy/setup.bash && \
+    colcon build --symlink-install
 
-# Auto-source ROS environment
-RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+# Auto-source ROS + workspace for runtime shells
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
+    echo "source ${ROS_WS}/install/setup.bash" >> /etc/bash.bashrc
 
-
-# Build and source workspace
-RUN colcon build
-
-# Auto-source workspace for interactive shells
-RUN echo "source install/setup.bash" >> /root/.bashrc
-
-# Default to interactive shell
+# ---------------------------------------------------------
+# Default command (override in docker-compose if needed)
+# ---------------------------------------------------------
 CMD ["bash"]
