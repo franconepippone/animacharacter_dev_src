@@ -1,220 +1,453 @@
-from typing import Tuple, Callable
+from typing import overload, Literal, Tuple
 import time
 import math
 import logging
+from enum import Enum, auto
 
 from pySerialDevice import SerialDevice
-
 from .utils import *
 
-# Serial packet ids
-PACK_ID_MOTION = 0x10
-PACK_ID_LEDS = 0x9
-PACK_ID_CONTROL = 0x07
-PACK_ID_MOTION_PARAMETERS = 0x08
-PACK_ID_DIAGNOSTIC = 0x05
 
-# Control flags 
+# ================= MOTION PACKET LAYOUT =================
+#
+# The motion packet sent to the MCU is exactly 15 bytes.
+# Each byte or byte pair corresponds to a specific actuator.
+# Multi-byte fields are stored as little-endian integers (16-bit).
+#
+# ┌─────────┬───────────────┬───────────────┬─────────────────────────────┐
+# │ Bytes   │ Field         │ Type / Scale  │ Description                 │
+# ├─────────┼───────────────┼───────────────┼─────────────────────────────┤
+# │ 0       │ Mouth         │ uint8 0..255  │ 0 = fully open, 255 = closed│
+# │ 1       │ Left Ear      │ uint8 0..127  │ -1..1 scaled to 0..127     │      <---- XXX CHECK THE EARS!!!!
+# │ 2       │ Right Ear     │ uint8 0..127  │ -1..1 scaled to 0..127     │
+# │ 3       │ Left Lid      │ uint8 0..60*  │ Lid wideness * eyes_open    │
+# │ 4       │ Right Lid     │ uint8 0..60*  │ Lid wideness * eyes_open    │
+# │ 5-6     │ Eye Left Yaw  │ int16         │ Degrees -60..60             │
+# │ 7-8     │ Eye Right Yaw │ int16         │ Degrees -60..60             │
+# │ 9-10    │ Eyes Pitch    │ int16         │ Degrees -30..30             │
+# │ 11-12   │ Neck Right    │ int16         │ Computed from tilt/pitch    │
+# │ 13-14   │ Neck Left     │ int16         │ Computed from tilt/pitch    │
+# └─────────┴───────────────┴───────────────┴─────────────────────────────┘
+#
+# Notes:
+# - Lid wideness is multiplied by eyes_open (0 or 1) to support blinking.
+# - Neck servo values are derived:
+#       left  = L_OFFSET - tilt*TILT_SCALE + pitch*PITCH_SCALE
+#       right = R_OFFSET + tilt*TILT_SCALE + pitch*PITCH_SCALE
+# - All multi-byte int16 fields are little-endian in the packet.
+# - The packet is sent as a continuous bytearray (15 bytes).
+
+
+# ================= PACKET IDS =================
+
+PACK_ID_MOTION = 0x10
+PACK_ID_LEDS = 0x09
+PACK_ID_CONTROL = 0x07
+
 PSP_INIT_HARDWARE = bytes([1])
 PSP_DEINIT = bytes([2])
 PSP_BEGIN_ALL = bytes([4])
 
+# ================= EXCEPTIONS
 
+class InvalidAxys(Exception): ...
+
+
+# ================= ENUMS =================
+
+class Axys(Enum):
+    LED_R = auto()
+    LED_G = auto()
+    LED_B = auto()
+    LED_L1 = auto()
+    LED_L2 = auto()
+
+    MOUTH = auto()
+    EAR_L = auto()
+    EAR_R = auto()
+    NECK_PITCH = auto()
+    NECK_TILT = auto()
+
+    EYES_PITCH = auto()
+    EYE_L = auto()
+    EYE_R = auto()
+    LID_L = auto()
+    LID_R = auto()
+    EYES_OPEN = auto()
+
+
+class WriteOutcome(Enum):
+    OK = 0
+    ERROR = -1
+    UNKNOWN_AXYS = -2
+
+
+# ================= DRIVER =================
 
 class HeadMcuDriver:
     """
-    Handles interactions with the animatronic head.
-    Hardware will only update upon calling the "drive_hardware()" method. Refer to the specific methods docstring for usage.
-    Call "begin()" to initialize, "deinit()" to stop everything (turns all motors off).
+    Animatronic head MCU driver.
+    All hardware updates are flushed via drive_hardware().
     """
-    # configs
+
+    # -------- constants --------
+
     _RGB_MAX_DUTY = 4095
     _RINGLED_MAX_DUTY = 255
+
+    _EYE_YAW_RANGE_DEG = 60
+    _EYE_PITCH_RANGE_DEG = 30
+    _LID_WIDENESS_MAX_DEG = 60
+
     _MOUTH_INPUT_SCALE = 255
     _EARS_INPUT_SCALE = 127
+
     _NECK_PITCH_SCALE = 50
     _NECK_TILT_SCALE = 35
     _NECK_L_OFFSET = 150
     _NECK_R_OFFSET = 270
-    _SEMI_IPDmm = 75 # half of inter pupillar distance in mm
+
+    _SEMI_IPDmm = 75
 
     _DEFAULT_BAUDRATE = 115200
-    _DEFAULT_NAME = "master"    # our serial device name
+    _DEFAULT_NAME = "master"
+
+    # -------- init --------
 
     def __init__(self, serial_port: str):
-        self.esp32 = SerialDevice(self._DEFAULT_NAME, serial_port, self._DEFAULT_BAUDRATE)
-        self.motionpack_buffer = bytearray(15) # total size of motionpack_buffer
+        """
+        Initialize the Head MCU Driver.
+        
+        Args:
+            serial_port: Serial port path (e.g., '/dev/ttyUSB0').
+        """
+        self.esp32 = SerialDevice(
+            self._DEFAULT_NAME,
+            serial_port,
+            self._DEFAULT_BAUDRATE
+        )
+
+        # motion packet: EXACTLY 15 BYTES
+        self.motionpack_buffer = bytearray(15)
         self.mp_buff_mv = memoryview(self.motionpack_buffer)
 
-        # flags
-        self._updt_leds: bool = True
-        self._updt_servos: bool = True
+        self._updt_leds = True
+        self._updt_servos = True
 
-        # state variables
-        self.led_r: int = 0
-        self.led_g: int = 0
-        self.led_b: int = 0
-        self.led_l1: int = 0
-        self.led_l2: int = 0
+        # -------- logical state --------
 
-        self.mouth: float = 1.0
-        self.ear_left: float = 0.0
-        self.ear_right: float = 0.0
-        self.neck_left: float = self._NECK_L_OFFSET #neck servos hold raw values
-        self.neck_right: float = self._NECK_R_OFFSET
+        # leds
+        self.led_r = 0
+        self.led_g = 0
+        self.led_b = 0
+        self.led_l1 = 0
+        self.led_l2 = 0
 
-        self.eyes_pitch: float = 0.0
-        self.eye_left: float = 0.0
-        self.eye_right: float = 0.0
-        self.lid_left_wideness: float = 20.0
-        self.lid_right_wideness: float = 20.0
-        self.eyes_open: int = 1
+        # face / servos
+        self.mouth = 1.0
+        self.ear_left = 0.0
+        self.ear_right = 0.0
+
+        self.neck_tilt = 0.0
+        self.neck_pitch = 0.0
+
+        self.eye_left = 0.0
+        self.eye_right = 0.0
+        self.eyes_pitch = 0.0
+
+        self.lid_left_wideness = 20.0
+        self.lid_right_wideness = 20.0
+        self.eyes_open = 1
+
+    # ================= CONNECTION =================
 
     def begin(self) -> bool:
-        """Wakes up hardware and gets the device ready to receive commands."""
+        """
+        Initialize hardware connection and synchronize with MCU.
+        
+        Returns:
+            True if initialization successful, False otherwise.
+        """
         self.esp32.open(1)
 
         name = self.esp32.request_peername(5)
-        if name != "TEODORE:api-v0a:HEAD":    # we check if the mcu supports this api
-            # we should set some internal status flags, so we can trace errors
+        if name != "TEODORE:api-v0a:HEAD":
             return False
 
         self.esp32.send_object(PSP_INIT_HARDWARE, PACK_ID_CONTROL)
-        if not (p := self.esp32.wait_packet(10)): #, allowed_ids=[PACK_ID_CONTROL_RESP]
-            # we should send a response back ideally
+        if not self.esp32.wait_packet(10):
             return False
-        time.sleep(.5)
+
+        time.sleep(0.5)
         self.esp32.send_object(PSP_BEGIN_ALL, PACK_ID_CONTROL)
-        time.sleep(.25)
+        time.sleep(0.25)
+
         self.drive_hardware()
-        time.sleep(.25)
         logging.info("[AnimaHead] Hardware initialized.")
         return True
-    
+
     def deinit(self):
-        """Sends a deinitialization command to the esp32. This is equivalent to power cycling the mcu."""
+        """Deinitialize hardware and close connection."""
         self.esp32.send_object(PSP_DEINIT, PACK_ID_CONTROL)
-        # TODO maybe add a response here to, to see if command was received
 
-    def set_rgb(self, r: float, g: float, b: float):
-        """Sets rgb channels values from 0 (fully off) to 1 (fully on)."""
-        self._set_rgb_raw(int(remap(r, self._RGB_MAX_DUTY)), 
-                         int(remap(g, self._RGB_MAX_DUTY)), 
-                         int(remap(b, self._RGB_MAX_DUTY)))
-    
-    def get_rgb(self) -> Tuple[float, float, float]:
-        """Returns current state of rgb leds."""
-        return self.led_r / self._RGB_MAX_DUTY, self.led_g / self._RGB_MAX_DUTY, self.led_b / self._RGB_MAX_DUTY
+    # ================= PRIVATE PROJECTIONS =================
 
-    def _set_rgb_raw(self, r: int, g: int, b: int):
-        "Sets rgb channels duty cycle from 0 to 4095."
-        self.led_r = r
-        self.led_g = g
-        self.led_b = b
-        self._updt_leds = True
-    
-    def set_iris_leds(self, l1: float, l2: float):
-        """Sets brightness of iris leds from 0 to 1"""
-        self._set_iris_leds_raw(int(remap(l1, self._RINGLED_MAX_DUTY)), int(remap(l2, self._RINGLED_MAX_DUTY)))
-        self._updt_leds = True
+    # bytes 11–14
+    def _apply_neck_to_buffer(self):
+        """Apply current neck_tilt and neck_pitch values to motion packet buffer."""
+        # computes motor angles based on tilt and pitch
+        left = self._NECK_L_OFFSET - self.neck_tilt * self._NECK_TILT_SCALE + self.neck_pitch * self._NECK_PITCH_SCALE    
+        right = self._NECK_R_OFFSET + self.neck_tilt * self._NECK_TILT_SCALE + self.neck_pitch * self._NECK_PITCH_SCALE
+        self.mp_buff_mv[11:13] = to_int16(right)
+        self.mp_buff_mv[13:15] = to_int16(left)
 
-    def _set_iris_leds_raw(self, l1: int, l2: int):
-        """Sets duty cycle from 0 to 255."""
-        self.led_l1 = l1
-        self.led_l2 = l2
-        self._updt_leds = True
+    # bytes 3–4
+    def _apply_lids_to_buffer(self):
+        """Apply current lid wideness and eyes_open values to motion packet buffer."""
+        self.mp_buff_mv[3:4] = to_uint8(self.lid_left_wideness * self.eyes_open)
+        self.mp_buff_mv[4:5] = to_uint8(self.lid_right_wideness * self.eyes_open)
 
-    def fade(self, function, args: list[float], time: float):
-        """Takes in a function and linearly iterpolates to value in time seconds"""
-        ...
+    # ================= AXIS WRITE CORE =================
 
-    def set_mouth(self, value: float):
-        "Value must be in range 0 (fully open) to 1 (fully closed)"
-        self.mouth = min(max(value, 0), 1.0)
-        # write value directyto packet buffer
-        self.mp_buff_mv[0:1] = to_uint8(self.mouth * self._MOUTH_INPUT_SCALE) 
+    def _write_axis(self, axys: Axys, val):
+        match axys:
+
+            # ---- LEDs ----
+            case Axys.LED_R:
+                self.led_r = topwm12(val)
+                self._updt_leds = True
+
+            case Axys.LED_G:
+                self.led_g = topwm12(val)
+                self._updt_leds = True
+
+            case Axys.LED_B:
+                self.led_b = topwm12(val)
+                self._updt_leds = True
+
+            case Axys.LED_L1:
+                self.led_l1 = topwm8(val)
+                self._updt_leds = True
+
+            case Axys.LED_L2:
+                self.led_l2 = topwm8(val)
+                self._updt_leds = True
+
+            # ---- Mouth / ears ----
+            case Axys.MOUTH:
+                self.mouth = clamp(val, 0, 1)
+                self.mp_buff_mv[0:1] = to_uint8(self.mouth * self._MOUTH_INPUT_SCALE)
+
+            case Axys.EAR_L:
+                self.ear_left = clamp(val, -1, 1)
+                self.mp_buff_mv[1:2] = to_uint8(self.ear_left * self._EARS_INPUT_SCALE)
+
+            case Axys.EAR_R:
+                self.ear_right = clamp(val, -1, 1)
+                self.mp_buff_mv[2:3] = to_uint8(self.ear_right * self._EARS_INPUT_SCALE)
+
+            # ---- Neck (derived) ----
+            case Axys.NECK_TILT:
+                self.neck_tilt = clamp(val, -1, 1)
+                self._apply_neck_to_buffer()
+
+            case Axys.NECK_PITCH:
+                self.neck_pitch = clamp(val, -1, 1)
+                self._apply_neck_to_buffer()
+
+            # ---- Eyes ----
+            case Axys.EYE_L:
+                self.eye_left = clamp(val, -self._EYE_YAW_RANGE_DEG, self._EYE_YAW_RANGE_DEG)
+                self.mp_buff_mv[5:7] = to_int16(self.eye_left)
+
+            case Axys.EYE_R:
+                self.eye_right = clamp(val, -self._EYE_YAW_RANGE_DEG, self._EYE_YAW_RANGE_DEG)
+                self.mp_buff_mv[7:9] = to_int16(self.eye_right)
+
+            case Axys.EYES_PITCH:
+                self.eyes_pitch = clamp(val, -self._EYE_PITCH_RANGE_DEG, self._EYE_PITCH_RANGE_DEG)
+                self.mp_buff_mv[9:11] = to_int16(self.eyes_pitch)
+
+            # ---- Lids ----
+            case Axys.LID_L:
+                self.lid_left_wideness = clamp(val * 0.5, 0, self._LID_WIDENESS_MAX_DEG)
+                self._apply_lids_to_buffer()
+
+            case Axys.LID_R:
+                self.lid_right_wideness = clamp(val * 0.5, 0, self._LID_WIDENESS_MAX_DEG)
+                self._apply_lids_to_buffer()
+
+            case Axys.EYES_OPEN:
+                self.eyes_open = int(bool(val))
+                self._apply_lids_to_buffer()
+
+            case _:
+                raise InvalidAxys(axys)
+
         self._updt_servos = True
 
-    def set_left_ear(self, value: float):
-        """Value must be in range -1 (fully forward) to 1 (fully backwards). 0 is perfectly straight."""
-        self.ear_left = min(max(value, -1.0), 1.0)
-        self.mp_buff_mv[1:2] = to_uint8(self.ear_left * self._EARS_INPUT_SCALE)
-        self._updt_servos = True
+    # ================= PUBLIC API =================
 
-    def set_right_ear(self, value: float):
-        """Value must be in range -1 (fully forward) to 1 (fully backwards). 0 is perfectly straight."""
-        self.ear_right = min(max(value, -1.0), 1.0)
-        self.mp_buff_mv[2:3] =  to_uint8(self.ear_right * self._EARS_INPUT_SCALE)
-        self._updt_servos = True
+    @overload
+    def write(self, axys: Literal[Axys.EYES_OPEN], val: bool) -> WriteOutcome: ...
+    @overload
+    def write(self, axys: Axys, val: float) -> WriteOutcome: ...
+
+    def write(self, axys: Axys, val) -> WriteOutcome:
+        """
+        Write value to an axis/actuator.
+        
+        Args:
+            axys: Axis/actuator to update (from Axys enum).
+            val: Value to set:
+                - MOUTH: [0, 1] where 0=fully open, 1=fully closed.
+                - EAR_L/EAR_R: [-1, 1] where -1=back, 0=neutral, 1=forward.
+                - NECK_TILT: [-1, 1] where -1=left, 0=center, 1=right.
+                - NECK_PITCH: [-1, 1] where -1=down, 0=center, 1=up.
+                - EYE_L/EYE_R: [-60, 60] degrees yaw.
+                - EYES_PITCH: [-30, 30] degrees pitch.
+                - LID_L/LID_R: [0, 1] where 0=fully closed, 1=fully open.
+                - EYES_OPEN: bool, whether eyes are open (blink control).
+                - LED_R/LED_G/LED_B: [0, 1] for RGB brightness.
+                - LED_L1/LED_L2: [0, 1] for ring LED brightness.
+        
+        Returns:
+            WriteOutcome enum: OK, ERROR, or UNKNOWN_AXYS.
+        """
+        try:
+            self._write_axis(axys, val)
+            return WriteOutcome.OK
+        except InvalidAxys:
+            return WriteOutcome.UNKNOWN_AXYS
+        except Exception:
+            return WriteOutcome.ERROR
+
+    # ---- semantic helpers ----
 
     def set_neck_rotation(self, tilt: float, pitch: float):
-        """Values must be in range -1 to 1; 0 is straight."""
-        self.neck_left = self._NECK_L_OFFSET - tilt * self._NECK_TILT_SCALE + pitch * self._NECK_PITCH_SCALE
-        self.neck_right = self._NECK_R_OFFSET + tilt * self._NECK_TILT_SCALE + pitch * self._NECK_PITCH_SCALE
-        self.mp_buff_mv[11:13] = to_int16(self.neck_right)
-        self.mp_buff_mv[13:15] =  to_int16(self.neck_left)
-        self._updt_servos = True
-    
+        """
+        Set neck rotation in both tilt and pitch.
+        
+        Args:
+            tilt: [-1, 1] where -1=left, 0=center, 1=right.
+            pitch: [-1, 1] where -1=down, 0=center, 1=up.
+        """
+        self.write(Axys.NECK_TILT, tilt)
+        self.write(Axys.NECK_PITCH, pitch)
+
     def set_eyes(self, pitch: float, yaw_left: float, yaw_right: float):
-        """Values represent angle (in degrees)."""
-        self.eyes_pitch = min(max(pitch, -30), 30)
-        self.eye_left = min(max(yaw_left, -60), 60)
-        self.eye_right = min(max(yaw_right, -60), 60)
-        # write to buffer
-        self.mp_buff_mv[5:7] =  to_int16(self.eye_left)
-        self.mp_buff_mv[7:9] =  to_int16(self.eye_right)
-        self.mp_buff_mv[9:11] =  to_int16(self.eyes_pitch)
-        self._updt_servos = True
-    
+        """
+        Set eye position (pitch and yaw for each eye).
+        
+        Args:
+            pitch: [-30, 30] degrees vertical eye rotation.
+            yaw_left: [-60, 60] degrees left eye horizontal rotation.
+            yaw_right: [-60, 60] degrees right eye horizontal rotation.
+        """
+        self.write(Axys.EYES_PITCH, pitch)
+        self.write(Axys.EYE_L, yaw_left)
+        self.write(Axys.EYE_R, yaw_right)
+
+    def set_eyelids(self, left: float, right: float):
+        """
+        Set eyelid wideness.
+        
+        Args:
+            left: [0, 1] where 0=fully closed, 1=fully open.
+            right: [0, 1] where 0=fully closed, 1=fully open.
+        """
+        self.write(Axys.LID_L, left)
+        self.write(Axys.LID_R, right)
+
+    def set_mouth(self, value: float):
+        """Set mouth aperture: 0 = fully open, 1 = fully closed."""
+        self.write(Axys.MOUTH, value)
+
+    def set_left_ear(self, value: float):
+        """Set left ear: -1 fully forward, 0 neutral, 1 fully backward."""
+        self.write(Axys.EAR_L, value)
+
+    def set_right_ear(self, value: float):
+        """Set right ear: -1 fully forward, 0 neutral, 1 fully backward."""
+        self.write(Axys.EAR_R, value)
+
+    def set_lid_left(self, value: float):
+        """Set left eyelid aperture (degrees, scaled internally)."""
+        self.write(Axys.LID_L, value)
+
+    def set_lid_right(self, value: float):
+        """Set right eyelid aperture (degrees, scaled internally)."""
+        self.write(Axys.LID_R, value)
+
+    def set_eyes_closed(self, closed: bool):
+        """Close or open both eyes."""
+        self.write(Axys.EYES_OPEN, not closed)
+
+    def set_rgb(self, r: float, g: float, b: float):
+        """Set RGB LED channels (0..1)."""
+        self.write(Axys.LED_R, r)
+        self.write(Axys.LED_G, g)
+        self.write(Axys.LED_B, b)
+
+    def set_iris_leds(self, l1: float, l2: float):
+        """Set iris LEDs brightness (0..1)."""
+        self.write(Axys.LED_L1, l1)
+        self.write(Axys.LED_L2, l2)
+
     def lookat(self, elevation_ang: float, lateral_ang: float, r: float, semi_IPDmm: float = -1):
-        """Look at a point at distance r (centimeters). Angles are in degrees."""
+        """
+        Make the head look at a target point in space.
+        
+        Args:
+            elevation_ang: Vertical angle in degrees.
+            lateral_ang: Horizontal angle in degrees.
+            r: Distance to target (in decimeters).
+            semi_IPDmm: Half interpupillary distance in mm. Defaults to 75 mm if <= 0.
+        """
         if semi_IPDmm <= 0:
             semi_IPDmm = self._SEMI_IPDmm
 
-        DEG_TO_RAD = math.radians(1)
+        DEG = math.radians(1)
         R = 10 * r
-        yaw_left = math.degrees(1) * math.atan2(R * math.sin(lateral_ang * DEG_TO_RAD) - semi_IPDmm, R * math.cos(lateral_ang * DEG_TO_RAD))
-        yaw_right = math.degrees(1) * math.atan2(R * math.sin(lateral_ang * DEG_TO_RAD) + semi_IPDmm, R* math.cos(lateral_ang * DEG_TO_RAD))
+
+        yaw_left = math.degrees(
+            math.atan2(
+                R * math.sin(lateral_ang * DEG) - semi_IPDmm,
+                R * math.cos(lateral_ang * DEG)
+            )
+        )
+        yaw_right = math.degrees(
+            math.atan2(
+                R * math.sin(lateral_ang * DEG) + semi_IPDmm,
+                R * math.cos(lateral_ang * DEG)
+            )
+        )
+
         self.set_eyes(elevation_ang, yaw_left, yaw_right)
-        self._updt_servos = True
 
-    def set_eyelids(self, aperture_left: float, aperture_right: float):
-        """Value represent the angle (positive, in degrees) formed by a pair of eyelids (0 is closed)"""
-        self.lid_left_wideness = min(max(aperture_left * 0.5, 0), 60)
-        self.lid_right_wideness = min(max(aperture_right * 0.5, 0), 60)
-        self.mp_buff_mv[3:4] =  to_uint8(self.lid_left_wideness * self.eyes_open)
-        self.mp_buff_mv[4:5] =  to_uint8(self.lid_right_wideness * self.eyes_open)
-        self._updt_servos = True
+    # ================= FLUSH =================
 
-    def set_eyes_closed(self, closed: bool):
-        self.eyes_open = int(not closed)
-        # update memory
-        self.mp_buff_mv[3:4] =  to_uint8(self.lid_left_wideness * self.eyes_open)
-        self.mp_buff_mv[4:5] =  to_uint8(self.lid_right_wideness * self.eyes_open)
-        self._updt_servos = True
-    
-    def drive_hardware(self):
-        """Updates the hardware with the current axys configuration. May raise serial exceptions.
+    def drive_hardware(self) -> bool:
         """
-        # if there has been a servo update
-        # 8 + 8 + 8 + 8 + 8 + 16 + 16 + 16 + 16 + 16 bits = 15 byte packet
-        if self._updt_servos:
+        Flush all pending updates to hardware via serial communication.
+        Sends motion packet (servos) and LED updates if changes were made.
 
-            #packet_data = to_uint8(self.mouth * self._MOUTH_INPUT_SCALE)
-            #packet_data += to_int8(self.ear_left * self._EARS_INPUT_SCALE) + to_int8(self.ear_right * self._EARS_INPUT_SCALE)
-            #packet_data += to_uint8(self.lid_left_wideness * self.eyes_open) + to_uint8(self.lid_right_wideness * self.eyes_open)
-            #packet_data += to_int16(self.eye_left) + to_int16(self.eye_right) + to_int16(self.eyes_pitch)
-            #packet_data += to_int16(self.neck_right) + to_int16(self.neck_left)
-            
-            # we dont need to write any data, it's already it the buffer
-            self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION) # sends packet to esp32 over serial
+        Returns True if serial transmission was successfull.
+        """
+        succ = True
+        if self._updt_servos:
+            succ = self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION)
             self._updt_servos = False
 
-        # if there has been a leds update
         if self._updt_leds:
-            # TODO turn this into a single byte, we are just wasting bandwith
-            data = to_uint16(self.led_r) + to_uint16(self.led_g) + to_uint16(self.led_b)
-            data += to_uint16(self.led_l1) + to_uint16(self.led_l2)
-            
-            self.esp32.send_object(data, PACK_ID_LEDS) # sends packet to esp32 over serial
+            data = (
+                to_uint16(self.led_r)
+                + to_uint16(self.led_g)
+                + to_uint16(self.led_b)
+                + to_uint16(self.led_l1)
+                + to_uint16(self.led_l2)
+            )
+            succ = succ and self.esp32.send_object(data, PACK_ID_LEDS)
             self._updt_leds = False
+
+        return succ
