@@ -4,6 +4,7 @@ import math
 import logging
 from enum import Enum, auto
 import zlib
+from threading import Lock
 
 from pySerialDevice import SerialDevice
 from .utils import *
@@ -128,6 +129,9 @@ class HeadMcuDriver:
             self._DEFAULT_BAUDRATE
         )
 
+        # lock for thread safe access
+        self._lock = Lock()
+
         # motion packet: EXACTLY 15 BYTES
         self.motionpack_buffer = bytearray(15)
         self.mp_buff_mv = memoryview(self.motionpack_buffer)
@@ -160,7 +164,7 @@ class HeadMcuDriver:
 
         self.lid_left_wideness = 20.0
         self.lid_right_wideness = 20.0
-        self.eyes_open = 1
+        self.eyes_open = 1.0
 
     # ================= CONNECTION =================
 
@@ -292,7 +296,7 @@ class HeadMcuDriver:
                 self._apply_lids_to_buffer()
 
             case Axys.EYES_OPEN:
-                self.eyes_open = int(bool(val))
+                self.eyes_open = float(bool(val))
                 self._apply_lids_to_buffer()
 
             case _:
@@ -327,7 +331,8 @@ class HeadMcuDriver:
             WriteOutcome enum: OK, ERROR, or UNKNOWN_AXYS.
         """
         try:
-            self._write_axis(axys, val)
+            with self._lock:
+                self._write_axis(axys, val)
             return WriteOutcome.OK
         except InvalidAxys:
             return WriteOutcome.UNKNOWN_AXYS
@@ -446,19 +451,54 @@ class HeadMcuDriver:
 
         Returns True if serial transmission was successfull.
         """
-        succ = True
-        if self._has_mp_updated():
-            succ = self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION)
+        data = b'' # needed for typehints
 
+        with self._lock:
+            succ = True
+            if self._has_mp_updated():
+                # XXX look at the commented snippet below
+                succ = self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION)
+
+            if self._updt_leds:
+                data = (
+                    to_uint16(self.led_r)
+                    + to_uint16(self.led_g)
+                    + to_uint16(self.led_b)
+                    + to_uint16(self.led_l1)
+                    + to_uint16(self.led_l2)
+                )
+        
         if self._updt_leds:
-            data = (
-                to_uint16(self.led_r)
-                + to_uint16(self.led_g)
-                + to_uint16(self.led_b)
-                + to_uint16(self.led_l1)
-                + to_uint16(self.led_l2)
-            )
             succ = succ and self.esp32.send_object(data, PACK_ID_LEDS)
             self._updt_leds = False
 
         return succ
+    
+        # WE CAN SNAPSHOT DATA TO DO THE IO OUTSIDE THE LOCK, THIS REQUIRES AD ADDITIONAL COPY,
+        # BUT
+        """
+        with self._lock:
+            mp_changed = self._has_mp_updated()
+            updt_leds = self._updt_leds
+
+            # snapshot data needed for IO
+            if mp_changed:
+                motion = bytes(self.mp_buff_mv)  # or a view if your API allows
+            if updt_leds:
+                led_data = (
+                    to_uint16(self.led_r)
+                    + to_uint16(self.led_g)
+                    + to_uint16(self.led_b)
+                    + to_uint16(self.led_l1)
+                    + to_uint16(self.led_l2)
+                )
+                self._updt_leds = False
+
+        # do the slow IO *outside* the lock
+        succ = True
+        if mp_changed:
+            succ = self.esp32.send_object(motion, PACK_ID_MOTION)
+        if updt_leds:
+            succ = succ and self.esp32.send_object(led_data, PACK_ID_LEDS)
+        return succ
+    """
