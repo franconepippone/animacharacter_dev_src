@@ -3,6 +3,7 @@ import time
 import math
 import logging
 from enum import Enum, auto
+import zlib
 
 from pySerialDevice import SerialDevice
 from .utils import *
@@ -134,6 +135,8 @@ class HeadMcuDriver:
         self._updt_leds = True
         self._updt_servos = True
 
+        self._prev_buff_hash: int = 0
+
         # -------- logical state --------
 
         # leds
@@ -209,6 +212,17 @@ class HeadMcuDriver:
 
     # ================= AXIS WRITE CORE =================
 
+    def _has_mp_updated(self) -> bool:
+        """
+        Returns True if the motion packet buffer has changed since the last call.
+        Updates the stored hash when a change is detected.
+        """
+        new_hash = zlib.crc32(self.mp_buff_mv) & 0xffffffff
+        if new_hash != self._prev_buff_hash:
+            self._prev_buff_hash = new_hash
+            return True
+        return False
+
     def _write_axis(self, axys: Axys, val):
         match axys:
 
@@ -283,8 +297,6 @@ class HeadMcuDriver:
 
             case _:
                 raise InvalidAxys(axys)
-
-        self._updt_servos = True
 
     # ================= PUBLIC API =================
 
@@ -435,9 +447,8 @@ class HeadMcuDriver:
         Returns True if serial transmission was successfull.
         """
         succ = True
-        if self._updt_servos:
+        if self._has_mp_updated():
             succ = self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION)
-            self._updt_servos = False
 
         if self._updt_leds:
             data = (
