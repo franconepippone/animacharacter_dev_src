@@ -114,7 +114,7 @@ class ThreadedLooper:
     def _add_loop_to_pool(self, l: LoopDescriptor):
         self.loop_pool[l.id] = l
     
-    def _start_loop(self, desc: LoopDescriptor) -> bool:
+    def _start_loop(self, desc: LoopDescriptor, paused: bool) -> bool:
         """Start a loop thread.
         
         Args:
@@ -130,7 +130,7 @@ class ThreadedLooper:
         # creates a brand new thread
         desc._thread = th.Thread(target=_loop, args=(desc,), daemon=True)
         desc._run.set()
-        desc._wait.set()
+        desc._wait.set() if not paused else desc._wait.clear()
         try:
             desc._thread.start()
         except (RuntimeError, SystemError, OSError) as e:
@@ -148,7 +148,18 @@ class ThreadedLooper:
         self.id_counter += 1
         return self.id_counter
     
+    def _set_loop_paused(self, paused: bool, desc: LoopDescriptor):
+        desc._wait.clear() if paused else desc._wait.set()
+
     # public interface
+
+    def pause_all(self):
+        for loop in self.get_loops():
+            self._set_loop_paused(True, loop)
+    
+    def unpause_all(self):
+        for loop in self.get_loops():
+            self._set_loop_paused(False, loop)
 
     def stop_all(self, block: bool = True, timeout: float = 1.0):
         """Stop all running loops.
@@ -231,19 +242,24 @@ class ThreadedLooper:
             return False
         return all([loop.is_running for loop in self.loop_pool.values()])
 
-    def start_all(self):
+    def all_stopped(self) -> bool:
+        """Returns true if all registered loops are stopped"""
+        if not self.loop_pool: return False
+        return not any([loop.is_running for loop in self.loop_pool.values()])
+
+    def start_all(self, paused: bool = False):
         """Start all registered loops."""
         for loop in self.loop_pool.values():
-            self._start_loop(loop)
+            self._start_loop(loop, paused)
 
-    def start_loop(self, loop_id: int) -> bool:
+    def start_loop(self, loop_id: int, paused: bool = False) -> bool:
         """Starts a loop from it's id.
         
         Returns:
             True if succesfull
         """
         if loop := self.get_loop_from_id(loop_id):
-            return self._start_loop(loop)
+            return self._start_loop(loop, paused)
         return False
 
     def add_loop(
@@ -292,9 +308,77 @@ class ThreadedLooper:
 
         self._add_loop_to_pool(descriptor)
         if start_now:
-            self._start_loop(descriptor)
+            self._start_loop(descriptor, paused=False)
         
         return descriptor
+
+    def display_status(self) -> str:
+        """Return a formatted multi-line string describing all registered loops."""
+        WIDTH = 66  # total inner width (between the borders)
+
+        def box_line(content: str = "", sep: str = "║") -> str:
+            return f"{sep} {content.ljust(WIDTH - 2)} {sep}"
+
+        def separator(char="═"):
+            return f"╠{char * WIDTH}╣"
+
+        def top():
+            return f"╔{'═' * WIDTH}╗"
+
+        def bottom():
+            return f"╚{'═' * WIDTH}╝"
+
+        if not self.loop_pool:
+            return "\n".join([
+                "",
+                top(),
+                box_line("THREADED LOOPER STATUS"),
+                separator(),
+                box_line("No loops registered."),
+                bottom(),
+            ])
+
+        loops = sorted(self.loop_pool.values(), key=lambda l: l.id)
+
+        def loop_state(l: LoopDescriptor) -> str:
+            if not l._thread:
+                return "NOT STARTED"
+            if not l.is_running:
+                return "STOPPED"
+            return "RUNNING" if l._wait.is_set() else "PAUSED"
+
+        running = sum(l.is_running and l._wait.is_set() for l in loops)
+        paused = sum(l.is_running and not l._wait.is_set() for l in loops)
+        stopped = len(loops) - running - paused
+
+        lines = ["", top()]
+        lines.append(box_line("THREADED LOOPER STATUS"))
+        lines.append(separator())
+        lines.append(box_line(
+            f"Total: {len(loops)} | Running: {running} | "
+            f"Paused: {paused} | Stopped: {stopped}"
+        ))
+        lines.append(separator())
+
+        for l in loops:
+            state = loop_state(l)
+            thread_name = l._thread.name if l._thread else "None"
+
+            lines.append(box_line(f"Loop ID: {l.id}"))
+            lines.append(box_line(f"  State              : {state}"))
+            lines.append(box_line(f"  Frequency          : {l.freq:.3f} Hz"))
+            #lines.append(box_line(f"  Period             : {l.period:.6f} s"))
+            lines.append(box_line(f"  Thread Alive       : {l.is_running}"))
+            #lines.append(box_line(f"  Thread Name        : {thread_name}"))
+            lines.append(box_line(f"  Lock Type          : {type(l.lock).__name__}"))
+            lines.append(box_line(
+                f"  Exception Callback : {'YES' if l.exception_cb else 'NO'}"
+            ))
+            lines.append(separator())
+
+        lines[-1] = bottom()
+        return "\n".join(lines)
+
 
 
 

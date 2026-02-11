@@ -1,4 +1,4 @@
-from animacharacter_server.ros2_ws.src.hardware_mng.hardware_mng.dispatcher import Dispatcher
+from hardware_mng.dispatcher import Dispatcher
 from hardware_mng.abstract_config import AbstractConfiguration
 
 from mcudrivers import HeadMcuDriver
@@ -10,6 +10,7 @@ LOOP_FREQ = 50 #Hz
 
 TABLE = get_id_by_name_tb()
 
+# consider shipping such classes in the mcudriver itself? 
 class eyesDriverHelper:
     def __init__(self, driver: HeadMcuDriver) -> None:
         self.d = driver
@@ -33,6 +34,7 @@ class TeodoreCfg(AbstractConfiguration):
     def __init__(self) -> None:
         super().__init__()
         self.head = self.add_driver('head_driver', HeadMcuDriver(PORT), LOOP_FREQ)
+        self.test = self.add_driver('test', HeadMcuDriver('diocane'), LOOP_FREQ)
 
         self.eyes_helper = eyesDriverHelper(self.head)
 
@@ -40,3 +42,7 @@ class TeodoreCfg(AbstractConfiguration):
         dispatcher.register_handler(TABLE['EYES_H'], self.eyes_helper.set_eyes_h)
         dispatcher.register_handler(TABLE['EYES_V'], lambda val: self.head.write(Axys.EYES_PITCH, val))
         ...
+
+
+def get_config_class() -> type[AbstractConfiguration]:
+    return TeodoreCfg

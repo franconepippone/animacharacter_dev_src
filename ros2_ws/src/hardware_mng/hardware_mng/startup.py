@@ -2,48 +2,37 @@
 Startup script for the Hardware Manager process.
 Configures objects, launches background threads, and spins the ros2 node.
 """
-import threading as thr
-from typing import Callable
-from functools import partial
-import time
+import importlib
 import rclpy
+from rclpy.logging import RcutilsLogger
+
+from .abstract_config import AbstractConfiguration
 from .hardware_mng_node import HardwareManagerNode
 from .dispatcher import Dispatcher
 from .looper_util import ThreadedLooper
 
-from mcudrivers.head_driver import HeadMcuDriver, Axys
+
+logger = RcutilsLogger('HW mng startup')
 
 def main(args=None):
-
-    # instantiate drivers
-    driv1 = HeadMcuDriver("COM3")
-    driv2 = HeadMcuDriver("COM4") # another driver
-    ...
-
-    dispatcher: Dispatcher[int, float] = Dispatcher()
-    # configure the dispatcher, examples with driv1
-    dispatcher.register_handler(1, lambda x: driv1.write(Axys.EYE_L, x))
-    dispatcher.register_handler(2, lambda x: driv1.write(Axys.EYE_R, x)) 
-    ...
-
+    # THIS IS PROBABLY VERY BROKEN!
+    cfg_module = importlib.import_module('hardware_mng.configs.teodore_cfg')
+    cfg: AbstractConfiguration = getattr(cfg_module, 'get_config_class')()() # create an instance
+    logger.info(f"Import succeded {cfg} {type(cfg)}")
     
-    # LOCKS LOGIC IS MISSING0
+    dispatcher: Dispatcher[int, float] = Dispatcher()
+    cfg.configure_dispatcher(dispatcher)
+    
     looper = ThreadedLooper()
-    l1 = looper.add_loop(50, driv1.drive_hardware)
-    l2 = looper.add_loop(50, driv2.drive_hardware)
-    ...
+    for driver in cfg.get_drivers():
+        looper.add_loop(driver.loop_freq, driver.driver.drive_hardware)
 
-    looper.pause_loop(l1.id)
-    looper.resume_loop(l2.id)
-
-    looper.start_all()
-
-    ok = looper.all_running()
-    print(ok) # from this point on, in the background threads are sending updates to hardware at fixed rate
-
+    #looper.pause_loop(l1.id)
+    #looper.resume_loop(l2.id)
+    
     # spin ros2 node in this thread 
     rclpy.init(args=args)
-    node = HardwareManagerNode(dispatcher)
+    node = HardwareManagerNode(dispatcher, looper)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
