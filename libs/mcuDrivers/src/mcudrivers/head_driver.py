@@ -8,6 +8,7 @@ from threading import Lock
 
 from pySerialDevice import SerialDevice
 from .utils import *
+from .base_driver import BaseHardwareDriver
 
 
 # ================= MOTION PACKET LAYOUT =================
@@ -86,10 +87,13 @@ class WriteOutcome(Enum):
 
 # ================= DRIVER =================
 
-class HeadMcuDriver:
+class HeadMcuDriver(BaseHardwareDriver):
     """
     Animatronic head MCU driver.
     All hardware updates are flushed via drive_hardware().
+
+    This class is already thread-safe, meaning that write and drive methods can be called concurrently
+    without causing data corruption.
     """
 
     # -------- constants --------
@@ -113,6 +117,7 @@ class HeadMcuDriver:
 
     _DEFAULT_BAUDRATE = 115200
     _DEFAULT_NAME = "master"
+    _DEVICE_NAME =  "TEODORE:api-v0a:HEAD"
 
     # -------- init --------
 
@@ -178,14 +183,14 @@ class HeadMcuDriver:
         self.esp32.open(1)
 
         name = self.esp32.request_peername(5)
-        if name != "TEODORE:api-v0a:HEAD":
+        if name != self._DEVICE_NAME:
             return False
 
         self.esp32.send_object(PSP_INIT_HARDWARE, PACK_ID_CONTROL)
         if not self.esp32.wait_packet(10):
             return False
 
-        time.sleep(0.5)
+        time.sleep(0.25)
         self.esp32.send_object(PSP_BEGIN_ALL, PACK_ID_CONTROL)
         time.sleep(0.25)
 
@@ -193,9 +198,11 @@ class HeadMcuDriver:
         logging.info("[AnimaHead] Hardware initialized.")
         return True
 
-    def deinit(self):
+    def deinit(self) -> bool:
         """Deinitialize hardware and close connection."""
         self.esp32.send_object(PSP_DEINIT, PACK_ID_CONTROL)
+        self.esp32.close()
+        return True
 
     # ================= PRIVATE PROJECTIONS =================
 
@@ -365,6 +372,19 @@ class HeadMcuDriver:
         self.write(Axys.EYE_L, yaw_left)
         self.write(Axys.EYE_R, yaw_right)
 
+    def set_eyes_h(self, focus: float, angle: float):
+        """
+        Docstring for set_eyes_h
+        
+        :param self: Description
+        :param focus: Description
+        :type focus: float
+        :param angle: Description
+        :type angle: float
+        :return: Description
+        :rtype: bool
+        """
+
     def set_eyelids(self, left: float, right: float):
         """
         Set eyelid wideness.
@@ -475,7 +495,7 @@ class HeadMcuDriver:
         return succ
     
         # WE CAN SNAPSHOT DATA TO DO THE IO OUTSIDE THE LOCK, THIS REQUIRES AD ADDITIONAL COPY,
-        # BUT
+        # BUT MIGHT BE WORTH IT IF IO BLOCKS FOR A LOT OF TIME
         """
         with self._lock:
             mp_changed = self._has_mp_updated()

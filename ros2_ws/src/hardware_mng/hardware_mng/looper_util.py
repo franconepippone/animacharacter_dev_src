@@ -43,19 +43,27 @@ def _loop(
         sleep_time = descriptor.period - elapsed
         if sleep_time > 0:
             time.sleep(sleep_time)
-    
+
+class MockLock:
+    """Just a mock object needed for the context manager construct with Locks to work"""
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 @dataclass
 class LoopDescriptor:
     """Describes a registered loop task.
     
     Attributes:
         id (int): Unique identifier for this loop.
-        lock (threading.Lock): Lock protecting callback execution.
+        lock (threading.Lock | MockLock): Lock protecting callback execution. If no lock is given, a MockLock is created (does not do anything)
         freq (float): Loop frequency in Hz.
         period (float): Loop period in seconds.
         is_running (bool): True if thread exists and is running.
-        job (Callable): Callback function executed each iteration.
-        exception_cb: If present, when job raises an exception this will be called with that exception as argument.
+        job (Callable[[], Any]): Callback function executed each iteration.
+        exception_cb (Callable[[Exception], Any]): If present, when job raises an exception this will be called with that exception as argument.
         _wait (threading.Event): PRIVATE - Event for pause control (cleared to pause, set to resume).
         _run (threading.Event): PRIVATE - Event that controls if loop continues (cleared to stop).
         _thread (threading.Thread): PRIVATE - Thread object running the loop (None if not started).
@@ -63,7 +71,7 @@ class LoopDescriptor:
     id: int
     _run: th.Event
     _wait: th.Event
-    lock: th.Lock
+    lock: th.Lock | MockLock
     freq: float
     job: Callable[[], Any]
     _thread: th.Thread | None = None
@@ -267,7 +275,7 @@ class ThreadedLooper:
         # create events / locks objects if not given
         run_evnt = th.Event()
         wait_evnt = th.Event()
-        lock = th.Lock() if lock is None else lock
+        new_lock = MockLock() if lock is None else lock
 
         loop_id = self._get_new_id()
 
@@ -275,7 +283,7 @@ class ThreadedLooper:
             id=loop_id,
             _run=run_evnt,
             _wait=wait_evnt,
-            lock=lock,
+            lock=new_lock,
             freq=freq,
             job=job,
             _thread=None,

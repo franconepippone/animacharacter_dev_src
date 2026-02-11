@@ -20,9 +20,7 @@ def main(args=None):
     driv2 = HeadMcuDriver("COM4") # another driver
     ...
 
-    lock_dr1 = thr.Lock()
-
-    dispatcher = Dispatcher()
+    dispatcher: Dispatcher[int, float] = Dispatcher()
     # configure the dispatcher, examples with driv1
     dispatcher.register_handler(1, lambda x: driv1.write(Axys.EYE_L, x))
     dispatcher.register_handler(2, lambda x: driv1.write(Axys.EYE_R, x)) 
@@ -31,7 +29,7 @@ def main(args=None):
     
     # LOCKS LOGIC IS MISSING0
     looper = ThreadedLooper()
-    l1 = looper.add_loop(50, driv1.drive_hardware, lock=lock_dr1)
+    l1 = looper.add_loop(50, driv1.drive_hardware)
     l2 = looper.add_loop(50, driv2.drive_hardware)
     ...
 

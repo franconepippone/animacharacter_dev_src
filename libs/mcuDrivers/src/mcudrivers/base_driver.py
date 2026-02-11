@@ -1,0 +1,9 @@
+from abc import ABC, abstractmethod
+
+class BaseHardwareDriver(ABC):
+    @abstractmethod
+    def begin(self) -> bool: ...
+    @abstractmethod
+    def deinit(self) -> bool: ...
+    @abstractmethod
+    def drive_hardware(self) -> bool: ...
