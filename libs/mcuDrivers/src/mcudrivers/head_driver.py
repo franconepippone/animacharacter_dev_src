@@ -1,10 +1,11 @@
-from typing import overload, Literal, Tuple
+from typing import overload, Literal, Tuple, Protocol
 import time
 import math
 import logging
 from enum import Enum, auto
 import zlib
-from threading import Lock
+from threading import RLock
+import struct
 
 from pySerialDevice import SerialDevice
 from .utils import *
@@ -34,11 +35,8 @@ from .base_driver import BaseHardwareDriver
 #
 # Notes:
 # - Lid wideness is multiplied by eyes_open (0 or 1) to support blinking.
-# - Neck servo values are derived:
-#       left  = L_OFFSET - tilt*TILT_SCALE + pitch*PITCH_SCALE
-#       right = R_OFFSET + tilt*TILT_SCALE + pitch*PITCH_SCALE
+# - Neck right and left are derived from neck_pitch and neck_tilt
 # - All multi-byte int16 fields are little-endian in the packet.
-# - The packet is sent as a continuous bytearray (15 bytes).
 
 
 # ================= PACKET IDS =================
@@ -53,12 +51,12 @@ PSP_BEGIN_ALL = bytes([4])
 
 # ================= EXCEPTIONS
 
-class InvalidAxys(Exception): ...
+class InvalidAxis(Exception): ...
 
 
 # ================= ENUMS =================
 
-class Axys(Enum):
+class Axis(Enum):
     LED_R = auto()
     LED_G = auto()
     LED_B = auto()
@@ -82,7 +80,13 @@ class Axys(Enum):
 class WriteOutcome(Enum):
     OK = 0
     ERROR = -1
-    UNKNOWN_AXYS = -2
+    UNKNOWN_AXIS = -2
+
+
+class GenericLogger(Protocol):
+    def info(self, msg): ...
+    def warning(self, msg): ...
+    def error(self, msg): ...
 
 
 # ================= DRIVER =================
@@ -90,61 +94,71 @@ class WriteOutcome(Enum):
 class HeadMcuDriver(BaseHardwareDriver):
     """
     Animatronic head MCU driver.
-    All hardware updates are flushed via drive_hardware().
+    Current status is sent to hardware via flush().
 
-    This class is already thread-safe, meaning that write and drive methods can be called concurrently
-    without causing data corruption.
+    This class is already thread safe, meaning that different threads can
+    write and flush concurrently without causing data corruption, but NOTE:   
+    by default, each call to write acquires and releases the lock; this can result in overhead if done at high
+    frequency. If you are writing to multiple axis, it's recommended to use the
+    'batch_write_lock()' method called within a context manager to acquire and the release the lock once,
+    and perform writing inside the context.
     """
-
+    
     # -------- constants --------
+    class CFG:
+        _RGB_MAX_DUTY = 4095
+        _RINGLED_MAX_DUTY = 255
 
-    _RGB_MAX_DUTY = 4095
-    _RINGLED_MAX_DUTY = 255
+        _EYE_YAW_RANGE_DEG = 60
+        _EYE_PITCH_RANGE_DEG = 30
+        _LID_WIDENESS_MAX_DEG = 60
 
-    _EYE_YAW_RANGE_DEG = 60
-    _EYE_PITCH_RANGE_DEG = 30
-    _LID_WIDENESS_MAX_DEG = 60
+        _MOUTH_INPUT_SCALE = 255
+        _EARS_INPUT_SCALE = 127
 
-    _MOUTH_INPUT_SCALE = 255
-    _EARS_INPUT_SCALE = 127
+        _NECK_PITCH_SCALE = 50
+        _NECK_TILT_SCALE = 35
+        _NECK_L_OFFSET = 150
+        _NECK_R_OFFSET = 270
 
-    _NECK_PITCH_SCALE = 50
-    _NECK_TILT_SCALE = 35
-    _NECK_L_OFFSET = 150
-    _NECK_R_OFFSET = 270
+        _SEMI_IPDmm = 75
 
-    _SEMI_IPDmm = 75
+        _DEFAULT_BAUDRATE = 115200
+        _DEFAULT_NAME = "master"
+        _DEVICE_NAME =  "TEODORE:api-v0a:HEAD"
 
-    _DEFAULT_BAUDRATE = 115200
-    _DEFAULT_NAME = "master"
-    _DEVICE_NAME =  "TEODORE:api-v0a:HEAD"
+    # Class-level sets for quick membership checks
+    _LED_AXIS = frozenset({Axis.LED_R, Axis.LED_G, Axis.LED_B, Axis.LED_L1, Axis.LED_L2})
 
-    # -------- init --------
-
-    def __init__(self, serial_port: str):
+    def __init__(self, serial_port: str, logger: GenericLogger | None = None):
         """
         Initialize the Head MCU Driver.
         
         Args:
             serial_port: Serial port path (e.g., '/dev/ttyUSB0').
         """
+        self.logger = logger
         self.esp32 = SerialDevice(
-            self._DEFAULT_NAME,
+            self.CFG._DEFAULT_NAME,
             serial_port,
-            self._DEFAULT_BAUDRATE
+            self.CFG._DEFAULT_BAUDRATE
         )
 
         # lock for thread safe access
-        self._lock = Lock()
+        self._lock = RLock()
 
-        # motion packet: EXACTLY 15 BYTES
+        # precompiled packer for motion packets (mp) and leds packet
+        self.mp_packer = struct.Struct("<BBBBBhhhhh")
+        self.leds_packer = struct.Struct("<hhhhh")
+
+        # buffers for packets
         self.motionpack_buffer = bytearray(15)
-        self.mp_buff_mv = memoryview(self.motionpack_buffer)
+        self.ledspack_buffer = bytearray(10)
 
-        self._updt_leds = True
-        self._updt_servos = True
-
-        self._prev_buff_hash: int = 0
+        # signals wheter or not there is any
+        # pending update to flush
+        self._mp_dirty = False
+        self._leds_dirty = False
 
         # -------- logical state --------
 
@@ -183,7 +197,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         self.esp32.open(1)
 
         name = self.esp32.request_peername(5)
-        if name != self._DEVICE_NAME:
+        if name != self.CFG._DEVICE_NAME:
             return False
 
         self.esp32.send_object(PSP_INIT_HARDWARE, PACK_ID_CONTROL)
@@ -194,7 +208,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         self.esp32.send_object(PSP_BEGIN_ALL, PACK_ID_CONTROL)
         time.sleep(0.25)
 
-        self.drive_hardware()
+        self.flush()
         logging.info("[AnimaHead] Hardware initialized.")
         return True
 
@@ -204,124 +218,58 @@ class HeadMcuDriver(BaseHardwareDriver):
         self.esp32.close()
         return True
 
-    # ================= PRIVATE PROJECTIONS =================
+    def _mark_dirty(self, axis: Axis):
+        was_led_updt = axis in self._LED_AXIS
+        self._leds_dirty |= was_led_updt
+        self._mp_dirty |= not was_led_updt
 
-    # bytes 11–14
-    def _apply_neck_to_buffer(self):
-        """Apply current neck_tilt and neck_pitch values to motion packet buffer."""
-        # computes motor angles based on tilt and pitch
-        left = self._NECK_L_OFFSET - self.neck_tilt * self._NECK_TILT_SCALE + self.neck_pitch * self._NECK_PITCH_SCALE    
-        right = self._NECK_R_OFFSET + self.neck_tilt * self._NECK_TILT_SCALE + self.neck_pitch * self._NECK_PITCH_SCALE
-        self.mp_buff_mv[11:13] = to_int16(right)
-        self.mp_buff_mv[13:15] = to_int16(left)
-
-    # bytes 3–4
-    def _apply_lids_to_buffer(self):
-        """Apply current lid wideness and eyes_open values to motion packet buffer."""
-        self.mp_buff_mv[3:4] = to_uint8(self.lid_left_wideness * self.eyes_open)
-        self.mp_buff_mv[4:5] = to_uint8(self.lid_right_wideness * self.eyes_open)
-
-    # ================= AXIS WRITE CORE =================
-
-    def _has_mp_updated(self) -> bool:
-        """
-        Returns True if the motion packet buffer has changed since the last call.
-        Updates the stored hash when a change is detected.
-        """
-        new_hash = zlib.crc32(self.mp_buff_mv) & 0xffffffff
-        if new_hash != self._prev_buff_hash:
-            self._prev_buff_hash = new_hash
-            return True
-        return False
-
-    def _write_axis(self, axys: Axys, val):
-        match axys:
-
+    def _write_axis(self, axis: Axis, val):
+        match axis:
             # ---- LEDs ----
-            case Axys.LED_R:
-                self.led_r = topwm12(val)
-                self._updt_leds = True
-
-            case Axys.LED_G:
-                self.led_g = topwm12(val)
-                self._updt_leds = True
-
-            case Axys.LED_B:
-                self.led_b = topwm12(val)
-                self._updt_leds = True
-
-            case Axys.LED_L1:
-                self.led_l1 = topwm8(val)
-                self._updt_leds = True
-
-            case Axys.LED_L2:
-                self.led_l2 = topwm8(val)
-                self._updt_leds = True
-
+            case Axis.LED_R: self.led_r = topwm12(val)
+            case Axis.LED_G: self.led_g = topwm12(val)
+            case Axis.LED_B: self.led_b = topwm12(val)
+            case Axis.LED_L1: self.led_l1 = topwm8(val)
+            case Axis.LED_L2: self.led_l2 = topwm8(val)
             # ---- Mouth / ears ----
-            case Axys.MOUTH:
-                self.mouth = clamp(val, 0, 1)
-                self.mp_buff_mv[0:1] = to_uint8(self.mouth * self._MOUTH_INPUT_SCALE)
-
-            case Axys.EAR_L:
-                self.ear_left = clamp(val, -1, 1)
-                self.mp_buff_mv[1:2] = to_uint8(self.ear_left * self._EARS_INPUT_SCALE)
-
-            case Axys.EAR_R:
-                self.ear_right = clamp(val, -1, 1)
-                self.mp_buff_mv[2:3] = to_uint8(self.ear_right * self._EARS_INPUT_SCALE)
-
-            # ---- Neck (derived) ----
-            case Axys.NECK_TILT:
-                self.neck_tilt = clamp(val, -1, 1)
-                self._apply_neck_to_buffer()
-
-            case Axys.NECK_PITCH:
-                self.neck_pitch = clamp(val, -1, 1)
-                self._apply_neck_to_buffer()
-
+            case Axis.MOUTH: self.mouth = clamp(val, 0, 1)
+            case Axis.EAR_L: self.ear_left = clamp(val, -1, 1)
+            case Axis.EAR_R: self.ear_right = clamp(val, -1, 1)
+            # ---- Neck (virtual) ----
+            case Axis.NECK_TILT: self.neck_tilt = clamp(val, -1, 1)
+            case Axis.NECK_PITCH: self.neck_pitch = clamp(val, -1, 1)
             # ---- Eyes ----
-            case Axys.EYE_L:
-                self.eye_left = clamp(val, -self._EYE_YAW_RANGE_DEG, self._EYE_YAW_RANGE_DEG)
-                self.mp_buff_mv[5:7] = to_int16(self.eye_left)
-
-            case Axys.EYE_R:
-                self.eye_right = clamp(val, -self._EYE_YAW_RANGE_DEG, self._EYE_YAW_RANGE_DEG)
-                self.mp_buff_mv[7:9] = to_int16(self.eye_right)
-
-            case Axys.EYES_PITCH:
-                self.eyes_pitch = clamp(val, -self._EYE_PITCH_RANGE_DEG, self._EYE_PITCH_RANGE_DEG)
-                self.mp_buff_mv[9:11] = to_int16(self.eyes_pitch)
-
+            case Axis.EYE_L: self.eye_left = clamp(val, -self.CFG._EYE_YAW_RANGE_DEG, self.CFG._EYE_YAW_RANGE_DEG)
+            case Axis.EYE_R: self.eye_right = clamp(val, -self.CFG._EYE_YAW_RANGE_DEG, self.CFG._EYE_YAW_RANGE_DEG)
+            case Axis.EYES_PITCH: self.eyes_pitch = clamp(val, -self.CFG._EYE_PITCH_RANGE_DEG, self.CFG._EYE_PITCH_RANGE_DEG)
             # ---- Lids ----
-            case Axys.LID_L:
-                self.lid_left_wideness = clamp(val * 0.5, 0, self._LID_WIDENESS_MAX_DEG)
-                self._apply_lids_to_buffer()
-
-            case Axys.LID_R:
-                self.lid_right_wideness = clamp(val * 0.5, 0, self._LID_WIDENESS_MAX_DEG)
-                self._apply_lids_to_buffer()
-
-            case Axys.EYES_OPEN:
-                self.eyes_open = float(bool(val))
-                self._apply_lids_to_buffer()
-
+            case Axis.LID_L: self.lid_left_wideness = clamp(val * 0.5, 0, self.CFG._LID_WIDENESS_MAX_DEG)
+            case Axis.LID_R: self.lid_right_wideness = clamp(val * 0.5, 0, self.CFG._LID_WIDENESS_MAX_DEG)
+            case Axis.EYES_OPEN: self.eyes_open = float(bool(val))
             case _:
-                raise InvalidAxys(axys)
+                raise InvalidAxis(axis)
+        
+        self._mark_dirty(axis)
 
     # ================= PUBLIC API =================
 
-    @overload
-    def write(self, axys: Literal[Axys.EYES_OPEN], val: bool) -> WriteOutcome: ...
-    @overload
-    def write(self, axys: Axys, val: float) -> WriteOutcome: ...
+    def batch_write_lock(self) -> RLock:
+        """Use this lock of inside a context manager for batch writing using
+        only one lock acquisition.
+        """
+        return self._lock
 
-    def write(self, axys: Axys, val) -> WriteOutcome:
+    @overload
+    def write(self, axis: Literal[Axis.EYES_OPEN], val: bool) -> WriteOutcome: ...
+    @overload
+    def write(self, axis: Axis, val: float) -> WriteOutcome: ...
+
+    def write(self, axis: Axis, val) -> WriteOutcome:
         """
         Write value to an axis/actuator.
         
         Args:
-            axys: Axis/actuator to update (from Axys enum).
+            axis: Axis/actuator to update (from Axis enum).
             val: Value to set:
                 - MOUTH: [0, 1] where 0=fully open, 1=fully closed.
                 - EAR_L/EAR_R: [-1, 1] where -1=back, 0=neutral, 1=forward.
@@ -335,14 +283,15 @@ class HeadMcuDriver(BaseHardwareDriver):
                 - LED_L1/LED_L2: [0, 1] for ring LED brightness.
         
         Returns:
-            WriteOutcome enum: OK, ERROR, or UNKNOWN_AXYS.
+            WriteOutcome enum: OK, ERROR, or UNKNOWN_AXIS.
         """
         try:
+            # only acquire lock if not already locked by batch context manager
             with self._lock:
-                self._write_axis(axys, val)
+                self._write_axis(axis, val)
             return WriteOutcome.OK
-        except InvalidAxys:
-            return WriteOutcome.UNKNOWN_AXYS
+        except InvalidAxis:
+            return WriteOutcome.UNKNOWN_AXIS
         except Exception:
             return WriteOutcome.ERROR
 
@@ -356,8 +305,8 @@ class HeadMcuDriver(BaseHardwareDriver):
             tilt: [-1, 1] where -1=left, 0=center, 1=right.
             pitch: [-1, 1] where -1=down, 0=center, 1=up.
         """
-        self.write(Axys.NECK_TILT, tilt)
-        self.write(Axys.NECK_PITCH, pitch)
+        self.write(Axis.NECK_TILT, tilt)
+        self.write(Axis.NECK_PITCH, pitch)
 
     def set_eyes(self, pitch: float, yaw_left: float, yaw_right: float):
         """
@@ -368,9 +317,9 @@ class HeadMcuDriver(BaseHardwareDriver):
             yaw_left: [-60, 60] degrees left eye horizontal rotation.
             yaw_right: [-60, 60] degrees right eye horizontal rotation.
         """
-        self.write(Axys.EYES_PITCH, pitch)
-        self.write(Axys.EYE_L, yaw_left)
-        self.write(Axys.EYE_R, yaw_right)
+        self.write(Axis.EYES_PITCH, pitch)
+        self.write(Axis.EYE_L, yaw_left)
+        self.write(Axis.EYE_R, yaw_right)
 
     def set_eyes_h(self, focus: float, angle: float):
         """
@@ -385,6 +334,9 @@ class HeadMcuDriver(BaseHardwareDriver):
         :rtype: bool
         """
 
+        # TODO to be implemented
+        raise NotImplementedError()
+
     def set_eyelids(self, left: float, right: float):
         """
         Set eyelid wideness.
@@ -393,43 +345,46 @@ class HeadMcuDriver(BaseHardwareDriver):
             left: [0, 1] where 0=fully closed, 1=fully open.
             right: [0, 1] where 0=fully closed, 1=fully open.
         """
-        self.write(Axys.LID_L, left)
-        self.write(Axys.LID_R, right)
+        with self._lock:
+            self.write(Axis.LID_L, left)
+            self.write(Axis.LID_R, right)
 
     def set_mouth(self, value: float):
         """Set mouth aperture: 0 = fully open, 1 = fully closed."""
-        self.write(Axys.MOUTH, value)
+        self.write(Axis.MOUTH, value)
 
     def set_left_ear(self, value: float):
         """Set left ear: -1 fully forward, 0 neutral, 1 fully backward."""
-        self.write(Axys.EAR_L, value)
+        self.write(Axis.EAR_L, value)
 
     def set_right_ear(self, value: float):
         """Set right ear: -1 fully forward, 0 neutral, 1 fully backward."""
-        self.write(Axys.EAR_R, value)
+        self.write(Axis.EAR_R, value)
 
     def set_lid_left(self, value: float):
         """Set left eyelid aperture (degrees, scaled internally)."""
-        self.write(Axys.LID_L, value)
+        self.write(Axis.LID_L, value)
 
     def set_lid_right(self, value: float):
         """Set right eyelid aperture (degrees, scaled internally)."""
-        self.write(Axys.LID_R, value)
+        self.write(Axis.LID_R, value)
 
     def set_eyes_closed(self, closed: bool):
         """Close or open both eyes."""
-        self.write(Axys.EYES_OPEN, not closed)
+        self.write(Axis.EYES_OPEN, not closed)
 
     def set_rgb(self, r: float, g: float, b: float):
         """Set RGB LED channels (0..1)."""
-        self.write(Axys.LED_R, r)
-        self.write(Axys.LED_G, g)
-        self.write(Axys.LED_B, b)
+        with self._lock:
+            self.write(Axis.LED_R, r)
+            self.write(Axis.LED_G, g)
+            self.write(Axis.LED_B, b)
 
     def set_iris_leds(self, l1: float, l2: float):
         """Set iris LEDs brightness (0..1)."""
-        self.write(Axys.LED_L1, l1)
-        self.write(Axys.LED_L2, l2)
+        with self._lock:
+            self.write(Axis.LED_L1, l1)
+            self.write(Axis.LED_L2, l2)
 
     def lookat(self, elevation_ang: float, lateral_ang: float, r: float, semi_IPDmm: float = -1):
         """
@@ -442,7 +397,7 @@ class HeadMcuDriver(BaseHardwareDriver):
             semi_IPDmm: Half interpupillary distance in mm. Defaults to 75 mm if <= 0.
         """
         if semi_IPDmm <= 0:
-            semi_IPDmm = self._SEMI_IPDmm
+            semi_IPDmm = self.CFG._SEMI_IPDmm
 
         DEG = math.radians(1)
         R = 10 * r
@@ -464,61 +419,65 @@ class HeadMcuDriver(BaseHardwareDriver):
 
     # ================= FLUSH =================
 
-    def drive_hardware(self) -> bool:
+    def flush(self) -> bool:
         """
         Flush all pending updates to hardware via serial communication.
         Sends motion packet (servos) and LED updates if changes were made.
 
-        Returns True if serial transmission was successfull.
+        Returns True if serial transmission occurred and was successfull.
         """
-        data = b'' # needed for typehints
-
-        with self._lock:
-            succ = True
-            if self._has_mp_updated():
-                # XXX look at the commented snippet below
-                succ = self.esp32.send_object(self.mp_buff_mv, PACK_ID_MOTION)
-
-            if self._updt_leds:
-                data = (
-                    to_uint16(self.led_r)
-                    + to_uint16(self.led_g)
-                    + to_uint16(self.led_b)
-                    + to_uint16(self.led_l1)
-                    + to_uint16(self.led_l2)
-                )
         
-        if self._updt_leds:
-            succ = succ and self.esp32.send_object(data, PACK_ID_LEDS)
-            self._updt_leds = False
+        if not self._mp_dirty and not self._leds_dirty:
+            return False
 
-        return succ
-    
-        # WE CAN SNAPSHOT DATA TO DO THE IO OUTSIDE THE LOCK, THIS REQUIRES AD ADDITIONAL COPY,
-        # BUT MIGHT BE WORTH IT IF IO BLOCKS FOR A LOT OF TIME
-        """
+        cfg = self.CFG
+        # compute tranformations for neck
+        neck_left_mot = int(cfg._NECK_L_OFFSET - self.neck_tilt * cfg._NECK_TILT_SCALE + self.neck_pitch * cfg._NECK_PITCH_SCALE)
+        neck_right_mot = int(cfg._NECK_R_OFFSET + self.neck_tilt * cfg._NECK_TILT_SCALE + self.neck_pitch * cfg._NECK_PITCH_SCALE)
+
         with self._lock:
-            mp_changed = self._has_mp_updated()
-            updt_leds = self._updt_leds
+            # costruct packets into buffers
+            try:
+                if self._mp_dirty:
+                    self.mp_packer.pack_into(self.motionpack_buffer, 0, 
+                        int(self.mouth * cfg._MOUTH_INPUT_SCALE),
+                        int(self.ear_left * cfg._EARS_INPUT_SCALE),
+                        int(self.ear_right * cfg._EARS_INPUT_SCALE),
+                        int(self.lid_left_wideness * self.eyes_open),
+                        int(self.lid_right_wideness * self.eyes_open),
+                        int(self.eye_left),
+                        int(self.eye_right),
+                        int(self.eyes_pitch),
+                        neck_left_mot,
+                        neck_right_mot
+                        )
+                
+                if self._leds_dirty:
+                    self.leds_packer.pack_into(self.ledspack_buffer, 0,
+                        self.led_r,
+                        self.led_g,
+                        self.led_b,
+                        self.led_l1,
+                        self.led_l2
+                    )
+            except struct.error as e:
+                if self.logger: self.logger.error(f"Head Driver caught exception during packaging phase of 'flush': {e}")
+                return False
+        
+        # I/O - flush to hardware
+        try:
+            success = True
+            if self._mp_dirty:
+                success = self.esp32.send_object(self.motionpack_buffer, PACK_ID_MOTION)
+                self._mp_dirty = not success # if send fails, set flag to dirty
 
-            # snapshot data needed for IO
-            if mp_changed:
-                motion = bytes(self.mp_buff_mv)  # or a view if your API allows
-            if updt_leds:
-                led_data = (
-                    to_uint16(self.led_r)
-                    + to_uint16(self.led_g)
-                    + to_uint16(self.led_b)
-                    + to_uint16(self.led_l1)
-                    + to_uint16(self.led_l2)
-                )
-                self._updt_leds = False
-
-        # do the slow IO *outside* the lock
-        succ = True
-        if mp_changed:
-            succ = self.esp32.send_object(motion, PACK_ID_MOTION)
-        if updt_leds:
-            succ = succ and self.esp32.send_object(led_data, PACK_ID_LEDS)
-        return succ
-    """
+            if self._leds_dirty:
+                success = success and self.esp32.send_object(self.ledspack_buffer, PACK_ID_LEDS)
+                self._leds_dirty = not success # if send fails, set flag to dirty
+            
+            if not success and self.logger: self.logger.warning("Serial packet transmission failed.")
+            return success
+        
+        except Exception as e:
+            if self.logger: self.logger.error(f"Head Driver caught exception during I/O phase of 'flush': {e}")
+            return False
