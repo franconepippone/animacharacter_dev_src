@@ -1,5 +1,5 @@
 from contextlib import AbstractContextManager, contextmanager
-from typing import TypeVar, Generic, Callable, Iterable, Dict, Set, List, Tuple, Optional, Any
+from typing import TypeVar, Generic, Callable, Iterable, Dict, Set, List, Tuple, Optional, Any, ContextManager
 
 from .dispatcher import Dispatcher
 
@@ -23,12 +23,12 @@ class BatchDispatcher(Generic[KEY_T, VAL_T]):
     def __init__(self, dispatcher: Dispatcher[KEY_T, VAL_T]):
         self.dispatcher = dispatcher
         # Each batch: (key set, optional context manager)
-        self.batches: List[Tuple[Set[KEY_T], Optional[AbstractContextManager]]] = []
+        self.batches: List[Tuple[Set[KEY_T], Optional[ContextManager]]] = []
 
     def add_batch(
         self,
         key_set: Set[KEY_T],
-        context: Optional[AbstractContextManager] = None,
+        context: Optional[ContextManager] = None,
     ):
         """
         Add a batch of keys and an optional context manager to wrap the dispatch.

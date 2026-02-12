@@ -1,66 +1,175 @@
-from typing import TypeVar, Dict, Any
+"""
+The class represents an abstract configuration for the hardware manager system.
+A configuration is a collection of data and functionality that the hardware
+manager uses to operate a specific hardware setup.
+
+- Drivers:
+  Each system using this hardware manager implementation may define its own
+  set of drivers. A driver is a Python class that provides an interface for
+  interacting with hardware. Drivers must implement the expected driver
+  interface (e.g., begin(), deinit(), write methods).
+
+- Dispatcher:
+  The dispatcher is the core routing component of the system. The hardware
+  manager receives abstract commands in the form (id, payload), where `id`
+  identifies the target hardware axis to actuate and `payload` represents
+  the command argument (e.g., position, speed).
+
+  The dispatcher bridges the abstract (id, payload) command to its concrete
+  implementation by mapping each id to a handler that typically calls into
+  a driver.
+
+  NOTE about BatchDispatcher:
+  The BatchDispatcher is a wrapper around a Dispatcher that allows optional
+  batching of dispatches based on sets of ids. This is typically used to group
+  commands by driver ownership, so that setup (e.g., lock acquisition) and
+  cleanup (e.g., lock release) logic can be executed once per driver rather
+  than once per command.
+
+  If drivers require setup/cleanup logic before transmission, define a batch
+  for each subset of ids associated with that driver and configure the
+  corresponding context logic accordingly (see `dispatcher.hooks_to_context`
+  for creating a context manager from simple pre/post functions).
+
+- wakeup_drivers / shutdown_drivers:
+  These methods manage the driver lifecycle. They are responsible for
+  initializing all communication with the hardware and properly shutting
+  it down. Each returns True only if all registered drivers succeed.
+  They are generally provided automatically and should not be overridden.
+
+When subclassing this class:
+
+- In __init__, register drivers using:
+      self.driver_A = self.add_driver("my_custom_dA", DriverClass(...), loop_freq=50)
+
+  The specified loop_freq determines how often the driver's periodic
+  hardware routine is executed.
+
+- In configure_dispatcher, register handlers using:
+      dispatcher.register_handler(<positive integer id>, <handler callable>)
+
+  Example:
+      dispatcher.register_handler(
+          5,
+          lambda payload: self.driver_A.write_axys_5(payload)
+      )
+
+If more complex logic is required, define custom handler functions or
+implement the necessary behavior directly inside the driver.
+"""
+
+from typing import TypeVar, Dict, Any, Iterable, Protocol
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from .dispatcher import Dispatcher
-from mcudrivers import BaseHardwareDriver # MAKE THIS A PROTOCOL INSTEAD? decouples from mcudrivers
+from .dispatcher import Dispatcher, BatchDispatcher
 
-T = TypeVar('T', bound=BaseHardwareDriver)
+# -------------------- Driver Protocol --------------------
+class HardwareDriverProtocol(Protocol):
+    """Protocol for any hardware driver compatible with the hardware manager."""
 
+    def begin(self) -> bool:
+        """Initialize and start communication with the hardware."""
+        ...
+
+    def deinit(self) -> bool:
+        """Deinitialize and stop communication with the hardware."""
+        ...
+
+    def flush(self) -> Any:
+        """Updateds the the hardware."""
+        ...
+
+# Generic type for drivers
+T = TypeVar('T', bound=HardwareDriverProtocol)
+
+
+# -------------------- Driver Wrapper --------------------
 @dataclass
 class DriverHolder:
-    driver: BaseHardwareDriver
+    driver: HardwareDriverProtocol
     loop_freq: float
     name: str
 
-class AbstractConfiguration(ABC):
-    """This class represent an abstract configuration for the hardware manager system.
-    
-    A configuration is a collection of data an functionalities that the hardware manager can use.
-    - **Drivers**: each unique system using this hardware manager implementation can have different drivers.
-        A driver is just a python class that provides an interface for interacting with any kind of hardware.
-        This systems only support driver classes inherited from the mcudrivers.BaseHardwareDriver ABC.
-    - **Dispatcher**: a dispatcher is the core component of the system. The hardware manager receives commands in the form
-        (id, payload), where id represents the target hardware axys to actuate, and payload the command argument (position, speed).
-        The dispatcher is what bridges between a (id, payload) abstract command to its actual implementation; to achieve this, it uses
-        drivers as an abstraction layer.
-    - **wakeup_drivers/shutdown_drivers**: methods that help manage the lifecycle of the drivers. They should be respectively responsible for
-        initiating all communication with hardware, and deinitializing and closing communication with hardware, returning either True or False
-        upon success on ALL registered drivers. Generally, they are automatically generated and should not be overwritten.
+    def __post_init__(self):
+        if self.loop_freq <= 0:
+            raise ValueError(f"loop_freq must be positive, got {self.loop_freq}")
 
-    When subclassing this class, in the init method use the scheme:   
-    `self.driver_A = self.add_driver('my_custom_dA', DriverClass(...), loop_freq=50)`   
-    The specified loop_freq will be the one at which the .drive_hardware() method on your driver will be called.
-    
-    Inside the configure_dispatcher method, use this scheme:  
-    `dispatcher.register_handler(<positive integer id>, <handler callable>)`  
-    A concrete example of this could be:  
-    `dispatcher.register_handler(5, lambda payload: self.driver_A.write_axys_5(payload)))`
-    If handlers require more complexity, create custom functions to use as handlers, or implement them in the 
-    driver itself.
-
+# -------------------- Abstract Configuration --------------------
+class AbstractHMSConfiguration(ABC):
     """
+    This class represents an abstract configuration for the Hardware Manager System.  
+    A configuration is a collection of data and functionality that the hardware
+    manager uses to operate a specific hardware setup.
+
+    - **Drivers**: A driver is just a Python class that provides an abstraction layer for
+        interacting with hardware.
+        Any class implementing the HardwareDriverProtocol is a valid driver; mainly this means
+        exposing a 'flush' method, which takes zero arguments, that updates hardware based on a stored state. 
+        The implementation is completely up to the user.
+
+    - **Dispatcher**: a dispatcher is the core component of the system. 
+        The hardware manager receives commands in the form (id, payload), 
+        where id represents the target hardware axys to actuate, and payload the command argument (position, speed). 
+        The dispatcher is what bridges between a (id, payload) abstract command to its 
+        actual implementation; to achieve this, it uses drivers as an abstraction layer.
+
+    - **BatchDispatcher**: The batch dispatcher is simply a wrapper around a dispatcher object that allows,
+        if necessary, to batch dispatches based on sets of ids. 
+        This in general should be used to group dispatches based on driver ownership of ids, so that setup 
+        (such as lock acquisition) and cleanup (lock release) logic can be executed PER driver. 
+        Put simply, if your drivers need setup/cleanup logic before a transmission just add a batch 
+        for each subset of ids directed to that driver and configure pre/post hooks accordingly 
+        (look into 'dispatcher.hooks_to_context' function to automatically create a ctx manager from functions).
+    """
+
     def __init__(self) -> None:
         self._drivers: Dict[str, DriverHolder] = {}
 
-    def get_drivers(self):
+    # -------------------- Driver Management --------------------
+    def get_drivers(self) -> Iterable[DriverHolder]:
+        """Return all registered drivers."""
         return self._drivers.values()
 
     def add_driver(self, name: str, driver_obj: T, loop_freq: float) -> T:
+        """
+        Register a driver with a name and loop frequency.
+
+        Args:
+            name (str): Unique driver identifier.
+            driver_obj: Instance implementing HardwareDriverProtocol.
+            loop_freq (float): Frequency in Hz at which the driver's drive_hardware method will be called.
+
+        Returns:
+            The driver object (for convenience).
+        """
+        if name in self._drivers:
+            raise ValueError(f"Driver with name '{name}' already exists")
         self._drivers[name] = DriverHolder(driver_obj, loop_freq, name)
         return driver_obj
 
+    # -------------------- Dispatcher Configuration --------------------
     @abstractmethod
-    def configure_dispatcher(self, dispatcher: Dispatcher): ...
+    def configure_dispatcher(self, dispatcher: Dispatcher[int, float]):
+        """Register handlers mapping ids to driver methods (one id per hardware axys)."""
+        ...
 
+    @abstractmethod
+    def configure_batch_dispatcher(self, batch_dispatcher: BatchDispatcher[int, float]):
+        """Add batches with optional context managers for grouped dispatches."""
+        ...
+
+    # -------------------- Driver Lifecycle --------------------
     def wakeup_drivers(self) -> bool:
-        ok = True
+        """Initialize all drivers. Short-circuits on first failure."""
         for dh in self.get_drivers():
-            ok = ok and dh.driver.begin()
-        return ok
-    
+            if not dh.driver.begin():
+                return False
+        return True
+
     def shutdown_drivers(self) -> bool:
-        ok = True
+        """Deinitialize all drivers. Short-circuits on first failure."""
         for dh in self.get_drivers():
-            ok = ok and dh.driver.deinit()
-        return ok
+            if not dh.driver.deinit():
+                return False
+        return True

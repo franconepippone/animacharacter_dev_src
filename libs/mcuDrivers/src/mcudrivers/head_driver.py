@@ -1,4 +1,4 @@
-from typing import overload, Literal, Tuple, Protocol
+from typing import overload, Literal, Any, Protocol
 import time
 import math
 import logging
@@ -83,11 +83,11 @@ class WriteOutcome(Enum):
     UNKNOWN_AXIS = -2
 
 
+# intented to work with ros2 rcutils logger
 class GenericLogger(Protocol):
-    def info(self, msg): ...
-    def warning(self, msg): ...
-    def error(self, msg): ...
-
+    def info(self, message: str, **kwargs: Any) -> bool: ...
+    def warning(self, message: str, **kwargs: Any) -> bool: ...
+    def error(self, message: str, **kwargs: Any) -> bool: ...
 
 # ================= DRIVER =================
 
@@ -127,7 +127,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         _DEFAULT_NAME = "master"
         _DEVICE_NAME =  "TEODORE:api-v0a:HEAD"
 
-    # Class-level sets for quick membership checks
+    # set for quick membership checks
     _LED_AXIS = frozenset({Axis.LED_R, Axis.LED_G, Axis.LED_B, Axis.LED_L1, Axis.LED_L2})
 
     def __init__(self, serial_port: str, logger: GenericLogger | None = None):
@@ -246,8 +246,8 @@ class HeadMcuDriver(BaseHardwareDriver):
             case Axis.LID_L: self.lid_left_wideness = clamp(val * 0.5, 0, self.CFG._LID_WIDENESS_MAX_DEG)
             case Axis.LID_R: self.lid_right_wideness = clamp(val * 0.5, 0, self.CFG._LID_WIDENESS_MAX_DEG)
             case Axis.EYES_OPEN: self.eyes_open = float(bool(val))
-            case _:
-                raise InvalidAxis(axis)
+            # unknown
+            case _: raise InvalidAxis(axis)
         
         self._mark_dirty(axis)
 
@@ -257,6 +257,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         """Use this lock of inside a context manager for batch writing using
         only one lock acquisition.
         """
+        # equivalent to just acquiring self._lock
         return self._lock
 
     @overload
@@ -469,12 +470,13 @@ class HeadMcuDriver(BaseHardwareDriver):
             success = True
             if self._mp_dirty:
                 success = self.esp32.send_object(self.motionpack_buffer, PACK_ID_MOTION)
-                self._mp_dirty = not success # if send fails, set flag to dirty
+                if success: self._mp_dirty = False # if send fails, keep flag to dirty
 
             if self._leds_dirty:
-                success = success and self.esp32.send_object(self.ledspack_buffer, PACK_ID_LEDS)
-                self._leds_dirty = not success # if send fails, set flag to dirty
-            
+                success_led = self.esp32.send_object(self.ledspack_buffer, PACK_ID_LEDS)
+                if success_led: self._leds_dirty = False # if send fails, keep flag to dirty
+                success = success and success_led # success only if both succeed
+
             if not success and self.logger: self.logger.warning("Serial packet transmission failed.")
             return success
         

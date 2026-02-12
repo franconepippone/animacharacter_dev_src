@@ -5,9 +5,12 @@ from rclpy.lifecycle import TransitionCallbackReturn
 from std_msgs.msg import ByteMultiArray, String
 from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
 
+from interfaces.msg import MotionframeArray
+
 from .dispatcher import Dispatcher
 from .looper_util import ThreadedLooper
 
+# of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
 
 class HardwareManagerNode(LifecycleNode):
@@ -23,7 +26,7 @@ class HardwareManagerNode(LifecycleNode):
         )
 
         self.sub = self.create_subscription(
-            ByteMultiArray,
+            MotionframeArray,
             INPUT_TOPIC,
             self.motionframe_callback,
             10
@@ -39,11 +42,13 @@ class HardwareManagerNode(LifecycleNode):
         response.message = "WIP"
         return response
 
-    def motionframe_callback(self, msg: ByteMultiArray):
+    def motionframe_callback(self, msg: MotionframeArray):
         # TODO parse the data into motion commands tuples, and we create a motionframe
-        motionframe = []
 
-        self.dispatcher.dispatch_multiple(motionframe)
+        # array of tuples (actutator id: int, actuator target value: float)
+        motionframes = [(act_id, val) for act_id, val in zip(msg.ids, msg.values)]
+
+        self.dispatcher.dispatch_multiple(motionframes)
 
     # --- configure ---
     def on_configure(self, state: State):
