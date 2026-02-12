@@ -1,37 +1,37 @@
-#BIT/ID,     NAME,           TYPE
-1,          EYES_H,         int16
-2,          EYES_V,         int16
-3,          EYES_FOCUS,     int16
-4,          EYELID_TR,      int16
-5,          EYELID_TL,      int16
-6,          EYELID_BR,      int16
-7,          EYELID_BL,      int16
-8,          EAR_LEFT,       int16
-9,          EAR_RIGHT,      int16
-10,         MOUTH,          int16
-#       NECK:
-11,     SERVO_NECK_R,       int16
-12,     SERVO_NECK_L,       int16
-13,     NECK_ROTATION,      int16
-#       ARM RIGHT:
-14,     ARMR_STEPPERA,      int16
-15,     ARMR_STEPPERB,      int16
-16,         ARMR_ELBOW,     int16
-17,         ARMR_WRIST,     int16
-18,     ARMR_ROTATION,      int16
-#       ARM LEFT:
-19,     ARML_STEPPERA,      int16
-20,     ARML_STEPPERB,      int16
-21,         ARML_ELBOW,     int16
-22,         ARML_WRIST,     int16
-23,     ARML_ROTATION,      int16
-#       BODY:
-24,     BODY_LEAN,          int16
-25,     BODY_ROTATION,      int16
-#       LEDS:
-26,     LED_IRIS_LEFT,      uint8
-27,     LED_IRIS_RIGHT,     uint8
-28,     EYELED_R,           uint8
-29,     EYELED_G,           uint8
-30,     EYELED_B,           uint8
-#comment    
+#ID,    NAME,           TYPE
+1,      EYES_H,         int16 
+2,      EYES_V,         int16 
+3,      EYES_FOCUS,     int16
+4,      EYELID_TR,      int16
+5,      EYELID_TL,      int16
+6,      EYELID_BR,      int16
+7,      EYELID_BL,      int16
+8,      EAR_LEFT,       int16
+9,      EAR_RIGHT,      int16
+10,     MOUTH,          int16
+#       NEC
+11,     SERVO_NECK_R,   int16
+12,     SERVO_NECK_L,   int16
+13,     NECK_ROTATION,  int16
+#       ARM RIGH
+14,     ARMR_STEPPERA,  int16
+15,     ARMR_STEPPERB,  int16
+16,     ARMR_ELBOW,     int16
+17,     ARMR_WRIST,     int16
+18,     ARMR_ROTATION,  int16
+#       ARM LEFT
+19,     ARML_STEPPERA,  int16
+20,     ARML_STEPPERB,  int16
+21,     ARML_ELBOW,     int16
+22,     ARML_WRIST,     int16
+23,     ARML_ROTATION,  int16
+#       BODY
+24,     BODY_LEAN,      int16
+25,     BODY_ROTATION,  int16
+#       LEDS
+26,     LED_IRIS_LEFT,  uint8
+27,     LED_IRIS_RIGHT, uint8
+28,     EYELED_R,       uint8
+29,     EYELED_G,       uint8
+30,     EYELED_B,       uint8
+#comment   

@@ -1,1 +1,1 @@
-from utils import ActTableEntry
+from .utils import ActTableEntry

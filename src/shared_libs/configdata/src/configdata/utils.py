@@ -2,6 +2,20 @@ import csv
 from dataclasses import dataclass
 from typing import Dict
 
+TYPE_TO_SIZE = {
+    "uint8" : 1,
+    "int8"  : 1,
+    "int16" : 2,
+    "uint16" : 2,
+    "int32" : 4,
+    "uint32" : 4,
+    "int64" : 8,
+    "uint64" : 8,
+    "float" : 4,
+    "double": 8
+}
+
+
 @dataclass
 class ActTableEntry:
     id: int
