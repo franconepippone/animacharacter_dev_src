@@ -1,7 +1,7 @@
-from contextlib import AbstractContextManager, contextmanager
 from typing import TypeVar, Generic, Callable, Iterable, Dict, Set, List, Tuple, Optional, Any, ContextManager
 
 from .dispatcher import Dispatcher
+from .utils import HooksContext
 
 KEY_T = TypeVar("KEY_T")
 VAL_T = TypeVar("VAL_T")
@@ -67,9 +67,6 @@ class BatchDispatcher(Generic[KEY_T, VAL_T]):
 
 
 # ---- Helper to build a context manager from pre/post hooks ----
-@contextmanager
 def hooks_to_context(pre_hook: Optional[Callable[[], Any]] = None,
                      post_hook: Optional[Callable[[], Any]] = None):
-    if pre_hook: pre_hook()
-    yield
-    if post_hook: post_hook()
+    return HooksContext(pre_hook=pre_hook, post_hook=post_hook)

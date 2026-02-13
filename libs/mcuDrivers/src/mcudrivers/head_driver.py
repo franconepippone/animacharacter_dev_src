@@ -1,15 +1,14 @@
-from typing import overload, Literal, Any, Protocol
+from typing import overload, Literal
 import time
 import math
 import logging
 from enum import Enum, auto
-import zlib
 from threading import RLock
 import struct
 
 from pySerialDevice import SerialDevice
 from .utils import *
-from .base_driver import BaseHardwareDriver
+from .base_driver import BaseHardwareDriver, GenericLogger
 
 
 # ================= MOTION PACKET LAYOUT =================
@@ -83,11 +82,6 @@ class WriteOutcome(Enum):
     UNKNOWN_AXIS = -2
 
 
-# intented to work with ros2 rcutils logger
-class GenericLogger(Protocol):
-    def info(self, message: str, **kwargs: Any) -> bool: ...
-    def warning(self, message: str, **kwargs: Any) -> bool: ...
-    def error(self, message: str, **kwargs: Any) -> bool: ...
 
 # ================= DRIVER =================
 

@@ -7,16 +7,16 @@ from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
 
 from interfaces.msg import MotionframeArray
 
-from .dispatcher import Dispatcher
+from .dispatcher import BatchDispatcher
 from .looper_util import ThreadedLooper
 
 # of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
 
 class HardwareManagerNode(LifecycleNode):
-    def __init__(self, dispatcher: Dispatcher, looper: ThreadedLooper):
+    def __init__(self, batch_dispatcher: BatchDispatcher, looper: ThreadedLooper):
         super().__init__('hardware_manager')
-        self.dispatcher = dispatcher
+        self.batch_dispatcher = batch_dispatcher
         self.looper = looper
 
         self.srv = self.create_service(
@@ -47,8 +47,8 @@ class HardwareManagerNode(LifecycleNode):
 
         # array of tuples (actutator id: int, actuator target value: float)
         motionframes = [(act_id, val) for act_id, val in zip(msg.ids, msg.values)]
-
-        self.dispatcher.dispatch_multiple(motionframes)
+        
+        self.batch_dispatcher.dispatch(motionframes)
 
     # --- configure ---
     def on_configure(self, state: State):

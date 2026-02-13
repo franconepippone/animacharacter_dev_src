@@ -1,4 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import Protocol, Any
+
+
+# intented to work with ros2 rcutils logger
+class GenericLogger(Protocol):
+    def info(self, message: str, **kwargs: Any) -> bool: ...
+    def warning(self, message: str, **kwargs: Any) -> bool: ...
+    def error(self, message: str, **kwargs: Any) -> bool: ...
+
 
 class BaseHardwareDriver(ABC):
     @abstractmethod

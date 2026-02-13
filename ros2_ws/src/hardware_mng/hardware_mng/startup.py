@@ -8,7 +8,7 @@ from rclpy.logging import RcutilsLogger
 
 from .abstract_config import AbstractHMSConfiguration
 from .hardware_mng_node import HardwareManagerNode
-from .dispatcher import Dispatcher
+from .dispatcher import Dispatcher, BatchDispatcher
 from .looper_util import ThreadedLooper
 
 
@@ -34,21 +34,24 @@ def main(args=None):
     if not cfg:
         return 
      
-    logger.info(f"Import succeded {cfg} {type(cfg)}")
+    logger.info(f"Import of HMS configuration succeded {cfg} {type(cfg)}")
     
+    # let cfg configure dispatcher
     dispatcher: Dispatcher[int, float] = Dispatcher()
     cfg.configure_dispatcher(dispatcher)
+
+    # let cfg configure batch dispatcher
+    batch_dispatcher: BatchDispatcher[int, float] = BatchDispatcher(dispatcher)
+    cfg.configure_batch_dispatcher(batch_dispatcher)
     
+    # creates loopers (for flushing hardware)
     looper = ThreadedLooper()
     for driver in cfg.get_drivers():
         looper.add_loop(driver.loop_freq, driver.driver.flush)
 
-    #looper.pause_loop(l1.id)
-    #looper.resume_loop(l2.id)
-    
     # spin ros2 node in this thread 
     rclpy.init(args=args)
-    node = HardwareManagerNode(dispatcher, looper)
+    node = HardwareManagerNode(batch_dispatcher, looper)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

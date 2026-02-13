@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main = hardware_mng.startup:main'
+            'main = hardware_mng.startup:main',
+            'mock_client = hardware_mng.mock_client.client_node:main'
         ],
     },
 )

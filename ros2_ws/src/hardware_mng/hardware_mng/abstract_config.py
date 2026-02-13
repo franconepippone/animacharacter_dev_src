@@ -7,7 +7,14 @@ manager uses to operate a specific hardware setup.
   Each system using this hardware manager implementation may define its own
   set of drivers. A driver is a Python class that provides an interface for
   interacting with hardware. Drivers must implement the expected driver
-  interface (e.g., begin(), deinit(), write methods).
+  interface (e.g., begin(), deinit(), flush() methods).
+
+  The flush() is the method responsible for updating the hardware with the currently
+  stored joint/actuator state. This method will be called at a fixed frequency 
+  automatically when the system is active, in a separate threads (keep thread safety in mind).
+  
+  Usually a driver exposes write() methods that modify the internal state/representation of joints.
+  The flush() is there to send this state to the hardware.
 
 - Dispatcher:
   The dispatcher is the core routing component of the system. The hardware
@@ -30,20 +37,22 @@ manager uses to operate a specific hardware setup.
   for each subset of ids associated with that driver and configure the
   corresponding context logic accordingly (see `dispatcher.hooks_to_context`
   for creating a context manager from simple pre/post functions).
+  Usually the context is just a lock, that needs to be acquired to avoid racing with
+  the thread constantly calling flush() (flush internally acquires the same lock).
 
 - wakeup_drivers / shutdown_drivers:
   These methods manage the driver lifecycle. They are responsible for
   initializing all communication with the hardware and properly shutting
   it down. Each returns True only if all registered drivers succeed.
-  They are generally provided automatically and should not be overridden.
+  They are already provided automatically and, if the drivers implement the begin/deinit
+  methods properly, there should be no need to overwrite them.
 
 When subclassing this class:
 
 - In __init__, register drivers using:
       self.driver_A = self.add_driver("my_custom_dA", DriverClass(...), loop_freq=50)
 
-  The specified loop_freq determines how often the driver's periodic
-  hardware routine is executed.
+  The specified loop_freq determines the frequency at witch the driver's flush() method is executed.
 
 - In configure_dispatcher, register handlers using:
       dispatcher.register_handler(<positive integer id>, <handler callable>)
@@ -54,15 +63,28 @@ When subclassing this class:
           lambda payload: self.driver_A.write_axys_5(payload)
       )
 
-If more complex logic is required, define custom handler functions or
-implement the necessary behavior directly inside the driver.
+    If more complex logic is required, define custom handler functions or
+    implement the necessary behavior directly inside the driver.
+
+- In configure_batch_dispatcher, add dispatch groups using:
+    batch_dispatcher.add_batch(
+            {<set of ids belonging to this group>},
+            <context manager for setup/cleanup logic>
+        )
+    
+    Example:
+        batch_dispatcher.add_batch(
+            {1, 2, 3, 4, 5},
+            self.driver_A.get_batch_write_context_manager() # assuming ctxmng is provided by the driver itself
+        )
+
 """
 
 from typing import TypeVar, Dict, Any, Iterable, Protocol
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-from .dispatcher import Dispatcher, BatchDispatcher
+from .dispatcher import Dispatcher, BatchDispatcher, hooks_to_context
 
 # -------------------- Driver Protocol --------------------
 class HardwareDriverProtocol(Protocol):
@@ -156,7 +178,19 @@ class AbstractHMSConfiguration(ABC):
 
     @abstractmethod
     def configure_batch_dispatcher(self, batch_dispatcher: BatchDispatcher[int, float]):
-        """Add batches with optional context managers for grouped dispatches."""
+        """Add batches from a set of ids with optional context managers for grouped dispatches.
+        Example usage:
+        ```
+        batch_dispatcher.add_batch(
+            set(id1, id2, id3, id4, id5, ...), # all ids from the driver 1 group 
+            self.driver1.batch_context_mng # example of a context manager for batch writing, provided from an example driver
+        )
+        batch_dispatcher.add_batch(
+            set(id10, id11, id12, id13, id14, ...), 
+            hooks_to_context(pre_func, post_func) # example of creating a ctx mng with pre/post functions
+        )
+        ```
+        """
         ...
 
     # -------------------- Driver Lifecycle --------------------
