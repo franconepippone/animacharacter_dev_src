@@ -1,144 +1,91 @@
 import threading
 import asyncio
 import json
-import psutil
+import os
 from pathlib import Path
 import time
-import os
+import psutil
 
 import rclpy
 from rclpy.node import Node
-from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
+from std_srvs.srv import Trigger
 
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 
-with open(Path(__file__).parent / 'frontend' / 'index.html', 'r') as f:
-    HTML = f.read()
+FRONTEND_DIR = Path(__file__).parent / "frontend"
 
-import rclpy
-from rclpy.node import Node
-from std_srvs.srv import Trigger
-import time
-import psutil
-import json
-
-class StatusNode(Node):
-
+class StatusClientNode(Node):
     def __init__(self):
-        super().__init__("status_viewer_node")
+        super().__init__("status_client_node")
+        self.cli = self.create_client(Trigger, "/get_status")
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for /get_status service...")
+        self.get_logger().info("Connected to /get_status service")
 
-        self.start_time = time.time()
+    def get_status(self):
+        """Call /get_status service and return dict with system stats."""
+        req = Trigger.Request()
+        future = self.cli.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+        data = {}
+        if future.result() and future.result().success:
+            try:
+                data = json.loads(future.result().message)
+            except json.JSONDecodeError as e:
+                self.get_logger().error(f"JSON decode error: {e}")
+        else:
+            self.get_logger().error("Service call failed")
 
-        self.prev_net = psutil.net_io_counters()
-        self.prev_time = time.time()
+        # Add system stats
+        data['cpu'] = psutil.cpu_percent()
+        data['memory'] = psutil.virtual_memory().percent
+        data['uptime'] = int(time.time() - psutil.boot_time())
+        net = psutil.net_io_counters()
+        data['bytes_sent'] = net.bytes_sent
+        data['bytes_recv'] = net.bytes_recv
+        # For rates, simple approximation (would need history for accurate rates)
+        data['upload_rate'] = 0  # Placeholder
+        data['download_rate'] = 0  # Placeholder
 
-        self.latest_data = {}
-        self.create_timer(1.0, self.update_status)
+        return data
 
-        # --- Create service ---
-        self.srv = self.create_service(
-            Trigger,
-            '/get_status',
-            self.get_status_callback
-        )
-
-        self.get_logger().info("StatusNode service /get_status ready")
-
-    def update_status(self):
-        now = time.time()
-        current_net = psutil.net_io_counters()
-        elapsed = now - self.prev_time
-
-        upload_rate = (current_net.bytes_sent - self.prev_net.bytes_sent) / elapsed / 1024
-        download_rate = (current_net.bytes_recv - self.prev_net.bytes_recv) / elapsed / 1024
-
-        self.prev_net = current_net
-        self.prev_time = now
-
-        self.latest_data = {
-            "cpu": psutil.cpu_percent(),
-            "memory": psutil.virtual_memory().percent,
-            "uptime": int(now - self.start_time),
-            "bytes_sent": current_net.bytes_sent,
-            "bytes_recv": current_net.bytes_recv,
-            "upload_rate": round(upload_rate, 1),
-            "download_rate": round(download_rate, 1),
-        }
-
-    # --- New service callback ---
-    def get_status_callback(self, request: Trigger_Request, response: Trigger_Response):
-        """
-        Responds to /get_status Trigger service calls.
-        Puts the latest hardware metrics into JSON in the 'message' field.
-        """
-        try:
-            # Convert the latest_data dict to JSON string
-            response.message = json.dumps(self.latest_data)
-            response.success = True
-        except (TypeError, OverflowError) as e:
-            response.message = f"Failed to serialize data: {e}"
-            response.success = False
-
-        return response
-
-
-def start_web_server(node: StatusNode):
-
+def start_web_server(node: StatusClientNode):
     app = FastAPI()
 
-    base_dir = os.path.dirname(__file__)
-    frontend_dir = os.path.join(base_dir, "frontend")
-
-    # Serve JS files under /static
-    app.mount(
-        "/static",
-        StaticFiles(directory=frontend_dir),
-        name="static",
-    )
-
-    @app.get("/get_status_rest")
-    async def get_status_rest():
-        # Get latest hardware metrics
-        hw_data = node.latest_data
-
-        # Get looper JSON (if you have ThreadedLooper instance)
-        loops_json = looper.status_as_json()  # assuming `looper` is global/shared
-
-        return {
-            **hw_data,
-            "loops_json": loops_json
-        }
-
+    # Serve JS
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.get("/")
     async def index():
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
+        return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/get_status_rest")
+    async def get_status_rest():
+        return node.get_status()
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket):
         await ws.accept()
         while True:
-            await ws.send_json(node.latest_data)
+            data = await asyncio.to_thread(node.get_status)
+            await ws.send_json(data)
             await asyncio.sleep(1)
 
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
 
 def main():
     rclpy.init()
-    node = StatusNode()
+    node = StatusClientNode()
 
-    # Run web server in separate thread
     web_thread = threading.Thread(target=start_web_server, args=(node,), daemon=True)
     web_thread.start()
 
     rclpy.spin(node)
-
     node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

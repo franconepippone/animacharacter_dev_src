@@ -12,6 +12,21 @@ function formatRate(rate) {
         return Math.round(rate) + " KB/s";
 }
 
+function getStateClass(state) {
+    switch(state) {
+        case 'RUNNING': return 'bg-success';
+        case 'PAUSED': return 'bg-warning';
+        case 'STOPPED': return 'bg-secondary';
+        default: return 'bg-light text-dark';
+    }
+}
+
+function getBoolBadge(value) {
+    return value ? 'bg-success' : 'bg-danger';
+}
+
+
+
 const ws = new WebSocket("ws://" + location.host + "/ws");
 
 ws.onopen = () => {
@@ -44,59 +59,51 @@ ws.onmessage = (event) => {
     document.getElementById("net-recv").textContent = formatBytes(data.bytes_recv);
     document.getElementById("net-up").textContent = formatRate(data.upload_rate);
     document.getElementById("net-down").textContent = formatRate(data.download_rate);
+
+    // Loops
+    if (data.loops) {
+        const summary = `Total: ${data.total} | Running: ${data.running} | Paused: ${data.paused} | Stopped: ${data.stopped}`;
+        document.getElementById("loops-summary").textContent = summary;
+        const tbody = document.getElementById("loops-tbody");
+        tbody.innerHTML = "";
+        for (const loop of data.loops) {
+            const row = tbody.insertRow();
+            
+            row.insertCell().textContent = loop.id;
+            
+            const stateCell = row.insertCell();
+            const stateBadge = document.createElement('span');
+            stateBadge.className = 'badge ' + getStateClass(loop.state);
+            stateBadge.textContent = loop.state;
+            stateCell.appendChild(stateBadge);
+            
+            row.insertCell().textContent = `${loop.freq.toFixed(3)} Hz`;
+            
+            const aliveCell = row.insertCell();
+            const aliveBadge = document.createElement('span');
+            aliveBadge.className = 'badge ' + getBoolBadge(loop.is_running);
+            aliveBadge.textContent = loop.is_running ? 'Yes' : 'No';
+            aliveCell.appendChild(aliveBadge);
+            
+            row.insertCell().textContent = loop.lock_type;
+            
+            const excCell = row.insertCell();
+            const excBadge = document.createElement('span');
+            excBadge.className = 'badge ' + getBoolBadge(loop.exception_cb);
+            excBadge.textContent = loop.exception_cb ? 'Yes' : 'No';
+            excCell.appendChild(excBadge);
+        }
+    }
 };
 
-function formatLoopStatus(status) {
-    const WIDTH = 66;
-    const lines = [];
-    function box_line(content = "", sep = "║") {
-        return `${sep} ${content.padEnd(WIDTH - 2)} ${sep}`;
-    }
-    function separator(char = "═") { return `╠${char.repeat(WIDTH)}╣`; }
-    function top() { return `╔${"═".repeat(WIDTH)}╗`; }
-    function bottom() { return `╚${"═".repeat(WIDTH)}╝`; }
-
-    lines.push(top());
-    lines.push(box_line("THREADED LOOPER STATUS"));
-    lines.push(separator());
-
-    lines.push(box_line(`Total: ${status.total} | Running: ${status.running} | Paused: ${status.paused} | Stopped: ${status.stopped}`));
-    lines.push(separator());
-
-    for (const l of status.loops) {
-        lines.push(box_line(`Loop ID: ${l.id}`));
-        lines.push(box_line(`  State              : ${l.state}`));
-        lines.push(box_line(`  Frequency          : ${l.freq.toFixed(3)} Hz`));
-        lines.push(box_line(`  Thread Alive       : ${l.is_running}`));
-        lines.push(box_line(`  Lock Type          : ${l.lock_type}`));
-        lines.push(box_line(`  Exception Callback : ${l.exception_cb ? "YES" : "NO"}`));
-        lines.push(separator());
-    }
-
-    if (lines.length) lines[lines.length - 1] = bottom();
-    return lines.join("\n");
-}
-
+// Fallback periodic REST fetch every 2s
 async function fetchStatus() {
     try {
-        const resp = await fetch("/get_status_rest"); // We'll add this endpoint in FastAPI
+        const resp = await fetch("/get_status_rest");
         const data = await resp.json();
-
-        // Update hardware metrics
-        document.getElementById("cpu-text").textContent = data.cpu;
-        document.getElementById("ram-text").textContent = data.memory;
-        document.getElementById("uptime").textContent = data.uptime;
-        document.getElementById("net-up").textContent = `${data.upload_rate} KB/s`;
-        document.getElementById("net-down").textContent = `${data.download_rate} KB/s`;
-
-        // Update loop ASCII table
-        if (data.loops_json) {
-            document.getElementById("loop-status").textContent = formatLoopStatus(data.loops_json);
-        }
+        ws.onmessage({ data: JSON.stringify(data) });
     } catch (e) {
         console.error("Failed to fetch status:", e);
     }
 }
-
-// Refresh every second
-setInterval(fetchStatus, 1000);
+setInterval(fetchStatus, 2000);
