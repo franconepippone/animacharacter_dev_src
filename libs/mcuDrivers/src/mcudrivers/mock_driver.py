@@ -3,6 +3,8 @@ from threading import RLock
 
 from .base_driver import BaseHardwareDriver, GenericLogger
 
+import random
+import time
 
 class MockDriver(BaseHardwareDriver):
     """A versitile placeholder driver"""
@@ -37,6 +39,9 @@ class MockDriver(BaseHardwareDriver):
             with self.lock:
                 self.logger.info(f"flushing [{self.count}]")
                 self.count += 1
+
+            # simulate io
+            time.sleep(random.random() * 0.01)
         self.dirty = False
         return True
         

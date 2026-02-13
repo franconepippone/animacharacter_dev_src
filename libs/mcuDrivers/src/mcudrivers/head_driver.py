@@ -93,9 +93,9 @@ class HeadMcuDriver(BaseHardwareDriver):
     This class is already thread safe, meaning that different threads can
     write and flush concurrently without causing data corruption, but NOTE:   
     by default, each call to write acquires and releases the lock; this can result in overhead if done at high
-    frequency. If you are writing to multiple axis, it's recommended to use the
+    frequency. If you are writing to multiple axis, it's recommended to use the return of
     'batch_write_lock()' method called within a context manager to acquire and the release the lock once,
-    and perform writing inside the context.
+    and perform writing inside the managed context.
     """
     
     # -------- constants --------
@@ -154,7 +154,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         self._mp_dirty = False
         self._leds_dirty = False
 
-        # -------- logical state --------
+        # -------- state --------
 
         # leds
         self.led_r = 0
@@ -163,7 +163,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         self.led_l1 = 0
         self.led_l2 = 0
 
-        # face / servos
+        # servos
         self.mouth = 1.0
         self.ear_left = 0.0
         self.ear_right = 0.0
@@ -188,27 +188,34 @@ class HeadMcuDriver(BaseHardwareDriver):
         Returns:
             True if initialization successful, False otherwise.
         """
-        self.esp32.open(1)
+        if not self.esp32.open(1): 
+            if self.logger: self.logger.error("Could not open serial device")
+            return False
 
         name = self.esp32.request_peername(5)
         if name != self.CFG._DEVICE_NAME:
+            if self.logger: self.logger.error(f"Serial device not match expected name: got {name} instead of {self.CFG._DEFAULT_NAME}")
             return False
 
         self.esp32.send_object(PSP_INIT_HARDWARE, PACK_ID_CONTROL)
-        if not self.esp32.wait_packet(10):
+        if not self.esp32.wait_packet(5):
+            if self.logger: self.logger.error(f"Failed to received ack packet after hardware init request")
             return False
 
         time.sleep(0.25)
         self.esp32.send_object(PSP_BEGIN_ALL, PACK_ID_CONTROL)
         time.sleep(0.25)
 
-        self.flush()
-        logging.info("[AnimaHead] Hardware initialized.")
+        if not self.flush():
+            if self.logger: self.logger.error("Could not flush initial hardware state")
+            return False
+        if self.logger: self.logger.info("Hardware initialized.")
         return True
 
     def deinit(self) -> bool:
         """Deinitialize hardware and close connection."""
-        self.esp32.send_object(PSP_DEINIT, PACK_ID_CONTROL)
+        if not self.esp32.send_object(PSP_DEINIT, PACK_ID_CONTROL):
+            if self.logger: self.logger.error("Could not send deinit request to serial device, closing anyway...")
         self.esp32.close()
         return True
 
@@ -456,7 +463,7 @@ class HeadMcuDriver(BaseHardwareDriver):
                         self.led_l2
                     )
             except struct.error as e:
-                if self.logger: self.logger.error(f"Head Driver caught exception during packaging phase of 'flush': {e}")
+                if self.logger: self.logger.warning(f"Head Driver caught exception during packaging phase of 'flush': {e}")
                 return False
         
         # I/O - flush to hardware
@@ -471,9 +478,9 @@ class HeadMcuDriver(BaseHardwareDriver):
                 if success_led: self._leds_dirty = False # if send fails, keep flag to dirty
                 success = success and success_led # success only if both succeed
 
-            if not success and self.logger: self.logger.warning("Serial packet transmission failed.")
+            if not success and self.logger: self.logger.warning("Serial packet transmission failed during 'flush'.")
             return success
         
         except Exception as e:
-            if self.logger: self.logger.error(f"Head Driver caught exception during I/O phase of 'flush': {e}")
+            if self.logger: self.logger.warning(f"Head Driver caught exception during I/O phase of 'flush': {e}")
             return False

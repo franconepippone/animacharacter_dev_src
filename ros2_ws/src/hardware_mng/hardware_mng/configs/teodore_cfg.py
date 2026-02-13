@@ -57,10 +57,17 @@ class TeodoreHMSCfg(AbstractHMSConfiguration):
 
     def configure_batch_dispatcher(self, batch_dispatcher: BatchDispatcher[int, float]):
         
+        def enter():
+            self.body.logger.warning("entering dispatch A")
+            self.body.lock.acquire()
+        
+        def exit():
+            self.body.logger.warning("exiting dispatch A")
+            self.body.lock.release()
 
         batch_dispatcher.add_batch(
             {50,51,52, 53},
-            hooks_to_context(lambda: self.body.logger.warning("entering dispatch A"), lambda: self.body.logger.warning("exiting dispatch A"))
+            hooks_to_context(enter, exit)
         )
         batch_dispatcher.add_batch(
             {100, 101},
