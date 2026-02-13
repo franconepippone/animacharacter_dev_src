@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Animachar Status Panel</title>
+
+<!-- Default Bootstrap -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+/* Optional compact bars */
+.progress {
+    height: 12px;
+}
+</style>
+
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold">Animachar Status Panel</span>
+  </div>
+</nav>
+
+<div class="container my-4">
+
+  <!-- Hardware Manager System Status -->
+  <div class="card mb-3 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title text-primary">Hardware Manager System Status</h5>
+      <p>Status: <span id="connection-badge" class="badge bg-warning">Connecting</span></p>
+      <p>Uptime: <strong id="uptime">--</strong> seconds</p>
+    </div>
+  </div>
+
+  <!-- Session Status -->
+  <div class="card mb-3 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title text-primary">Session Status</h5>
+      <p>Active Session: <strong id="session">Idle</strong></p>
+      <p>Last Update: <strong id="last-update">--</strong></p>
+    </div>
+  </div>
+
+  <!-- Resource Monitor (CPU/RAM + Network) -->
+  <div class="card mb-3 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title text-primary">Resource Monitor</h5>
+
+      <div class="row">
+
+        <!-- CPU & RAM -->
+        <div class="col-md-6">
+          <label>CPU (<span id="cpu-text">0</span>%)</label>
+          <div class="progress mb-2">
+            <div id="cpu-bar" class="progress-bar bg-primary"></div>
+          </div>
+
+          <label>RAM (<span id="ram-text">0</span>%)</label>
+          <div class="progress mb-2">
+            <div id="ram-bar" class="progress-bar bg-info"></div>
+          </div>
+        </div>
+
+        <!-- Network Stats -->
+        <div class="col-md-6">
+          <p>Total Sent: <strong id="net-sent">0 KB</strong></p>
+          <p>Upload Rate: <strong id="net-up">0 KB/s</strong></p>
+
+          <p>Total Received: <strong id="net-recv">0 KB</strong></p>
+          <p>Download Rate: <strong id="net-down">0 KB/s</strong></p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/dashboard.js"></script>
+
+</body>
+</html>

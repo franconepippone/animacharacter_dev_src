@@ -9,7 +9,7 @@ from rclpy.logging import RcutilsLogger
 from .abstract_config import AbstractHMSConfiguration
 from .hardware_mng_node import HardwareManagerNode
 from .dispatcher import Dispatcher, BatchDispatcher
-from .looper_util import ThreadedLooper
+from .looper import ThreadedLooper
 
 
 logger = RcutilsLogger('HW-mng startup')

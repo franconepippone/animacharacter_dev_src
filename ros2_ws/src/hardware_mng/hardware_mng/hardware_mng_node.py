@@ -1,3 +1,4 @@
+import json
 import rclpy
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle import State
@@ -8,7 +9,7 @@ from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
 from interfaces.msg import MotionframeArray
 
 from .dispatcher import BatchDispatcher
-from .looper_util import ThreadedLooper
+from .looper import ThreadedLooper, display_status_from_json
 
 # of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
@@ -35,11 +36,18 @@ class HardwareManagerNode(LifecycleNode):
 
     def get_status_callback(self, request: Trigger_Request, response: Trigger_Response):
         """
-        Utility service to be called from CLI to get a textual representation of the status
+        Utility service to be called from CLI to get a json representation of the status
         of the hardware manager
         """
+        try:
+            json_str = json.dumps(self.looper.status_as_json())
+        except Exception as e:
+            response.message = str(e)
+            response.success = False
+            return response
+
         response.success = True
-        response.message = "WIP"
+        response.message = json_str
         return response
 
     def motionframe_callback(self, msg: MotionframeArray):
@@ -57,7 +65,7 @@ class HardwareManagerNode(LifecycleNode):
         # start looper threads in a ready state
         self.looper.start_all(paused=True)
         ok = self.looper.all_running()
-        print(self.looper.display_status())
+        print(display_status_from_json(self.looper.status_as_json()))
 
 
 
@@ -67,14 +75,14 @@ class HardwareManagerNode(LifecycleNode):
     def on_activate(self, state: State):
         self.get_logger().info("on_activate()")
         self.looper.unpause_all()
-        print(self.looper.display_status())
+        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- deactivate ---
     def on_deactivate(self, state: State):
         self.get_logger().info("on_deactivate()")
         self.looper.pause_all()
-        print(self.looper.display_status())
+        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- cleanup ---
@@ -82,14 +90,14 @@ class HardwareManagerNode(LifecycleNode):
         self.get_logger().info("on_cleanup()")
         self.looper.stop_all()
         ok = self.looper.all_stopped()
-        print(self.looper.display_status())
+        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS if ok else TransitionCallbackReturn.FAILURE
 
     # --- shutdown ---
     def on_shutdown(self, state: State):
         self.get_logger().info("on_shutdown()")
         self.looper.stop_all()
-        print(self.looper.display_status())
+        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- error ---

@@ -312,32 +312,30 @@ class ThreadedLooper:
         
         return descriptor
 
-    def display_status(self) -> str:
-        """Return a formatted multi-line string describing all registered loops."""
-        WIDTH = 66  # total inner width (between the borders)
+    def status_as_json(self) -> dict:
+        """
+        Return a structured dictionary with all loop status data.
+        Can be serialized to JSON for ROS2 or WebSocket publishing.
 
-        def box_line(content: str = "", sep: str = "║") -> str:
-            return f"{sep} {content.ljust(WIDTH - 2)} {sep}"
-
-        def separator(char="═"):
-            return f"╠{char * WIDTH}╣"
-
-        def top():
-            return f"╔{'═' * WIDTH}╗"
-
-        def bottom():
-            return f"╚{'═' * WIDTH}╝"
-
-        if not self.loop_pool:
-            return "\n".join([
-                "",
-                top(),
-                box_line("THREADED LOOPER STATUS"),
-                separator(),
-                box_line("No loops registered."),
-                bottom(),
-            ])
-
+        Structure:
+        {
+            "total": int,
+            "running": int,
+            "paused": int,
+            "stopped": int,
+            "loops": [
+                {
+                    "id": int,
+                    "state": str,
+                    "freq": float,
+                    "is_running": bool,
+                    "lock_type": str,
+                    "exception_cb": bool
+                },
+                ...
+            ]
+        }
+        """
         loops = sorted(self.loop_pool.values(), key=lambda l: l.id)
 
         def loop_state(l: LoopDescriptor) -> str:
@@ -351,35 +349,24 @@ class ThreadedLooper:
         paused = sum(l.is_running and not l._wait.is_set() for l in loops)
         stopped = len(loops) - running - paused
 
-        lines = ["", top()]
-        lines.append(box_line("THREADED LOOPER STATUS"))
-        lines.append(separator())
-        lines.append(box_line(
-            f"Total: {len(loops)} | Running: {running} | "
-            f"Paused: {paused} | Stopped: {stopped}"
-        ))
-        lines.append(separator())
-
+        loops_data = []
         for l in loops:
-            state = loop_state(l)
-            thread_name = l._thread.name if l._thread else "None"
+            loops_data.append({
+                "id": l.id,
+                "state": loop_state(l),
+                "freq": l.freq,
+                "is_running": l.is_running,
+                "lock_type": type(l.lock).__name__,
+                "exception_cb": l.exception_cb is not None
+            })
 
-            lines.append(box_line(f"Loop ID: {l.id}"))
-            lines.append(box_line(f"  State              : {state}"))
-            lines.append(box_line(f"  Frequency          : {l.freq:.3f} Hz"))
-            #lines.append(box_line(f"  Period             : {l.period:.6f} s"))
-            lines.append(box_line(f"  Thread Alive       : {l.is_running}"))
-            #lines.append(box_line(f"  Thread Name        : {thread_name}"))
-            lines.append(box_line(f"  Lock Type          : {type(l.lock).__name__}"))
-            lines.append(box_line(
-                f"  Exception Callback : {'YES' if l.exception_cb else 'NO'}"
-            ))
-            lines.append(separator())
-
-        lines[-1] = bottom()
-        return "\n".join(lines)
-
-
+        return {
+            "total": len(loops),
+            "running": running,
+            "paused": paused,
+            "stopped": stopped,
+            "loops": loops_data
+        }
 
 
 if __name__ == "__main__":
