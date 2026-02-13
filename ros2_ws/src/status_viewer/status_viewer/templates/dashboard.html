@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Developer Dashboard</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-light">
+
+<div class="container py-4">
+
+    <h2 class="mb-4">Developer Dashboard</h2>
+
+    <!-- Metrics Row -->
+    <div class="row g-3 mb-4">
+
+        <!-- CPU -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>CPU Usage</h5>
+                    <div class="progress">
+                        <div id="cpuBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Memory Usage</h5>
+                    <div class="progress">
+                        <div id="memoryBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Table -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>System Stats</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Active Tasks</th>
+                        <th>Errors</th>
+                        <th>Throughput</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="tasks">0</td>
+                        <td id="errors">0</td>
+                        <td id="throughput">0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-3">
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Resource Distribution</h5>
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Throughput History</h5>
+                    <canvas id="lineChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Your JS -->
+<script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
+
+</body>
+</html>

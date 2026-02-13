@@ -16,6 +16,7 @@ logger = RcutilsLogger('HW-mng startup')
 
 def import_config(path: str) -> AbstractHMSConfiguration | None:
     """ Attempts import of configuration module at runtime """
+    # NOTE for now this only works with a symlink install
     try:
         cfg_module = importlib.import_module(path)
         cfg: AbstractHMSConfiguration = getattr(cfg_module, 'get_config')() # gets the config instance
@@ -24,7 +25,7 @@ def import_config(path: str) -> AbstractHMSConfiguration | None:
             raise ValueError(f"Configuration object is of type '{type(cfg)}' instead of subtype of AbstractHMSConfiguration")
         return cfg
     except Exception as e:
-        logger.error(f"Failed to import configuration hardware system configuration '{path}': {e}")
+        logger.error(f"Failed to import hardware system configuration '{path}': {e}. Setup halted.")
 
 
 def main(args=None):
