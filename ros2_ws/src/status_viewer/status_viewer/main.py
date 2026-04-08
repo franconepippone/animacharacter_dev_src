@@ -60,15 +60,6 @@ async def broadcaster():
             data = {}
             if statnode:
                 data = statnode.gather_system_status()
-            
-            """
-            data = {
-                "cpu": random.randint(0, 100),
-                "memory": random.randint(0, 100),
-                "tasks": random.randint(10, 50),
-                "errors": random.randint(0, 10),
-                "throughput": random.randint(50, 150)
-            }"""
 
             # Send only if clients exist (extra safety)
             if clients:

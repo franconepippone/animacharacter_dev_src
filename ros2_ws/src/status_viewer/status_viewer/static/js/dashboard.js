@@ -27,17 +27,20 @@ let lineChart = new Chart(document.getElementById("lineChart"), {
 ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
 
-    document.getElementById("cpuBar").style.width = data.cpu + "%";
-    document.getElementById("cpuBar").innerText = data.cpu + "%";
+    document.getElementById("cpuBar").style.width = data.sys.global.cpu + "%";
+    document.getElementById("cpuBar").innerText = data.sys.global.cpu + "%";
 
-    document.getElementById("memoryBar").style.width = data.memory + "%";
-    document.getElementById("memoryBar").innerText = data.memory + "%";
+    document.getElementById("memoryBar").style.width = data.sys.global.memory + "%";
+    document.getElementById("memoryBar").innerText = data.sys.global.memory + "%";
 
     document.getElementById("tasks").innerText = data.tasks;
     document.getElementById("errors").innerText = data.errors;
     document.getElementById("throughput").innerText = data.throughput;
 
-    pieChart.data.datasets[0].data = [data.cpu, data.memory];
+    const cpuList = data.sys.processes.map(process => process.cpu);
+    const procNamesList = data.sys.processes.map(process => process.name);
+    pieChart.labels = procNamesList 
+    pieChart.data.datasets[0].data = cpuList;
     pieChart.update();
 
     history.push(data.throughput);

@@ -1,5 +1,7 @@
 import json
-import rclpy
+import os
+import psutil
+
 from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle import State
 from rclpy.lifecycle import TransitionCallbackReturn
@@ -39,13 +41,19 @@ class HardwareManagerNode(LifecycleNode):
         Utility service to be called from CLI to get a json representation of the status
         of the hardware manager
         """
+        # construct the json dict
+        status = {
+            'pid' : os.getpid(),
+            'looper' : self.looper.status_as_json()
+        }
+        
         try:
-            json_str = json.dumps(self.looper.status_as_json())
+            json_str = json.dumps(status)
         except Exception as e:
             response.message = str(e)
             response.success = False
             return response
-
+    
         response.success = True
         response.message = json_str
         return response
