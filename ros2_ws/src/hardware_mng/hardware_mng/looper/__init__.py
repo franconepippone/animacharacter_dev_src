@@ -1,2 +1,2 @@
-from .looper_util import ThreadedLooper
+from .looper_util import LoopSupervisor
 from .display_ascii import display_status_from_json

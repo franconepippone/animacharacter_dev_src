@@ -1,0 +1,6 @@
+# this file defines all hardware configurations. Write your hardware module "plugins", and add them
+# to a custom configuration here if you are using this on a custom robot.
+
+teodore:
+  - "hardware_mng.hw_modules.teodore_plugins:HeadController"
+  - "hw_modules."

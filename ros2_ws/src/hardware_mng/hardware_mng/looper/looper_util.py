@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Callable, List, Any, Dict, Iterable
 from dataclasses import dataclass
 import threading as th
+from queue import Queue
 import time
 from rclpy.logging import RcutilsLogger
 
@@ -32,7 +33,7 @@ def _loop(
         descriptor._wait.wait()
         try:
             with descriptor.lock:
-                descriptor.job()
+                descriptor.job(descriptor.input_queue, descriptor.output_queue)
 
         except Exception as e:
             # run exception handler if set
@@ -51,6 +52,7 @@ class MockLock:
     def __exit__(self, exc_type, exc, tb):
         return False
 
+type LoopJob = Callable[[Queue, Queue], Any]
 
 @dataclass
 class LoopDescriptor:
@@ -58,22 +60,26 @@ class LoopDescriptor:
     
     Attributes:
         id (int): Unique identifier for this loop.
+        input_queue (Queue): Optional queue for sending consumable data to the job.
+        output_queue (Queue): Optional queue for receiving processed data from the job.
         lock (threading.Lock | MockLock): Lock protecting callback execution. If no lock is given, a MockLock is created (does not do anything)
         freq (float): Loop frequency in Hz.
         period (float): Loop period in seconds.
         is_running (bool): True if thread exists and is running.
-        job (Callable[[], Any]): Callback function executed each iteration.
+        job (Callable[[Queue, Queue], Any]): Callback function executed each iteration. Receives input and output queues as arguments, can be used for inter-thread communication.
         exception_cb (Callable[[Exception], Any]): If present, when job raises an exception this will be called with that exception as argument.
         _wait (threading.Event): PRIVATE - Event for pause control (cleared to pause, set to resume).
         _run (threading.Event): PRIVATE - Event that controls if loop continues (cleared to stop).
         _thread (threading.Thread): PRIVATE - Thread object running the loop (None if not started).
     """
     id: int
+    input_queue: Queue
+    output_queue: Queue
     _run: th.Event
     _wait: th.Event
     lock: th.Lock | MockLock
     freq: float
-    job: Callable[[], Any]
+    job: LoopJob
     _thread: th.Thread | None = None
     exception_cb: Callable[[Exception], Any] | None = None
 
@@ -89,12 +95,12 @@ class LoopDescriptor:
         """Period between loop iterations (seconds)."""
         return 1 / self.freq
 
-class ThreadedLooper:
+class LoopSupervisor:
     """Helps managing multiple concurrent (threaded) loops, each running at a specified frequency.
     
     Each loop is represented by a LoopDescriptor dataclass, which is returned after a call to
     the methods 'add_loop' or 'get_loop_from_id/get_loops'. This object is ment for inspection only,
-    it's content should never be modified externally.
+    it's content should never be modified manually.
 
     NOTE that this class relies on time.sleep and time.perf_counter for timing, so
     there might be substantial jitter in the loops, depending on OS, expecially at high frequencies.
@@ -105,9 +111,9 @@ class ThreadedLooper:
     - Exceptions can be handled by assigning a custom callback
     - When creating loops, a shared lock can be given for Thread-safe operations.
     """
-    def __init__(self):
-        """Initialize the ThreadedLooper."""
-        self.logger = RcutilsLogger('ThreadedLooper')
+    def __init__(self, logger_name: str = 'LoopSupervisor'):
+        """Initialize the LoopSupervisor."""
+        self.logger = RcutilsLogger(logger_name)
         self.loop_pool: Dict[int, LoopDescriptor] = {}
         self.id_counter = 0
     
@@ -265,7 +271,7 @@ class ThreadedLooper:
     def add_loop(
         self, 
         freq: float, 
-        job: Callable[[], Any],
+        job: LoopJob,
         start_now: bool = False,
         lock: th.Lock | None = None,
         exception_handler: Callable[[Exception], Any] | None = None
@@ -297,6 +303,8 @@ class ThreadedLooper:
 
         descriptor = LoopDescriptor(
             id=loop_id,
+            input_queue=Queue(),
+            output_queue=Queue(),
             _run=run_evnt,
             _wait=wait_evnt,
             lock=new_lock,
@@ -371,9 +379,9 @@ class ThreadedLooper:
 
 if __name__ == "__main__":
 
-    def job1(): print("hello1")
-    def job2(): print("hello2")
-    looper = ThreadedLooper()
+    def job1(input, output): print("hello1")
+    def job2(input, output): print("hello2")
+    looper = LoopSupervisor()
     l1 = looper.add_loop(1, job1)
     l2 = looper.add_loop(2, job2)
 

@@ -1,32 +1,21 @@
-import json
-import os
-import psutil
-
-from rclpy.lifecycle import LifecycleNode
-from rclpy.lifecycle import State
-from rclpy.lifecycle import TransitionCallbackReturn
-from std_msgs.msg import ByteMultiArray, String
-from std_srvs.srv import Trigger, Trigger_Request, Trigger_Response
+from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 
 from interfaces.msg import MotionframeArray
 
-from .dispatcher import BatchDispatcher
-from .looper import ThreadedLooper, display_status_from_json
+from .dispatcher import BatchDispatcher, Dispatcher
+from .looper import LoopSupervisor, display_status_from_json
+from .abstract_hw_controller import MotionCommand
+
 
 # of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
 
 class HardwareManagerNode(LifecycleNode):
-    def __init__(self, batch_dispatcher: BatchDispatcher, looper: ThreadedLooper):
+    def __init__(self, batch_dispatcher: BatchDispatcher, looper: LoopSupervisor):
         super().__init__('hardware_manager')
         self.batch_dispatcher = batch_dispatcher
+        self.dispatcher: Dispatcher = Dispatcher()
         self.looper = looper
-
-        self.srv = self.create_service(
-            Trigger,
-            '/get_status',
-            self.get_status_callback
-        )
 
         self.sub = self.create_subscription(
             MotionframeArray,
@@ -36,35 +25,10 @@ class HardwareManagerNode(LifecycleNode):
         )
         self.get_logger().info("Initialized!")
 
-    def get_status_callback(self, request: Trigger_Request, response: Trigger_Response):
-        """
-        Utility service to be called from CLI to get a json representation of the status
-        of the hardware manager
-        """
-        # construct the json dict
-        status = {
-            'pid' : os.getpid(),
-            'looper' : self.looper.status_as_json()
-        }
-        
-        try:
-            json_str = json.dumps(status)
-        except Exception as e:
-            response.message = str(e)
-            response.success = False
-            return response
-    
-        response.success = True
-        response.message = json_str
-        return response
-
     def motionframe_callback(self, msg: MotionframeArray):
-        # TODO parse the data into motion commands tuples, and we create a motionframe
-
-        # array of tuples (actutator id: int, actuator target value: float)
-        motionframes = [(act_id, val) for act_id, val in zip(msg.ids, msg.values)]
-        
-        self.batch_dispatcher.dispatch(motionframes)
+        # create a motion command for each pair, and dispatch them to the queues        
+        for act_id, val in zip(msg.ids, msg.values):
+            self.dispatcher.dispatch(MotionCommand(act_id, val))
 
     # --- configure ---
     def on_configure(self, state: State):
