@@ -10,7 +10,7 @@ from .looper import LoopDescriptor, LoopSupervisor
 
 class ControllerState(Enum):
     """
-    Desired state of a controller + loop pair.
+    Logical controller state.
     """
     UNINITIALIZED = auto()
     INITIALIZED = auto()
@@ -20,22 +20,16 @@ class ControllerState(Enum):
 @dataclass
 class ManagedController:
     """
-    Internal structure holding a controller, its loop and desired goal.
+    Holds the controller and loop plus the desired goal.
     """
     loop: LoopDescriptor
     controller: BaseHardwareController
     goal: ControllerState = ControllerState.UNINITIALIZED
-    state: ControllerState = ControllerState.UNINITIALIZED
 
 
 class HWControllerStateReconciler:
     """
-    Reconciles the state of hardware controllers and their associated loops
-    toward a desired goal state.
-
-    The reconciler periodically checks the actual system state and attempts
-    to move it toward the desired state. This replaces retry queues and
-    transition-specific recovery logic.
+    Desired-state reconciler for hardware controllers and loops.
     """
 
     def __init__(self, looper: LoopSupervisor, logger: RcutilsLogger):
@@ -48,9 +42,6 @@ class HWControllerStateReconciler:
     # ------------------------------------------------------------------
 
     def add_controller(self, loop: LoopDescriptor, controller: BaseHardwareController):
-        """
-        Register a controller + loop pair to be managed by the reconciler.
-        """
         self.controllers.append(
             ManagedController(loop=loop, controller=controller)
         )
@@ -60,20 +51,39 @@ class HWControllerStateReconciler:
     # ------------------------------------------------------------------
 
     def set_goal(self, loop_id: int, goal: ControllerState):
-        """
-        Set the desired goal for a specific controller.
-        """
-        for c in self.controllers:
-            if c.loop.id == loop_id:
-                c.goal = goal
+        for mc in self.controllers:
+            if mc.loop.id == loop_id:
+                mc.goal = goal
                 return
 
     def set_goal_all(self, goal: ControllerState):
+        for mc in self.controllers:
+            mc.goal = goal
+
+    # ------------------------------------------------------------------
+    # State observation
+    # ------------------------------------------------------------------
+
+    def _actual_state(self, mc: ManagedController) -> ControllerState:
         """
-        Set the desired goal for all controllers.
+        Derive the controller state from the real system.
+        
+        Logic:
+        - RUNNING: Loop is started AND not paused AND HW is init.
+        - INITIALIZED: Loop is started AND paused AND HW is init.
+        - UNINITIALIZED: Anything else (Loop stopped or HW not init).
         """
-        for c in self.controllers:
-            c.goal = goal
+        hw_init = mc.controller.is_initialized()
+        loop_running = mc.loop.is_running
+        loop_paused = self.looper.is_paused(mc.loop.id)
+        
+        if hw_init and loop_running and not loop_paused:
+            return ControllerState.RUNNING
+        
+        if hw_init and loop_running and loop_paused:
+            return ControllerState.INITIALIZED
+
+        return ControllerState.UNINITIALIZED
 
     # ------------------------------------------------------------------
     # Reconciliation loop
@@ -81,91 +91,94 @@ class HWControllerStateReconciler:
 
     def reconcile(self):
         """
-        Attempt to move each controller toward its desired state.
-        Should be called periodically (e.g. by a ROS timer).
+        Attempt to move the system toward desired state.
         """
-
         for mc in self.controllers:
             try:
-                if mc.goal == ControllerState.RUNNING:
-                    self._ensure_running(mc)
+                actual = self._actual_state(mc)
+                goal = mc.goal
 
-                elif mc.goal == ControllerState.INITIALIZED:
-                    self._ensure_initialized(mc)
+                if actual == goal:
+                    continue
 
-                elif mc.goal == ControllerState.UNINITIALIZED:
-                    self._ensure_uninitialized(mc)
+                self.logger.info(
+                    f"Reconciling '{mc.controller.name}': {actual.name} -> {goal.name}"
+                )
+
+                if goal == ControllerState.RUNNING:
+                    self._step_to_running(mc, actual)
+                elif goal == ControllerState.INITIALIZED:
+                    self._step_to_initialized(mc, actual)
+                elif goal == ControllerState.UNINITIALIZED:
+                    self._step_to_uninitialized(mc, actual)
 
             except Exception as e:
-                self.logger.warning(
-                    f"Reconciliation error for controller '{mc.controller.name}': {e}"
+                self.logger.error(
+                    f"Reconciliation error for '{mc.controller.name}': {e}"
                 )
 
     # ------------------------------------------------------------------
-    # Goal enforcement helpers
+    # Transition steps (State Machine Logic)
     # ------------------------------------------------------------------
 
-    def _ensure_running(self, mc: ManagedController):
-        """
-        Ensure controller is initialized and loop is running.
-        """
-        if mc.state == ControllerState.RUNNING:
-            return
-
-        self._ensure_initialized(mc)
-        if mc.state != ControllerState.INITIALIZED:
-            return
-
-        if not self.looper.resume_loop(mc.loop.id):
-            self.logger.warning(f"Failed to resume loop '{mc.loop.name}'")
-            return
-
-        mc.state = ControllerState.RUNNING
+    def _step_to_running(self, mc: ManagedController, actual: ControllerState):
+        """Move toward RUNNING."""
+        if actual == ControllerState.UNINITIALIZED:
+            # First, get to INITIALIZED
+            self._step_to_initialized(mc, actual)
         
-    def _ensure_initialized(self, mc: ManagedController):
-        """
-        Ensure controller is initialized but loop is paused.
-        """
+        elif actual == ControllerState.INITIALIZED:
+            # Resume to reach RUNNING
+            if not self.looper.resume_loop(mc.loop.id):
+                self.logger.warning(f"Failed to resume loop '{mc.loop.name}'")
 
-        if mc.state == ControllerState.INITIALIZED:
-            return
+    def _step_to_initialized(self, mc: ManagedController, actual: ControllerState):
+        """Move toward INITIALIZED (HW Init + Loop Paused)."""
+        if actual == ControllerState.UNINITIALIZED:
+            # 1. Initialize Hardware
+            if not mc.controller.is_initialized():
+                if not mc.controller.initialize_hw():
+                    self.logger.warning(f"HW init failed for '{mc.controller.name}'")
+                    return
 
-        # we can also come from running state
-        if mc.state != ControllerState.RUNNING:
-            self._ensure_uninitialized(mc)
-            if mc.state != ControllerState.UNINITIALIZED:
-                return
+            # 2. Start the loop in paused mode
+            if not mc.loop.is_running:
+                if not self.looper.start_loop(mc.loop.id, paused=True):
+                    self.logger.warning(f"Failed to start loop '{mc.loop.name}'")
+            else:
+                # If loop was running but HW wasn't init (error state), pause it
+                self.looper.pause_loop(mc.loop.id)
 
-        if not mc.controller.initialize_hw():
-            self.logger.warning(
-                f"Failed to initialize controller '{mc.controller.name}'"
-            )
-            return
+        elif actual == ControllerState.RUNNING:
+            # Just pause it
+            if not self.looper.pause_loop(mc.loop.id):
+                self.logger.warning(f"Failed to pause loop '{mc.loop.name}'")
 
-        if not self.looper.start_loop(mc.loop.id, paused=True):
-            self.logger.warning(f"Failed to start loop '{mc.loop.name}'")
-            return
-
-        mc.state = ControllerState.INITIALIZED
-
-    def _ensure_uninitialized(self, mc: ManagedController):
-        """
-        Ensure controller is fully stopped and deinitialized.
-        """
-
-        if mc.state == ControllerState.UNINITIALIZED:
-            return
-
+    def _step_to_uninitialized(self, mc: ManagedController, actual: ControllerState):
+        """Move toward UNINITIALIZED (Loop Stopped + HW Deinit)."""
+        # 1. Stop the loop first (Safety)
         if mc.loop.is_running:
-            self.looper.stop_loop(mc.loop.id)
-            if mc.loop.is_running:
+            if not self.looper.stop_loop(mc.loop.id):
                 self.logger.warning(f"Failed to stop loop '{mc.loop.name}'")
                 return
 
-        if not mc.controller.deinitialize_hw():
-            self.logger.warning(
-                f"Failed to deinitialize controller '{mc.controller.name}'"
-            )
-            return
+        # 2. Deinitialize Hardware
+        if mc.controller.is_initialized():
+            if not mc.controller.deinitialize_hw():
+                self.logger.warning(f"HW deinit failed for '{mc.controller.name}'")
 
-        mc.state = ControllerState.UNINITIALIZED
+    # ------------------------------------------------------------------
+    # Status reporting
+    # ------------------------------------------------------------------
+
+    def get_status_json(self):
+        status = {}
+        for mc in self.controllers:
+            actual = self._actual_state(mc)
+            status[mc.controller.name] = {
+                "goal": mc.goal.name,
+                "actual": actual.name,
+                "loop_running": mc.loop.is_running,
+                "hw_initialized": mc.controller.is_initialized()
+            }
+        return status

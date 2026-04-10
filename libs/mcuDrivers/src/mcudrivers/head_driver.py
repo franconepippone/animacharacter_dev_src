@@ -94,7 +94,7 @@ class HeadMcuDriver(BaseHardwareDriver):
     write and flush concurrently without causing data corruption, but NOTE:   
     by default, each call to write acquires and releases the lock; this can result in overhead if done at high
     frequency. If you are writing to multiple axis, it's recommended to use the return of
-    'batch_write_lock()' method called within a context manager to acquire and the release the lock once,
+    'batch_write()' method called within a context manager to acquire and the release the lock once,
     and perform writing inside the managed context.
     """
     
@@ -155,6 +155,7 @@ class HeadMcuDriver(BaseHardwareDriver):
         self._leds_dirty = False
 
         # -------- state --------
+        self.initialized = False
 
         # leds
         self.led_r = 0
@@ -188,6 +189,8 @@ class HeadMcuDriver(BaseHardwareDriver):
         Returns:
             True if initialization successful, False otherwise.
         """
+        if self.initialized: return True
+
         if not self.esp32.open(1): 
             if self.logger: self.logger.error("Could not open serial device")
             return False
@@ -209,15 +212,23 @@ class HeadMcuDriver(BaseHardwareDriver):
         if not self.flush():
             if self.logger: self.logger.error("Could not flush initial hardware state")
             return False
+        
         if self.logger: self.logger.info("Hardware initialized.")
+        self.initialized = True
         return True
 
     def deinit(self) -> bool:
         """Deinitialize hardware and close connection."""
+        if not self.initialized: return True # dont if we are still deinitialized
+
         if not self.esp32.send_object(PSP_DEINIT, PACK_ID_CONTROL):
             if self.logger: self.logger.error("Could not send deinit request to serial device, closing anyway...")
         self.esp32.close()
+        self.initialized = False
         return True
+
+    def isinit(self) -> bool:
+        return self.initialized
 
     def _mark_dirty(self, axis: Axis):
         was_led_updt = axis in self._LED_AXIS
@@ -254,7 +265,7 @@ class HeadMcuDriver(BaseHardwareDriver):
 
     # ================= PUBLIC API =================
 
-    def batch_write_lock(self) -> RLock:
+    def batch_write(self) -> RLock:
         """Use this lock of inside a context manager for batch writing using
         only one lock acquisition.
         """

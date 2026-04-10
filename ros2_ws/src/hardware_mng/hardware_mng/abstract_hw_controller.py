@@ -1,12 +1,9 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Callable
 from typing import NamedTuple
 
 from rclpy.logging import RcutilsLogger
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
-
-from click import command
 
 # a "motion frame" is a set of motion commands
 class MotionCommand(NamedTuple):
@@ -34,14 +31,16 @@ class BaseHardwareController(ABC):
         self.name = name
         self.flush_freq = flush_freq # flush frequency in Hz
         self.command_group = command_group
+        self._initialized = False
 
         if self.flush_freq <= 0:
             raise ValueError(f"flush_freq must be positive, got {self.flush_freq}")
 
         self.logger = RcutilsLogger(f"HWController-{self.name}")
+        self._setup_wrappers()
 
     def subscribe_to_command_group(self, ids_group: Iterable[int]):
-        """If not set during __init__, use this to subscribe to a set of motion """
+        """If not set during __init__, use this to subscribe to a set of motion commands"""
         self.command_group = set(ids_group)
 
     # this is used as the "job" of the looper
@@ -56,15 +55,38 @@ class BaseHardwareController(ABC):
                     continue
 
             self.control(commands)
+    
+    def _setup_wrappers(self):
+        # note this could cause issues if a initialize fails because hardware is alrady initialized; in that
+        # case _initialized will be marked as false even though it's not. We could guard this but it's better to keep this stateless.
+        original_init = self.initialize_hw
+        original_deinit = self.deinitialize_hw
 
+        def init_wrapper() -> bool:
+            self._initialized = original_init() # true on success
+            return self._initialized
+
+        def deinit_wrapper() -> bool:
+            self._initialized = not original_deinit() # not true (false) on success
+            return not self._initialized
+
+        self.initialize_hw = init_wrapper
+        self.deinitialize_hw = deinit_wrapper
+    
     @abstractmethod
     def control(self, commands: Iterable[MotionCommand]):
         """Implement your custom control logic for a set of motion commands."""
     
     @abstractmethod
     def initialize_hw(self) -> bool:
-        """Puts the hardware in a ready-to-operate state. Returns True on success."""
+        """Puts the hardware in a ready-to-operate state. Returns True on success or if already initialized."""
 
     @abstractmethod
     def deinitialize_hw(self) -> bool:
-        """Puts the hardware at rest. Hardware should be re-initializable after this."""
+        """Puts the hardware at rest. Hardware should be re-initializable after this.
+        Returns True on success or if already is deinitialized."""
+    
+    def is_initialized(self) -> bool:
+        """Wheter the hardware is succesfully initialized (if initialize_hw has been called succesfully).
+        This is handled automatically but could be overwritten by custom logic"""
+        return self._initialized

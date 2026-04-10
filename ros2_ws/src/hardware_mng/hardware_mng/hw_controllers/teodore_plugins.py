@@ -29,10 +29,11 @@ class HeadController(BaseHardwareController):
     def control(self, commands: Iterable[MotionCommand]):
         # controls the head hardware
 
-        for command in commands:
-            fn = self.COMMAND_MAP.get(command.id)
-            if fn: fn(command.value)
-        
+        with self.driver.batch_write():
+            for command in commands:
+                fn = self.COMMAND_MAP.get(command.id)
+                if fn: fn(command.value)
+            
         self.driver.flush()
 
 

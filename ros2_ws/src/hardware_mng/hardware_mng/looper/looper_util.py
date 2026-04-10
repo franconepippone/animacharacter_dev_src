@@ -160,6 +160,11 @@ class LoopSupervisor:
 
     # public interface
 
+    def is_paused(self, loop_id: int) -> bool:
+        if loop := self.get_loop_from_id(loop_id):
+            return not loop._wait.is_set()
+        return False
+
     def pause_all(self):
         for loop in self.get_loops():
             self._set_loop_paused(True, loop)
@@ -185,7 +190,7 @@ class LoopSupervisor:
                 if loop._thread is not None:
                     loop._thread.join(timeout=timeout)
 
-    def stop_loop(self, loop_id: int, block: bool = True, timeout: float = 1.0):
+    def stop_loop(self, loop_id: int, block: bool = True, timeout: float = 1.0) -> bool:
         """Stop a specific loop.
         
         Args:
@@ -197,6 +202,8 @@ class LoopSupervisor:
             self._request_loop_stop(loop)
             if block and loop._thread is not None:
                 loop._thread.join(timeout=timeout)
+            return not loop.is_running
+        return False
 
     def pause_loop(self, loop_id: int) -> bool:
         """Pause a specific loop without stopping it.
@@ -284,7 +291,7 @@ class LoopSupervisor:
             freq: Loop frequency in Hz (must be > 0).
             job: Callable to execute each iteration.
             start_now: If True, start the loop immediately.
-            context_manager: Custom ContextManager (e.g. Lock) for callback.
+            context_manager: Custom ContextManager (e.g. Lock) for job.
             exception_handler: If given, exceptions raised by 'job' during loop can be processed here.
 
         Returns:

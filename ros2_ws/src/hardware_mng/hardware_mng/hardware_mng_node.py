@@ -25,7 +25,7 @@ class HardwareManagerNode(LifecycleNode):
         self.loop_controllers_pairs = loop_controllers_pairs # loop and controller are always kept together in a tuple
 
         # setting up reconciler for background state reconciliation of controller state
-        # (if a controller fails to update its state during a lifecycle transistion, this will help it recoincile in the background)
+        # (if a controller fails to update its state during a lifecycle transistion, this will try to recoincile in the background)
         self.reconciler = HWControllerStateReconciler(
             looper=self.looper,
             logger=self.get_logger()
@@ -36,7 +36,7 @@ class HardwareManagerNode(LifecycleNode):
 
         self.timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
 
-        self.create_timer(3, lambda: print(print(display_status_from_json(self.looper.status_as_json()))), autostart=True)
+        self.create_timer(3, lambda: print(self.reconciler.get_status_json()), autostart=True)
 
         self.sub = self.create_subscription(
             MotionframeArray,
@@ -103,7 +103,12 @@ class HardwareManagerNode(LifecycleNode):
     # --- shutdown ---
     def on_shutdown(self, state: State):
         self.get_logger().info("on_shutdown()")
-        self.looper.stop_all()
+        self.reconciler.set_goal_all(
+            ControllerState.UNINITIALIZED
+        )
+        self.reconciler.reconcile()
+        self.reconciler.reconcile()
+        
         print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
