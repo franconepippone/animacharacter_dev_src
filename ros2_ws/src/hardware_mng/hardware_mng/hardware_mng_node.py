@@ -36,7 +36,7 @@ class HardwareManagerNode(LifecycleNode):
 
         self.timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
 
-        self.create_timer(3, lambda: print(self.reconciler.get_status_json()), autostart=True)
+        #self.create_timer(3, lambda: print(self.reconciler.get_ascii_status()), autostart=True)
 
         self.sub = self.create_subscription(
             MotionframeArray,
@@ -48,8 +48,9 @@ class HardwareManagerNode(LifecycleNode):
         self.get_logger().info("Initialized!")
 
     def motionframe_callback(self, msg: MotionframeArray):
-        # create a motion command for each pair, and dispatch them to the queues        
+        # create a motion command for each pair, and dispatch them to the queues
         for act_id, val in zip(msg.ids, msg.values):
+            #self.get_logger().info(f"{act_id}:{val}")
             self.dispatcher.dispatch(MotionCommand(act_id, val))
 
     # --- configure ---
@@ -60,8 +61,6 @@ class HardwareManagerNode(LifecycleNode):
             ControllerState.INITIALIZED
         )
         self.reconciler.reconcile()
-
-        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- activate ---
@@ -72,8 +71,6 @@ class HardwareManagerNode(LifecycleNode):
             ControllerState.RUNNING
         )
         self.reconciler.reconcile()
-
-        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- deactivate ---
@@ -84,8 +81,6 @@ class HardwareManagerNode(LifecycleNode):
             ControllerState.INITIALIZED
         )
         self.reconciler.reconcile()
-
-        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- cleanup ---
@@ -96,8 +91,6 @@ class HardwareManagerNode(LifecycleNode):
             ControllerState.UNINITIALIZED
         )
         self.reconciler.reconcile()
-
-        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- shutdown ---
@@ -108,8 +101,6 @@ class HardwareManagerNode(LifecycleNode):
         )
         self.reconciler.reconcile()
         self.reconciler.reconcile()
-        
-        print(display_status_from_json(self.looper.status_as_json()))
         return TransitionCallbackReturn.SUCCESS
 
     # --- error ---

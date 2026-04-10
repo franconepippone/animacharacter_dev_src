@@ -37,18 +37,14 @@ class HWControllerStateReconciler:
         self.logger = logger
         self.controllers: List[ManagedController] = []
 
-    # ------------------------------------------------------------------
     # Controller registration
-    # ------------------------------------------------------------------
 
     def add_controller(self, loop: LoopDescriptor, controller: BaseHardwareController):
         self.controllers.append(
             ManagedController(loop=loop, controller=controller)
         )
 
-    # ------------------------------------------------------------------
     # Goal management
-    # ------------------------------------------------------------------
 
     def set_goal(self, loop_id: int, goal: ControllerState):
         for mc in self.controllers:
@@ -60,9 +56,7 @@ class HWControllerStateReconciler:
         for mc in self.controllers:
             mc.goal = goal
 
-    # ------------------------------------------------------------------
     # State observation
-    # ------------------------------------------------------------------
 
     def _actual_state(self, mc: ManagedController) -> ControllerState:
         """
@@ -76,7 +70,7 @@ class HWControllerStateReconciler:
         hw_init = mc.controller.is_initialized()
         loop_running = mc.loop.is_running
         loop_paused = self.looper.is_paused(mc.loop.id)
-        
+
         if hw_init and loop_running and not loop_paused:
             return ControllerState.RUNNING
         
@@ -85,9 +79,7 @@ class HWControllerStateReconciler:
 
         return ControllerState.UNINITIALIZED
 
-    # ------------------------------------------------------------------
     # Reconciliation loop
-    # ------------------------------------------------------------------
 
     def reconcile(self):
         """
@@ -117,9 +109,7 @@ class HWControllerStateReconciler:
                     f"Reconciliation error for '{mc.controller.name}': {e}"
                 )
 
-    # ------------------------------------------------------------------
     # Transition steps (State Machine Logic)
-    # ------------------------------------------------------------------
 
     def _step_to_running(self, mc: ManagedController, actual: ControllerState):
         """Move toward RUNNING."""
@@ -167,10 +157,7 @@ class HWControllerStateReconciler:
             if not mc.controller.deinitialize_hw():
                 self.logger.warning(f"HW deinit failed for '{mc.controller.name}'")
 
-    # ------------------------------------------------------------------
-    # Status reporting
-    # ------------------------------------------------------------------
-
+    # Status 
     def get_status_json(self):
         status = {}
         for mc in self.controllers:
@@ -182,3 +169,64 @@ class HWControllerStateReconciler:
                 "hw_initialized": mc.controller.is_initialized()
             }
         return status
+
+    def get_ascii_status(self) -> str:
+        """
+        Returns a formatted ASCII table representing the current 
+        reconciliation status of all managed controllers.
+        
+        Rows with an ACTUAL-GOAL mismatch are highlighted in Yellow.
+        """
+        if not self.controllers:
+            return "No controllers registered."
+
+        # ANSI Escape Codes
+        RED = "\033[91m"
+        RESET = "\033[0m"
+        BOLD = "\033[1m"
+
+        # Define column widths
+        name_w = 25
+        state_w = 15
+        bool_w = 10
+
+        # Header
+        header = (
+            f"{'CONTROLLER':<{name_w}} | "
+            f"{'ACTUAL':<{state_w}} | "
+            f"{'GOAL':<{state_w}} | "
+            f"{'LOOP':<{bool_w}} | "
+            f"{'HW':<{bool_w}}"
+        )
+        separator = "-" * len(header)
+
+        lines = [separator, f"{BOLD}{header}{RESET}", separator]
+
+        for mc in self.controllers:
+            actual = self._actual_state(mc)
+            
+            # Formatting values
+            name = (mc.controller.name[:name_w-3] + '...') if len(mc.controller.name) > name_w else mc.controller.name
+            actual_str = actual.name
+            goal_str = mc.goal.name
+            
+            # Using your updated status logic
+            loop_status = ("PAUSED" if self.looper.is_paused(mc.loop.id) else "RUNNING") if mc.loop.is_running else "STOP"
+            hw_status = "OK" if mc.controller.is_initialized() else "DOWN"
+
+            row = (
+                f"{name:<{name_w}} | "
+                f"{RED if actual != mc.goal else ""}{actual_str:<{state_w}} | {RESET}"
+                f"{RED if actual != mc.goal else ""}{goal_str:<{state_w}} | {RESET}"
+                f"{loop_status:<{bool_w}} | "
+                f"{hw_status:<{bool_w}}"
+            )
+
+            # Color row if actual state doesn't match the goal
+            if actual != mc.goal:
+                lines.append(f"{RED}{row}{RESET}")
+            else:
+                lines.append(row)
+
+        lines.append(separator)
+        return "\n".join(lines)

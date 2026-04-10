@@ -2,7 +2,7 @@
 Startup script for the Hardware Manager process.
 Configures objects, launches background threads, and spins the ros2 node.
 """
-from typing import Protocol
+from typing import Protocol, Callable
 from types import ModuleType
 import importlib
 import rclpy
@@ -121,16 +121,22 @@ def main(args=None):
     loop_ctrl_pairs: list[tuple[LoopDescriptor, BaseHardwareController]] = []
 
     for ctrl in controllers:
-        loop = looper.add_loop(f"loop-{ctrl.name}", ctrl.flush_freq, ctrl._flush, start_now=False)    
-        # make it so every received commmand with a command_group id gets put in the correct input queue.
-        handler = lambda cmd: loop.input_queue.put(cmd, block=False)
+        loop = looper.add_loop(f"loop-{ctrl.name}", ctrl.flush_freq, ctrl._flush, start_now=False)
+        input_queue = loop.input_queue
+
+        # we need q = input_queue because of how closures work 
+        def handler(cmd: MotionCommand, q = input_queue) -> None:
+            q.put(cmd, block=False)
+        
+        # make it so every received command gets put in the correct input queue.
         for id in ctrl.command_group:
             dispatcher.register_handler(id, handler)
         
         # keep the loop and respective controller boundled together in this tuple
         loop_ctrl_pairs.append((loop, ctrl))
 
-    logger.info("Configuration complete, starting ros node.")
+    num_handlers = dispatcher.get_map_size()
+    logger.info(f"Configuration complete, registered {num_handlers} dispatcher handlers. Starting ros node.")
     
     # spin ros2 node in this thread 
     rclpy.init(args=args)

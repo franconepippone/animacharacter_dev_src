@@ -1,11 +1,11 @@
 """Threaded loop management utility.
 
-Provides ThreadedLooper class for managing multiple concurrent loops at specified
+Provides LoopSupervisor class for managing multiple concurrent loops at specified
 frequencies. Each loop runs in its own daemon thread and can be individually
 paused, resumed, or stopped.
 
 Example:
-    looper = ThreadedLooper()
+    looper = LoopSupervisor()
     loop_desc = looper.add_loop(freq=10, job=my_callback, start_now=True)
     # ...
     looper.stop_all(block=True)

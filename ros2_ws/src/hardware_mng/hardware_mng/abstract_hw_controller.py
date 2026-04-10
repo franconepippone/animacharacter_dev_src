@@ -58,7 +58,7 @@ class BaseHardwareController(ABC):
     
     def _setup_wrappers(self):
         # note this could cause issues if a initialize fails because hardware is alrady initialized; in that
-        # case _initialized will be marked as false even though it's not. We could guard this but it's better to keep this stateless.
+        # case _initialized will be marked as false even though hardware is ok. We could guard this but it's better to keep this stateless.
         original_init = self.initialize_hw
         original_deinit = self.deinitialize_hw
 
@@ -74,7 +74,7 @@ class BaseHardwareController(ABC):
         self.deinitialize_hw = deinit_wrapper
     
     @abstractmethod
-    def control(self, commands: Iterable[MotionCommand]):
+    def control(self, commands: list[MotionCommand]):
         """Implement your custom control logic for a set of motion commands."""
     
     @abstractmethod
@@ -88,5 +88,5 @@ class BaseHardwareController(ABC):
     
     def is_initialized(self) -> bool:
         """Wheter the hardware is succesfully initialized (if initialize_hw has been called succesfully).
-        This is handled automatically but could be overwritten by custom logic"""
+        By default, this is handled automatically but could be overwritten with custom logic"""
         return self._initialized

@@ -39,6 +39,10 @@ class Dispatcher(Generic[KEY_T, PAYLOAD_T]):
         """Initialize an empty dispatcher with no registered handlers."""
         self.map: Dict[KEY_T, Handler] = {}
 
+    def get_map_size(self) -> int:
+        """The amount of handlers registered."""
+        return len(self.map)
+
     def clear_handlers(self):
         """Remove all registered handlers.
 
