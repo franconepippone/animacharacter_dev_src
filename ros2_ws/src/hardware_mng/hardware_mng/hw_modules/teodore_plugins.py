@@ -8,7 +8,7 @@ from mcudrivers.head_driver import Axis, HeadMcuDriver
 class HeadController(BaseHardwareController):
     def __init__(self):
         super().__init__("head", flush_freq=30.0)
-        
+
         # helper class to drive the hardware
         self.driver = HeadMcuDriver("COM3", self.logger)
 
@@ -34,3 +34,28 @@ class HeadController(BaseHardwareController):
             if fn: fn(command.value)
         
         self.driver.flush()
+
+
+class BodyController(BaseHardwareController):
+    def __init__(self):
+        super().__init__("body", flush_freq=30.0)
+
+    def initialize_hw(self) -> bool: return True
+    def deinitialize_hw(self) -> bool: return True
+    def control(self, commands: Iterable[MotionCommand]): pass
+
+class LeftArmController(BaseHardwareController):
+    def __init__(self):
+        super().__init__("l-arm", flush_freq=30.0)
+    
+    def initialize_hw(self) -> bool: return True
+    def deinitialize_hw(self) -> bool: return True
+    def control(self, commands: Iterable[MotionCommand]): pass
+
+class RightArmController(BaseHardwareController):
+    def __init__(self):
+        super().__init__("r-arm", flush_freq=30.0)
+
+    def initialize_hw(self) -> bool: return True
+    def deinitialize_hw(self) -> bool: return True
+    def control(self, commands: Iterable[MotionCommand]): pass    

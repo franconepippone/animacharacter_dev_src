@@ -1,6 +1,14 @@
-# this file defines all hardware configurations. Write your hardware module "plugins", and add them
-# to a custom configuration here if you are using this on a custom robot.
+# this file defines all hardware configurations. Write your hardware module "plugins" paths as path.to.module:class, and add them
+# to a custom configuration here if you are using this on a custom robot. You can specify the used configuration as a launch argument
 
 teodore:
   - "hardware_mng.hw_modules.teodore_plugins:HeadController"
-  - "hw_modules."
+  - "hardware_mng.hw_modules.teodore_plugins:BodyController"
+  - "hardware_mng.hw_modules.teodore_plugins:LeftArmController"
+  - "hardware_mng.hw_modules.teodore_plugins:RightArmController"
+
+# uses fake controllers just for testing
+testing:
+  - "hardware_mng.hw_modules.testing_plugins:A_Controller"
+  - "hardware_mng.hw_modules.testing_plugins:B_Controller"
+  - "hardware_mng.hw_modules.testing_plugins:C_Controller"

@@ -11,7 +11,7 @@ Example:
     looper.stop_all(block=True)
 """
 from __future__ import annotations
-from typing import Callable, List, Any, Dict, Iterable
+from typing import Callable, List, Any, Dict, Iterable, ContextManager
 from dataclasses import dataclass
 import threading as th
 from queue import Queue
@@ -32,7 +32,7 @@ def _loop(
         # if wait is false, blocks until it is true (paused)
         descriptor._wait.wait()
         try:
-            with descriptor.lock:
+            with descriptor.context:
                 descriptor.job(descriptor.input_queue, descriptor.output_queue)
 
         except Exception as e:
@@ -45,12 +45,12 @@ def _loop(
         if sleep_time > 0:
             time.sleep(sleep_time)
 
-class MockLock:
-    """Just a mock object needed for the context manager construct with Locks to work"""
+class EmptyContextManager:
     def __enter__(self):
-        return self
+        return None
     def __exit__(self, exc_type, exc, tb):
         return False
+
 
 type LoopJob = Callable[[Queue, Queue], Any]
 
@@ -62,7 +62,7 @@ class LoopDescriptor:
         id (int): Unique identifier for this loop.
         input_queue (Queue): Optional queue for sending consumable data to the job.
         output_queue (Queue): Optional queue for receiving processed data from the job.
-        lock (threading.Lock | MockLock): Lock protecting callback execution. If no lock is given, a MockLock is created (does not do anything)
+        context (ContextManager): Context manager for the job (e.g. a threading.Lock for thread safe operation)
         freq (float): Loop frequency in Hz.
         period (float): Loop period in seconds.
         is_running (bool): True if thread exists and is running.
@@ -72,12 +72,13 @@ class LoopDescriptor:
         _run (threading.Event): PRIVATE - Event that controls if loop continues (cleared to stop).
         _thread (threading.Thread): PRIVATE - Thread object running the loop (None if not started).
     """
+    name: str
     id: int
     input_queue: Queue
     output_queue: Queue
     _run: th.Event
     _wait: th.Event
-    lock: th.Lock | MockLock
+    context: ContextManager
     freq: float
     job: LoopJob
     _thread: th.Thread | None = None
@@ -163,7 +164,7 @@ class LoopSupervisor:
         for loop in self.get_loops():
             self._set_loop_paused(True, loop)
     
-    def unpause_all(self):
+    def resume_all(self):
         for loop in self.get_loops():
             self._set_loop_paused(False, loop)
 
@@ -269,11 +270,12 @@ class LoopSupervisor:
         return False
 
     def add_loop(
-        self, 
+        self,
+        name: str, 
         freq: float, 
         job: LoopJob,
         start_now: bool = False,
-        lock: th.Lock | None = None,
+        context_manager: ContextManager | None = None,
         exception_handler: Callable[[Exception], Any] | None = None
     ) -> LoopDescriptor:
         """Register a new loop task.
@@ -282,7 +284,7 @@ class LoopSupervisor:
             freq: Loop frequency in Hz (must be > 0).
             job: Callable to execute each iteration.
             start_now: If True, start the loop immediately.
-            lock: Custom Lock for callback protection (created if None).
+            context_manager: Custom ContextManager (e.g. Lock) for callback.
             exception_handler: If given, exceptions raised by 'job' during loop can be processed here.
 
         Returns:
@@ -297,17 +299,18 @@ class LoopSupervisor:
         # create events / locks objects if not given
         run_evnt = th.Event()
         wait_evnt = th.Event()
-        new_lock = MockLock() if lock is None else lock
+        context = EmptyContextManager() if context_manager is None else context_manager
 
         loop_id = self._get_new_id()
 
         descriptor = LoopDescriptor(
+            name=name,
             id=loop_id,
             input_queue=Queue(),
             output_queue=Queue(),
             _run=run_evnt,
             _wait=wait_evnt,
-            lock=new_lock,
+            context=context,
             freq=freq,
             job=job,
             _thread=None,
@@ -333,6 +336,7 @@ class LoopSupervisor:
             "stopped": int,
             "loops": [
                 {
+                    "name": str,
                     "id": int,
                     "state": str,
                     "freq": float,
@@ -360,11 +364,12 @@ class LoopSupervisor:
         loops_data = []
         for l in loops:
             loops_data.append({
+                "name" : l.name,
                 "id": l.id,
                 "state": loop_state(l),
                 "freq": l.freq,
                 "is_running": l.is_running,
-                "lock_type": type(l.lock).__name__,
+                "ctx_manager": type(l.context).__name__,
                 "exception_cb": l.exception_cb is not None
             })
 
@@ -382,8 +387,8 @@ if __name__ == "__main__":
     def job1(input, output): print("hello1")
     def job2(input, output): print("hello2")
     looper = LoopSupervisor()
-    l1 = looper.add_loop(1, job1)
-    l2 = looper.add_loop(2, job2)
+    l1 = looper.add_loop("pipo", 1, job1)
+    l2 = looper.add_loop("pino", 2, job2)
 
     looper.start_all()
 

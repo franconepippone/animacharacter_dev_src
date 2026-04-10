@@ -36,11 +36,11 @@ def display_status_from_json(status: dict) -> str:
     lines.append(separator())
 
     for loop in status.get("loops", []):
-        lines.append(box_line(f"Loop ID: {loop.get('id')}"))
+        lines.append(box_line(f"Loop ID: {loop.get('id')}, name: {loop.get('name')}"))
         lines.append(box_line(f"  State              : {loop.get('state')}"))
         lines.append(box_line(f"  Frequency          : {loop.get('freq'):.3f} Hz"))
         lines.append(box_line(f"  Thread Alive       : {loop.get('is_running')}"))
-        lines.append(box_line(f"  Lock Type          : {loop.get('lock_type')}"))
+        lines.append(box_line(f"  CtxMng Type          : {loop.get('lock_type')}"))
         lines.append(box_line(f"  Exception Callback : {'YES' if loop.get('exception_cb') else 'NO'}"))
         lines.append(separator())
 
