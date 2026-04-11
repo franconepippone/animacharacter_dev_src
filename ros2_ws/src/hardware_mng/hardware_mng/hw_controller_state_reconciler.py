@@ -157,17 +157,25 @@ class HWControllerStateReconciler:
             if not mc.controller.deinitialize_hw():
                 self.logger.warning(f"HW deinit failed for '{mc.controller.name}'")
 
-    # Status 
-    def get_status_json(self):
-        status = {}
-        for mc in self.controllers:
-            actual = self._actual_state(mc)
-            status[mc.controller.name] = {
+    def get_status_for_controller_json(self, mc: ManagedController):
+        actual = self._actual_state(mc)
+        return {
                 "goal": mc.goal.name,
-                "actual": actual.name,
+                "state": actual.name,
                 "loop_running": mc.loop.is_running,
                 "hw_initialized": mc.controller.is_initialized()
             }
+
+    # Status 
+    def get_status_json(self):
+        status = {}
+        has_discrepancy = False # wheter there is at least one controller in an unwanted state
+        for mc in self.controllers:
+            actual = self._actual_state(mc)
+            status[mc.controller.name] = self.get_status_for_controller_json(mc)
+            if mc.goal.name != actual.name:
+                has_discrepancy = True
+        status["has_discrepancy"] = has_discrepancy
         return status
 
     def get_ascii_status(self) -> str:

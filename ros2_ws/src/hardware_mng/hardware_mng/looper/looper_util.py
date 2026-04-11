@@ -330,33 +330,7 @@ class LoopSupervisor:
         
         return descriptor
 
-    def status_as_json(self) -> dict:
-        """
-        Return a structured dictionary with all loop status data.
-        Can be serialized to JSON for ROS2 or WebSocket publishing.
-
-        Structure:
-        {
-            "total": int,
-            "running": int,
-            "paused": int,
-            "stopped": int,
-            "loops": [
-                {
-                    "name": str,
-                    "id": int,
-                    "state": str,
-                    "freq": float,
-                    "is_running": bool,
-                    "lock_type": str,
-                    "exception_cb": bool
-                },
-                ...
-            ]
-        }
-        """
-        loops = sorted(self.loop_pool.values(), key=lambda l: l.id)
-
+    def get_loop_status_json(self, l: LoopDescriptor):
         def loop_state(l: LoopDescriptor) -> str:
             if not l._thread:
                 return "NOT STARTED"
@@ -364,13 +338,7 @@ class LoopSupervisor:
                 return "STOPPED"
             return "RUNNING" if l._wait.is_set() else "PAUSED"
 
-        running = sum(l.is_running and l._wait.is_set() for l in loops)
-        paused = sum(l.is_running and not l._wait.is_set() for l in loops)
-        stopped = len(loops) - running - paused
-
-        loops_data = []
-        for l in loops:
-            loops_data.append({
+        return  {
                 "name" : l.name,
                 "id": l.id,
                 "state": loop_state(l),
@@ -378,7 +346,22 @@ class LoopSupervisor:
                 "is_running": l.is_running,
                 "ctx_manager": type(l.context).__name__,
                 "exception_cb": l.exception_cb is not None
-            })
+            }
+
+
+    def status_as_json(self) -> dict:
+        """
+        Return a structured dictionary with all loop status data.
+        """
+        loops = sorted(self.loop_pool.values(), key=lambda l: l.id)
+
+        running = sum(l.is_running and l._wait.is_set() for l in loops)
+        paused = sum(l.is_running and not l._wait.is_set() for l in loops)
+        stopped = len(loops) - running - paused
+
+        loops_data = {}
+        for l in loops:
+            loops_data[l.id] = self.get_loop_status_json(l)
 
         return {
             "total": len(loops),
