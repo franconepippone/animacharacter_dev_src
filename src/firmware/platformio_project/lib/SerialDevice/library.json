@@ -1,0 +1,26 @@
+{
+    "name": "MyLibrary",
+    "version": "1.0.0",
+    "description": "My custom Arduino library",
+    "keywords": ["arduino", "sensor"],
+    "authors": [
+      {
+        "name": "Your Name",
+        "email": "you@email.com"
+      }
+    ],
+    "frameworks": ["arduino"],
+    "platforms": "*",
+  
+    "dependencies": [
+      {
+        "name": "Adafruit BusIO",
+        "owner": "adafruit",
+        "version": "^1.14.0"
+      },
+      {
+        "name": "ArduinoJson",
+        "version": "^7.0.0"
+      }
+    ]
+  }
