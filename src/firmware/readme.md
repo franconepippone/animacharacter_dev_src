@@ -1,4 +1,8 @@
-This subfolder contains code related to the mcus (arduino, esp32, esp8266) used in the robot. It mainly consists of platformio projects (possibly one giant platformio project). While the rest of the repo is being developed on Ubuntu WSL, the platformio projects are best edited on windows due to native platformio support (WSL can be tricky). To perform a partial clone only of this folder on the windows machine, follow these steps:
+This subfolder contains code related to the mcus (arduino, esp32, esp8266) used in the robot. It mainly consists of platformio projects (possibly one giant platformio project). While the rest of the repo is being developed on Ubuntu WSL, the platformio projects are best edited on windows due to native platformio support (WSL can be tricky). 
+
+> TL;DR: DO NOT EDIT THIS IF YOU ARE ON UBUNTU WSL, EDIT THIS FOLDER **ONLY** ON WINDOWS.
+
+To perform a partial clone only of this folder on the windows machine, follow these steps:
 
 Clone the repo with no checkout
 ```bash

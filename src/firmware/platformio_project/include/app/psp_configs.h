@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <PSP.h>
+#include <SerialDevice.h>
 
 
 #define PSP_BAUD_RATE 115200
