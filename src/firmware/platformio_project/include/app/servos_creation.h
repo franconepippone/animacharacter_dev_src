@@ -6,7 +6,6 @@
 #include "utility/controllers/simmetric_pwm_pair.h"
 
 #include "hardware/pwm_devices.h"
-#include "hardware/drivers.h"
 
 #include "app/constants.h"
 #include "app/head_controllers.h"
@@ -33,9 +32,12 @@ PWMServo<int16_t> SERVO_MOUTH_RIGHT(CHANNEL_MOUTH_RIGHT, 0, 500); // automatical
 PWMServo<int16_t> SERVO_NECK_RIGHT(CHANNEL_NECK_R, 0, 1000);
 PWMServo<int16_t> SERVO_NECK_LEFT(CHANNEL_NECK_L, 0, 1000);
 
+// container for servos
 PWMServo<int16_t>* servos[] = {&SERVO_EYELID_DR, &SERVO_EYELID_UR, &SERVO_EYELID_DL, &SERVO_EYELID_UL, &SERVO_EYE_L, &SERVO_EYE_R, &SERVO_EYE_TILT, &SERVO_EAR_LEFT, &SERVO_EAR_RIGHT, &SERVO_MOUTH_LEFT, &SERVO_MOUTH_RIGHT, &SERVO_NECK_RIGHT, &SERVO_NECK_LEFT};
 const size_t servo_amount = sizeof(servos) / sizeof(servos[0]);
 
+
+/* Creation of controllers */
 EyelidsController eyeLeft(&SERVO_EYELID_UL, &SERVO_EYELID_DL);
 EyelidsController eyeRight(&SERVO_EYELID_UR, &SERVO_EYELID_DR);
 

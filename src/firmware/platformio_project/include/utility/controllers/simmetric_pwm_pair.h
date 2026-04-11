@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#include <hardware/pwm_devices.h>
+#include "hardware/pwm_devices.h"
 
 /* Permette di controllare due canali PWM simmetricamente.
 i.e.: due servomotori che agiscono a specchio su uno stesso asse di rotazione.
