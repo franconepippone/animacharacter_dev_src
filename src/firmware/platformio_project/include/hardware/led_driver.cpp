@@ -23,8 +23,6 @@ void pwmLedDriver::setDuty(uint duty) {
 }
 
 
-
-
 /*SAMPLE CODE
 const int DELAY_MS = 4;  // delay between fade increments
 

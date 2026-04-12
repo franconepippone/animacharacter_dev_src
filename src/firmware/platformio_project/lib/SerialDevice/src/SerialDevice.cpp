@@ -18,6 +18,10 @@
   #define LED_OFF LOW
 #endif
 
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
 
 //#define IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
