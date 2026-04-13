@@ -56,13 +56,14 @@ def _loop(
                     # this should match what _request_loop_stop does below
                     descriptor._run.clear()
                     descriptor._wait.set()
+                    return # not necessary
 
         except Exception as e:
             # run exception handler if set
             if descriptor.exception_cb: descriptor.exception_cb(e)
 
         if not descriptor._run.is_set(): return # exit early if this is already true
-        
+
         # sleep for remaining time in the period
         elapsed = time.perf_counter() - iteration_start
         sleep_time = descriptor.period - elapsed
