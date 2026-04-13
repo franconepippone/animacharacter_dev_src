@@ -1,6 +1,6 @@
 from typing import Dict, Callable, Any
 from collections.abc import Iterable, Sized
-from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, HardwareCrash
 
 from random import random
 
@@ -39,6 +39,9 @@ class C_Controller(BaseHardwareController):
         super().__init__("C", flush_freq=1.0)
         self.subscribe_to_command_group([7,8,9])
 
-    def initialize_hw(self) -> bool: return faultytrue(0.8, "Initializing C:")
+    def initialize_hw(self) -> bool: return faultytrue(0.5, "Initializing C:")
     def deinitialize_hw(self) -> bool: return faultytrue(0.2, "Deinitializing C:")
     def control(self, commands: list[MotionCommand]): print(f"controlling C, got {len(commands)} commands")
+    def read(self):
+        if faultytrue(0.5, "testing read C:"):
+            raise HardwareCrash("C controller became unresponsive")

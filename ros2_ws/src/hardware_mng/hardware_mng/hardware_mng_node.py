@@ -44,7 +44,7 @@ class HardwareManagerNode(LifecycleNode):
         for loop, ctrl in loop_controllers_pairs:
             self.reconciler.add_controller(loop, ctrl)
 
-        self.timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
+        self.reconcile_timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
         
         #self.create_timer(3, lambda: print(self.reconciler.get_ascii_status()), autostart=True)
 
@@ -67,7 +67,7 @@ class HardwareManagerNode(LifecycleNode):
                 lambda stat, l=loop: self.check_loop_status(stat, l)
             )
 
-        self.timer = self.create_timer(1.0, self.updater.update) # update 
+        self.diagnostic_timer = self.create_timer(1.0, self.updater.update) # update 
 
         # -------------------------
         # main subscription to input topic

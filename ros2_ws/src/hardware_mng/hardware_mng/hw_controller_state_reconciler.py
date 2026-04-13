@@ -116,8 +116,12 @@ class HWControllerStateReconciler:
         if actual == ControllerState.UNINITIALIZED:
             # First, get to INITIALIZED
             self._step_to_initialized(mc, actual)
+            # we allow to continue if init was succesfull
+            if (actual := self._actual_state(mc)) != ControllerState.INITIALIZED:
+                return 
         
-        elif actual == ControllerState.INITIALIZED:
+        # not ELIF, so we can go UNINIT -> RUNNING in one step
+        if actual == ControllerState.INITIALIZED:
             # Resume to reach RUNNING
             if not self.looper.resume_loop(mc.loop.id):
                 self.logger.warning(f"Failed to resume loop '{mc.loop.name}'")
