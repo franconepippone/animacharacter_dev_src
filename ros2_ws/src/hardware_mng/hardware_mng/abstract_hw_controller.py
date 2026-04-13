@@ -1,10 +1,10 @@
 from collections.abc import Iterable, Callable
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
-
+from .looper import LoopActionRequest, LoopAction
 
 class HardwareCrash(Exception):
     """
@@ -52,8 +52,8 @@ class BaseHardwareController(ABC):
         self.command_group = set(ids_group)
 
     # this is used as the "job" of the looper
-    def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]):
-            
+    def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopActionRequest]:
+            if not self.is_initialized(): print("STO QUI BASTARDO")
             if not self.is_initialized(): return # prevent flush if not initialized
 
             commands = []
@@ -67,13 +67,17 @@ class BaseHardwareController(ABC):
             try:
                 self.read() # first poll for any data
                 self.control(commands) # then write command instructions
+            
             except HardwareCrash as e:
-                self._set_initialized(False)
                 self.logger.error(f"Hardware crash in controller '{self.name}': {e}")
+                self._set_initialized(False)
+                return LoopActionRequest(LoopAction.STOP)
+            
             except Exception as e:
                 # we interpret an exception as an hardware failure and reset the state to uninitialized
-                self._set_initialized(False)
                 self.logger.error(f"Unexpected exception in controller '{self.name}': {e}")
+                self._set_initialized(False)
+                return LoopActionRequest(LoopAction.STOP)
 
     def _setup_wrappers(self):
         # note this could cause issues if a initialize fails because hardware is alrady initialized; in that

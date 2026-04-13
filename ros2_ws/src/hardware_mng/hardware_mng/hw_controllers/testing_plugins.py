@@ -43,5 +43,5 @@ class C_Controller(BaseHardwareController):
     def deinitialize_hw(self) -> bool: return faultytrue(0.2, "Deinitializing C:")
     def control(self, commands: list[MotionCommand]): print(f"controlling C, got {len(commands)} commands")
     def read(self):
-        if faultytrue(0.5, "testing read C:"):
+        if not faultytrue(0.2, "testing read C:"):
             raise HardwareCrash("C controller became unresponsive")
