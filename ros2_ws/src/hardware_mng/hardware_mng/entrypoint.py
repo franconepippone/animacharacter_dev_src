@@ -65,7 +65,7 @@ def import_module(path: str) -> ModuleType | None:
 
 def main(args=None):
     # simulate CLI input
-    INPUT_CONFIG = "testing"
+    INPUT_CONFIG = "simulator"
     YAML_FILE = "src/hardware_mng/hardware_mng/hw_configurations.yaml"
     STRICT_MODE = True #wheter to stop if any of the controllers fail to load
 
@@ -130,7 +130,7 @@ def main(args=None):
         
         # make it so every received command gets put in the correct input queue.
         for id in ctrl.command_group:
-            dispatcher.register_handler(id, handler)
+            dispatcher.add_handler(id, handler)
         
         # keep the loop and respective controller boundled together in this tuple
         loop_ctrl_pairs.append((loop, ctrl))
