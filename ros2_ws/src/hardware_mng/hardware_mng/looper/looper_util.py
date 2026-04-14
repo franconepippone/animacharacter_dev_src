@@ -91,7 +91,8 @@ class LoopDescriptor:
         freq (float): Loop frequency in Hz.
         period (float): Loop period in seconds.
         is_running (bool): True if thread exists and is running.
-        job (Callable[[Queue, Queue], Any]): Callback function executed each iteration. Receives input and output queues as arguments, can be used for inter-thread communication.
+        job (Callable[[Queue, Queue], None | LoopActionRequest]): Callback function executed each iteration. Receives input and output queues as arguments, which can be used for inter-thread communication.
+            Can optionally return a LoopActionRequest object to either PAUSE/STOP the loop internally.
         exception_cb (Callable[[Exception], Any]): If present, when job raises an exception this will be called with that exception as argument.
         _wait (threading.Event): PRIVATE - Event for pause control (cleared to pause, set to resume).
         _run (threading.Event): PRIVATE - Event that controls if loop continues (cleared to stop).

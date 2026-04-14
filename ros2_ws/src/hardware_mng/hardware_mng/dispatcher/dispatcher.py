@@ -14,7 +14,7 @@ Concepts:
   the entire dispatch call blocks as well.
 """
 
-from typing import Dict, Callable, Tuple, Iterable, Any, Generic, TypeVar, TypeAlias
+from typing import Dict, Callable, Tuple, Iterable, Any, Generic, TypeVar, TypeAlias, List
 
 KEY_T = TypeVar("KEY_T")
 PAYLOAD_T = TypeVar("PAYLOAD_T")
@@ -37,7 +37,7 @@ class Dispatcher(Generic[KEY_T, PAYLOAD_T]):
 
     def __init__(self):
         """Initialize an empty dispatcher with no registered handlers."""
-        self.map: Dict[KEY_T, Handler] = {}
+        self.map: Dict[KEY_T, List[Handler]] = {}
 
     def get_map_size(self) -> int:
         """The amount of handlers registered."""
@@ -51,14 +51,15 @@ class Dispatcher(Generic[KEY_T, PAYLOAD_T]):
         """
         self.map.clear()
 
-    def register_handler(self, key: KEY_T, handler: Handler):
-        """Register or replace a handler for a given key.
+    def add_handler(self, key: KEY_T, handler: Handler):
+        """Register a new handler for a given key. Multiple handlers
+        can exist for the same key.
 
         Args:
             key: Identifier used to select the handler.
             handler: Callable invoked with the command payload.
         """
-        self.map[key] = handler
+        self.map.setdefault(key, []).append(handler)
 
     def dispatch_multiple(self, commands: Iterable[Command]):
         """Dispatch a sequence of commands.
@@ -69,8 +70,8 @@ class Dispatcher(Generic[KEY_T, PAYLOAD_T]):
         """
         handlers = self.map
         for key, payload in commands:
-            handler = handlers.get(key)
-            if handler:
+            bucket = handlers.get(key, [])
+            for handler in bucket:
                 handler(payload)
 
     def dispatch(self, command: Command):
@@ -82,6 +83,6 @@ class Dispatcher(Generic[KEY_T, PAYLOAD_T]):
         If no handler is registered for the key, nothing happens.
         """
         key, payload = command
-        handler = self.map.get(key)
-        if handler:
+        bucket = self.map.get(key, [])
+        for handler in bucket:
             handler(payload)
