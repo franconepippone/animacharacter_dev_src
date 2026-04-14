@@ -14,6 +14,10 @@ config/name="bot-simulator"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Utils="*res://utils.gd"
+
 [physics]
 
 common/physics_ticks_per_second=200

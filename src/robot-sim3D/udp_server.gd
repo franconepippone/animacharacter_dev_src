@@ -34,7 +34,6 @@ func _handle_packet(packet: PackedByteArray, ip: String, port: int) -> void:
 
 	match packid:
 		PACKID_MOTION:
-			received_packet.emit()
 			var result = _decode_motion(packet)
 			received_packet.emit(result[0], result[1])
 		PACKID_PING:
@@ -59,7 +58,7 @@ func _decode_motion(packet: PackedByteArray):
 	value_bytes.reverse() # only if incoming data is big-endian
 	var value := value_bytes.decode_float(0)
 
-	print("Motion:", axis_id, value)
+	print("Motion command:", axis_id, " ", value)
 	return [axis_id, value]
 
 

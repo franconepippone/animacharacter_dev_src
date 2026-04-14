@@ -1,7 +1,7 @@
 [gd_scene load_steps=20 format=3 uid="uid://cik6bbow78uf3"]
 
-[ext_resource type="Script" uid="uid://cbg32yl3fnbmh" path="res://node_3d.gd" id="1_bb14l"]
 [ext_resource type="PackedScene" uid="uid://daxhm1rse2wnp" path="res://meshes/body.tscn" id="2_fhuon"]
+[ext_resource type="Script" uid="uid://cqvclyy2ksnqm" path="res://remote_joint.gd" id="3_l5cmi"]
 [ext_resource type="PackedScene" uid="uid://c3nnjk474ityy" path="res://meshes/testa.tscn" id="3_y25lv"]
 [ext_resource type="PackedScene" uid="uid://cxu0q26u8jjqt" path="res://meshes/mandibola_001.tscn" id="4_l5cmi"]
 [ext_resource type="PackedScene" uid="uid://cdnlxsl3i8dh1" path="res://meshes/braccio.tscn" id="5_5xdwo"]
@@ -50,7 +50,9 @@ radius = 0.3433543
 height = 1.5244141
 
 [node name="env" type="Node3D"]
-script = ExtResource("1_bb14l")
+
+[node name="udpserver" parent="." instance=ExtResource("7_0kcsd")]
+unique_name_in_owner = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_jsk3o")
@@ -74,14 +76,22 @@ angular_limit_z/enabled = false
 angular_spring_x/enabled = true
 angular_spring_x/stiffness = 5000.0
 angular_spring_x/damping = 400.0
-angular_spring_x/equilibrium_point = -0.47909287
 angular_spring_y/enabled = true
-angular_spring_y/stiffness = 10000.0
+angular_spring_y/stiffness = 1000.0
 angular_spring_y/damping = 300.0
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 5000.0
 angular_spring_z/damping = 400.0
-angular_spring_z/equilibrium_point = -0.049741883
+script = ExtResource("3_l5cmi")
+axis_x_name = "BODY_ROTATION"
+axis_y_name = "BODY_ROLL"
+y_min_angle = -10.0
+y_max_angle = 10.0
+input_format_y = 1
+axis_z_name = "BODY_LEAN"
+z_min_angle = -18.0
+z_max_angle = 0.0
+input_format_z = 2
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.9647964, -0.0970591, 0.24443248, 1.34840805e-08, 0.92940986, 0.3690494, -0.26299757, -0.35605758, 0.8966913, 1.0715549, 5.56195, 4.3765736)
@@ -109,10 +119,20 @@ angular_spring_x/damping = 1.0
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 20.0
 angular_spring_y/damping = 1.0
-angular_spring_y/equilibrium_point = 1.5707964
+angular_spring_y/equilibrium_point = 2.7358036
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 20.0
 angular_spring_z/damping = 0.965
+angular_spring_z/equilibrium_point = 1.3124876
+script = ExtResource("3_l5cmi")
+axis_x_name = "ARML_ROTATION"
+x_min_angle = -15.0
+x_max_angle = 90.0
+axis_y_name = "ARML_ABDUCTION"
+y_min_angle = 90.0
+y_max_angle = 160.0
+axis_z_name = "ARML_FLEXION"
+z_max_angle = 90.0
 
 [node name="body_applied" parent="body" instance=ExtResource("2_fhuon")]
 transform = Transform3D(-2.1855695e-07, 0, -5, 0, 5, 0, 5, 0, -2.1855695e-07, -0.004636526, 0.6469977, -0.16461015)
@@ -127,15 +147,12 @@ angular_limit_z/enabled = false
 angular_spring_x/enabled = true
 angular_spring_x/stiffness = 100.0
 angular_spring_x/damping = 4.0
-angular_spring_x/equilibrium_point = 0.15184365
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 100.0
 angular_spring_y/damping = 4.0
-angular_spring_y/equilibrium_point = 0.08290314
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 100.0
 angular_spring_z/damping = 4.0
-angular_spring_z/equilibrium_point = -0.17104226
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="body"]
 transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, 0.002655074, 1.0506642, -0.3342672)
@@ -151,15 +168,26 @@ angular_limit_z/enabled = false
 angular_spring_x/enabled = true
 angular_spring_x/stiffness = 20.0
 angular_spring_x/damping = 1.0
-angular_spring_x/equilibrium_point = -0.437205
+angular_spring_x/equilibrium_point = 0.06632251
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 20.0
 angular_spring_y/damping = 1.0
-angular_spring_y/equilibrium_point = -2.4652777
+angular_spring_y/equilibrium_point = -2.378011
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 20.0
 angular_spring_z/damping = 0.965
-angular_spring_z/equilibrium_point = -1.9521508
+angular_spring_z/equilibrium_point = -1.6920967
+script = ExtResource("3_l5cmi")
+axis_x_name = "ARMR_ROTATION"
+x_min_angle = -15.0
+x_max_angle = 90.0
+axis_y_name = "ARMR_ABDUCTION"
+y_min_angle = 160.0
+y_max_angle = 90.0
+negate_input_y = true
+axis_z_name = "ARMR_FLEXION"
+z_max_angle = 90.0
+negate_input_z = true
 
 [node name="head" type="RigidBody3D" parent="."]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 5.8585043e-09, 5.0151777, -0.0769968)
@@ -288,7 +316,7 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = -1.0742501
+angular_spring_y/equilibrium_point = -1.5707964
 angular_spring_z/stiffness = 0.4
 
 [node name="ArmL_B" type="RigidBody3D" parent="."]
@@ -302,8 +330,6 @@ shape = SubResource("CapsuleShape3D_r3fl7")
 
 [node name="COSMETIC_007" parent="ArmL_B" instance=ExtResource("7_fhuon")]
 transform = Transform3D(5, 0, 0, 0, 4.305, 0, 0, 0, 5, 0, -1.5486696, 5.570543e-23)
-
-[node name="udpserver" parent="." instance=ExtResource("7_0kcsd")]
 
 [node name="ArmR_A" type="RigidBody3D" parent="."]
 transform = Transform3D(1.9106855e-15, 4.371139e-08, -1, -2.9802322e-08, -1, -4.371139e-08, -1, 2.9802322e-08, -8.881784e-16, -1.2017535, 4.0232863, -0.24824739)
@@ -328,7 +354,7 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = -1.0742501
+angular_spring_y/equilibrium_point = -1.5707964
 angular_spring_z/stiffness = 0.4
 
 [node name="ArmR_B" type="RigidBody3D" parent="."]
