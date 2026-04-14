@@ -11,13 +11,14 @@ class PeerUDP:
 
     def __init__(self, peer_addr: Tuple[str, int]):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.s.bind(("0.0.0.0", 0))
-        self.s.setblocking(False)
+        self.s.bind(("", 0))
+        #self.s.setblocking(True)
 
         self.host_addr = self.s.getsockname()
         self.peer_addr = peer_addr
 
     def send(self, packet: bytes) -> None:
+        #print("sending", packet, "to", self.peer_addr)
         self.s.sendto(packet, self.peer_addr)
 
     def recv(self, timeout: float = 0) -> Optional[bytes]:
@@ -37,7 +38,9 @@ class PeerUDP:
         return None
 
 
-SIMULATOR_ADDRESS = "127.0.0.1", 500
+# found address by running iside WSL:
+# ip route show | grep -i default | awk '{ print $3}'
+SIMULATOR_ADDRESS = "172.26.32.1", 500
 
 PACKID_MOTION = b'\x00'
 PACKID_PING = b'\x01'
