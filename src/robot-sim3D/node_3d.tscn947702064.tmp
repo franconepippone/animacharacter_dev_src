@@ -1,0 +1,58 @@
+[gd_scene load_steps=4 format=3 uid="uid://cik6bbow78uf3"]
+
+[ext_resource type="Script" uid="uid://cbg32yl3fnbmh" path="res://node_3d.gd" id="1_a202f"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_a202f"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_4xowi"]
+height = 1.5053711
+
+[node name="Node3D" type="Node3D"]
+script = ExtResource("1_a202f")
+
+[node name="HingeJoint3D" type="HingeJoint3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, 1.0000001, 0, -1.0000001, 0, 0, 0.45474827, -0.009857893)
+node_a = NodePath("../RigidBody3D")
+node_b = NodePath("../StaticBody3D")
+exclude_nodes_from_collision = false
+angular_limit/enable = true
+angular_limit/softness = 16.0
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+shape = SubResource("BoxShape3D_a202f")
+
+[node name="RigidBody3D" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13658023, 0.9943489, 0.15321922)
+can_sleep = false
+constant_torque = Vector3(500, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+transform = Transform3D(0.9701435, 0.24253151, 0, -0.24253151, 0.9701435, 0, 0, 0, 1, 0.1086663, 0.41980934, 0)
+shape = SubResource("CapsuleShape3D_4xowi")
+
+[node name="RigidBody3D2" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.442302, 2.8279252, 0.15321922)
+can_sleep = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D2"]
+transform = Transform3D(0.9701435, 0.24253151, 0, -0.24253151, 0.9701435, 0, 0, 0, 1, 0.1086663, 0.41980934, 0)
+shape = SubResource("CapsuleShape3D_4xowi")
+
+[node name="Generic6DOFJoint3D" type="Generic6DOFJoint3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.37792903, 2.17211, 0)
+node_a = NodePath("../RigidBody3D2")
+node_b = NodePath("../RigidBody3D")
+exclude_nodes_from_collision = false
+angular_limit_x/upper_angle = 0.93218035
+angular_limit_x/lower_angle = -2.4511404
+angular_limit_x/softness = 16.0
+angular_limit_x/restitution = 0.01
+angular_limit_x/force_limit = 4.0
+angular_spring_x/enabled = true
+angular_spring_x/stiffness = 60.0
+angular_spring_x/equilibrium_point = 1.7235126
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2877893, 1.554686)

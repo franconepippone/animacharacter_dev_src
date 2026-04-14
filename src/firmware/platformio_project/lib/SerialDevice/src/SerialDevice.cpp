@@ -18,6 +18,7 @@
   #define LED_OFF LOW
 #endif
 
+// This is only defined on esp8266
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 2
 #endif
