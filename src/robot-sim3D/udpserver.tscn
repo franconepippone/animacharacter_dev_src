@@ -1,8 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bni5apittphnu"]
 
-[ext_resource type="PackedScene" uid="uid://m3u5532eoiiu" path="res://imports/head.glb" id="1_sv3hc"]
+[ext_resource type="Script" uid="uid://d24n71nikevc4" path="res://udp_server.gd" id="1_sv3hc"]
 
-[node name="Node3D" type="Node3D"]
-
-[node name="head" parent="." instance=ExtResource("1_sv3hc")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.15830374, 0, 0.39792347)
+[node name="udpserver" type="Node"]
+script = ExtResource("1_sv3hc")

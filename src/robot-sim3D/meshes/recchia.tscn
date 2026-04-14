@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=4 uid="uid://byo8pd0hq6xcp"]
+[gd_scene load_steps=9 format=4 uid="uid://byo8pd0hq6xcp"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r8o5f"]
 resource_name = "base"
@@ -37,6 +37,9 @@ _surfaces = [{
 }]
 blend_shape_mode = 0
 shadow_mesh = SubResource("ArrayMesh_cdx4q")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_u7p0f"]
+albedo_color = Color(0.63529414, 0.40784314, 0.1764706, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eyd3t"]
 resource_name = "accent"
@@ -78,12 +81,20 @@ _surfaces = [{
 blend_shape_mode = 0
 shadow_mesh = SubResource("ArrayMesh_4m4yp")
 
+[sub_resource type="BoxMesh" id="BoxMesh_u7p0f"]
+size = Vector3(2, 0.5, 0.17)
+
 [node name="recchia" type="MeshInstance3D"]
-transform = Transform3D(0, 0.027243167, 0, -0.08202594, 0, 0, 0, 0, 0.08202594, 0, 0, 0)
+transform = Transform3D(-3.5854677e-09, 0.027243167, 0, -0.08202594, -1.1908367e-09, 0, 0, 0, 0.08202594, 0, 0, 0)
 mesh = SubResource("ArrayMesh_0okw0")
 skeleton = NodePath("")
+surface_material_override/0 = SubResource("StandardMaterial3D_u7p0f")
 
 [node name="Sphere_016" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.64609396, 0, 0, 0, 0.8861233, 0, 0, 0, 0.64609396, 0, 0.64577484, 0)
 mesh = SubResource("ArrayMesh_hue6u")
 skeleton = NodePath("")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1366735, 0, 0)
+mesh = SubResource("BoxMesh_u7p0f")

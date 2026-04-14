@@ -1,5 +1,8 @@
 extends Node
 
+# emitted on motionpacket reception
+signal received_packet(id: int, value: float)
+
 var udp: PacketPeerUDP = PacketPeerUDP.new()
 const PORT: int = 500
 
@@ -31,14 +34,16 @@ func _handle_packet(packet: PackedByteArray, ip: String, port: int) -> void:
 
 	match packid:
 		PACKID_MOTION:
-			_decode_motion(packet)
+			received_packet.emit()
+			var result = _decode_motion(packet)
+			received_packet.emit(result[0], result[1])
 		PACKID_PING:
 			_handle_ping(ip, port)
 		_:
 			print("Unknown packet ID: %d" % packid)
 
 
-func _decode_motion(packet: PackedByteArray) -> void:
+func _decode_motion(packet: PackedByteArray):
 	# Layout:
 	# [0] packid (u8)
 	# [1] axisid (u8)
@@ -55,6 +60,7 @@ func _decode_motion(packet: PackedByteArray) -> void:
 	var value := value_bytes.decode_float(0)
 
 	print("Motion:", axis_id, value)
+	return [axis_id, value]
 
 
 func _handle_ping(ip: String, port: int) -> void:
