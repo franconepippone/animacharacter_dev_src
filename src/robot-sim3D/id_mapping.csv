@@ -10,11 +10,11 @@
 9,      EAR_RIGHT,      int16
 10,     MOUTH,          int16
 #       NEC
-11,     SERVO_NECK_R,   int16
-12,     SERVO_NECK_L,   int16
+11,     NECK_TILT,   int16
+12,     NECK_PITCH,   int16
 13,     NECK_ROTATION,  int16
 #       ARM RIGH
-14,     ARMR_PICH,  int16
+14,     ARMR_ROTATION,  int16
 15,     ARMR_ABDUCTION,  int16
 16,     ARMR_FLEXION,  int16
 17,     ARMR_ELBOW,     int16

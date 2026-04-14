@@ -11,37 +11,42 @@ enum InputFormat {
 @export_range(-180.0, 180.0, 0.1) var x_min_angle: float = -45.0
 @export_range(-180.0, 180.0, 0.1) var x_max_angle: float = 45.0
 @export var input_format_x: InputFormat
-@export var negate_input_x: bool = false
-
+@export var negate_output_x: bool = false
+@export var invert_input_x: bool = false
 
 @export_group("Y Axis")
 @export var axis_y_name: String = "/"
 @export_range(-180.0, 180.0, 0.1) var y_min_angle: float = -45.0
 @export_range(-180.0, 180.0, 0.1) var y_max_angle: float = 45.0
 @export var input_format_y: InputFormat
-@export var negate_input_y: bool = false
+@export var negate_output_y: bool = false
+@export var invert_input_y: bool = false
 
 @export_group("Z Axis")
 @export var axis_z_name: String = "/"
 @export_range(-180.0, 180.0, 0.1) var z_min_angle: float = -45.0
 @export_range(-180.0, 180.0, 0.1) var z_max_angle: float = 45.0
 @export var input_format_z: InputFormat
-@export var negate_input_z: bool = false
+@export var negate_output_z: bool = false
+@export var invert_input_z: bool = false
 
 # gets a reference of the server so we can autoconnect signals
 @onready var udpserver = $%udpserver
 
-func transform_value(value: float, min_v: float, max_v: float, format: InputFormat, neg: bool) -> float:
+func transform_value(value: float, min_v: float, max_v: float, format: InputFormat, inv_in: bool, neg_out: bool) -> float:
 	var angle_deg = 0
 	if format == InputFormat.ANGLE:
+		value = -value if inv_in else value
 		angle_deg = clamp(value, min_v, max_v) # value is an angle
 	elif format == InputFormat.NORMALIZED_POSITIVE:
+		value = (1 - value) if inv_in else value 
 		angle_deg = lerp(min_v, max_v, clamp(value, 0, 1))
 	elif format == InputFormat.NORMALIZED_SYMMETRIC:
+		value = -value if inv_in else value
 		var t = (value + 1) / 2 
 		angle_deg = lerp(min_v, max_v, clamp(t, 0, 1))
 	
-	if neg:
+	if neg_out:
 		angle_deg = -angle_deg
 	return deg_to_rad(angle_deg)
 
@@ -60,19 +65,25 @@ func _process(_delta: float) -> void:
 
 
 func _control_x(id: int, value: float) -> void:
-	print("got x")
 	if id == Utils.table[axis_x_name]:
+		print("executed cmd on x: ", id, " ", value, "")
 		set_param_x(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT, 
-		transform_value(value, x_min_angle, x_max_angle, input_format_x, negate_input_x))
+		transform_value(
+			value, x_min_angle, x_max_angle, input_format_x, invert_input_x, negate_output_x
+			))
 	
 func _control_y(id: int, value: float) -> void:
-	print("got y")
 	if id == Utils.table[axis_y_name]:
+		print("executed cmd on y: ", id, " ", value, "")
 		set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT, 
-		transform_value(value, y_min_angle, y_max_angle, input_format_y, negate_input_y))
+		transform_value(
+			value, y_min_angle, y_max_angle, input_format_y, invert_input_y, negate_output_y
+			))
 		
 func _control_z(id: int, value: float) -> void:
-	print("got z")
 	if id == Utils.table[axis_z_name]:
+		print("executed cmd on z: ", id, " ", value, "")
 		set_param_z(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT, 
-		transform_value(value, z_min_angle, z_max_angle, input_format_z, negate_input_z))
+		transform_value(
+			value, z_min_angle, z_max_angle, input_format_z, invert_input_z, negate_output_z
+			))

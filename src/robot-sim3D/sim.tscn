@@ -92,6 +92,7 @@ axis_z_name = "BODY_LEAN"
 z_min_angle = -18.0
 z_max_angle = 0.0
 input_format_z = 2
+invert_input_z = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.9647964, -0.0970591, 0.24443248, 1.34840805e-08, 0.92940986, 0.3690494, -0.26299757, -0.35605758, 0.8966913, 1.0715549, 5.56195, 4.3765736)
@@ -119,18 +120,19 @@ angular_spring_x/damping = 1.0
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 20.0
 angular_spring_y/damping = 1.0
-angular_spring_y/equilibrium_point = 2.7358036
+angular_spring_y/equilibrium_point = 2.268928
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 20.0
 angular_spring_z/damping = 0.965
-angular_spring_z/equilibrium_point = 1.3124876
 script = ExtResource("3_l5cmi")
 axis_x_name = "ARML_ROTATION"
 x_min_angle = -15.0
 x_max_angle = 90.0
+negate_output_x = true
 axis_y_name = "ARML_ABDUCTION"
 y_min_angle = 90.0
 y_max_angle = 160.0
+input_format_y = 2
 axis_z_name = "ARML_FLEXION"
 z_max_angle = 90.0
 
@@ -153,6 +155,16 @@ angular_spring_y/damping = 4.0
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 100.0
 angular_spring_z/damping = 4.0
+script = ExtResource("3_l5cmi")
+axis_x_name = "NECK_PITCH"
+x_min_angle = -12.0
+x_max_angle = 20.0
+input_format_x = 1
+axis_y_name = "NECK_TILT"
+y_min_angle = -20.0
+y_max_angle = 20.0
+input_format_y = 1
+axis_z_name = "NECK_ROTATION"
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="body"]
 transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, 0.002655074, 1.0506642, -0.3342672)
@@ -168,26 +180,26 @@ angular_limit_z/enabled = false
 angular_spring_x/enabled = true
 angular_spring_x/stiffness = 20.0
 angular_spring_x/damping = 1.0
-angular_spring_x/equilibrium_point = 0.06632251
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 20.0
 angular_spring_y/damping = 1.0
-angular_spring_y/equilibrium_point = -2.378011
+angular_spring_y/equilibrium_point = -2.268928
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 20.0
 angular_spring_z/damping = 0.965
-angular_spring_z/equilibrium_point = -1.6920967
 script = ExtResource("3_l5cmi")
 axis_x_name = "ARMR_ROTATION"
 x_min_angle = -15.0
 x_max_angle = 90.0
+negate_output_x = true
 axis_y_name = "ARMR_ABDUCTION"
-y_min_angle = 160.0
-y_max_angle = 90.0
-negate_input_y = true
+y_min_angle = 90.0
+y_max_angle = 160.0
+input_format_y = 2
+negate_output_y = true
 axis_z_name = "ARMR_FLEXION"
 z_max_angle = 90.0
-negate_input_z = true
+negate_output_z = true
 
 [node name="head" type="RigidBody3D" parent="."]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 5.8585043e-09, 5.0151777, -0.0769968)
@@ -209,9 +221,13 @@ angular_spring_x/damping = 1.0
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = 0.1850049
 angular_spring_z/stiffness = 20.0
 angular_spring_z/damping = 0.965
+script = ExtResource("3_l5cmi")
+axis_y_name = "MOUTH"
+y_min_angle = -10.0
+y_max_angle = 15.0
+input_format_y = 2
 
 [node name="testasu_001" parent="head" instance=ExtResource("3_y25lv")]
 transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0.71055937, 0, 0)
@@ -233,9 +249,12 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = 0.68416905
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 0.4
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
 
 [node name="Rear_link" type="Generic6DOFJoint3D" parent="head"]
 transform = Transform3D(-1.447079e-07, 2.1073433e-08, 1, 0.7071067, -0.7071068, 1.172251e-07, 0.7071068, 0.7071067, 8.7422755e-08, -0.00035768747, 0.42271423, 0.69312215)
@@ -250,9 +269,12 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = 0.25132743
 angular_spring_z/enabled = true
 angular_spring_z/stiffness = 0.4
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_RIGHT"
+y_min_angle = -30.0
+y_max_angle = 50.0
 
 [node name="jaw" type="RigidBody3D" parent="."]
 transform = Transform3D(-8.940697e-08, 0, -0.99999994, 0, 1, 0, 0.99999994, 0, -8.940697e-08, -0.0066685528, 4.210466, -0.07699682)
@@ -316,8 +338,14 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = -1.5707964
+angular_spring_y/equilibrium_point = -1.3962634
 angular_spring_z/stiffness = 0.4
+script = ExtResource("3_l5cmi")
+axis_y_name = "ARML_ELBOW"
+y_min_angle = 0.0
+y_max_angle = 100.0
+input_format_y = 2
+negate_output_y = true
 
 [node name="ArmL_B" type="RigidBody3D" parent="."]
 transform = Transform3D(1.9106855e-15, 4.371139e-08, -1, -2.9802322e-08, -1, -4.371139e-08, -1, 2.9802322e-08, -8.881784e-16, 1.185835, 4.0232863, -0.24824739)
@@ -354,8 +382,14 @@ angular_spring_x/equilibrium_point = 0.25743607
 angular_spring_y/enabled = true
 angular_spring_y/stiffness = 10.0
 angular_spring_y/damping = 0.5
-angular_spring_y/equilibrium_point = -1.5707964
+angular_spring_y/equilibrium_point = -1.3962634
 angular_spring_z/stiffness = 0.4
+script = ExtResource("3_l5cmi")
+axis_y_name = "ARMR_ELBOW"
+y_min_angle = 0.0
+y_max_angle = 100.0
+input_format_y = 2
+negate_output_y = true
 
 [node name="ArmR_B" type="RigidBody3D" parent="."]
 transform = Transform3D(1.9106855e-15, 4.371139e-08, -1, -2.9802322e-08, -1, -4.371139e-08, -1, 2.9802322e-08, -8.881784e-16, -1.2017535, 4.0232863, -0.24824739)
