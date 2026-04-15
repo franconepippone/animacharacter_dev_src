@@ -35,6 +35,7 @@ func _handle_packet(packet: PackedByteArray, ip: String, port: int) -> void:
 	match packid:
 		PACKID_MOTION:
 			var result = _decode_motion(packet)
+			Utils.store_packet(result[0], result[1])
 			received_packet.emit(result[0], result[1])
 		PACKID_PING:
 			_handle_ping(ip, port)

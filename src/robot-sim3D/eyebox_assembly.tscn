@@ -1,0 +1,183 @@
+[gd_scene load_steps=7 format=3 uid="uid://w8g4dna0w1tw"]
+
+[ext_resource type="PackedScene" uid="uid://icg8ssjbimhm" path="res://meshes/eyebox_frame.tscn" id="1_y3gih"]
+[ext_resource type="PackedScene" uid="uid://vfjly1bufv6q" path="res://meshes/eyelid_down.tscn" id="2_pbcjy"]
+[ext_resource type="Script" uid="uid://cqvclyy2ksnqm" path="res://remote_joint.gd" id="3_ciiw8"]
+[ext_resource type="PackedScene" uid="uid://cwty6pr3wc3lq" path="res://meshes/eyelid_up.tscn" id="4_xrjgc"]
+[ext_resource type="PackedScene" uid="uid://bhc7mx5dvbc44" path="res://meshes/eye.tscn" id="5_x12u8"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_yj815"]
+radius = 0.001
+
+[node name="Node3D" type="Node3D"]
+
+[node name="new_skelly_001" parent="." instance=ExtResource("1_y3gih")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 0, 0.010399759, 0.080751106)
+
+[node name="eyelid_br" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.07331133)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eyelid_br"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_005" parent="eyelid_br" instance=ExtResource("2_pbcjy")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eyelid_br"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_tr" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.07331133)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eyelid_tr"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_004" parent="eyelid_tr" instance=ExtResource("4_xrjgc")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eyelid_tr"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_bl" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7043258)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eyelid_bl"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_005" parent="eyelid_bl" instance=ExtResource("2_pbcjy")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eyelid_bl"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_tl" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7043258)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eyelid_tl"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_004" parent="eyelid_tl" instance=ExtResource("4_xrjgc")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eyelid_tl"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eye_l" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.023604907, -0.057657234, -0.7125707)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eye_l"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eye" parent="eye_l" instance=ExtResource("5_x12u8")]
+transform = Transform3D(1.5696854e-06, 4.998962, -0.1018773, -5, 1.5695823e-06, -2.1050507e-08, 1.0934825e-08, 0.1018773, 4.998962, 0, 0, 0)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eye_l"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eye_r" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0058452263, -0.05463756, 0.06295531)
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="eye_r"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eye" parent="eye_r" instance=ExtResource("5_x12u8")]
+transform = Transform3D(1.5696854e-06, 4.998962, -0.1018773, -5, 1.5695823e-06, -2.1050507e-08, 1.0934825e-08, 0.1018773, 4.998962, 0, 0, 0)
+
+[node name="link" type="Generic6DOFJoint3D" parent="eye_r"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+exclude_nodes_from_collision = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 20.0
+angular_spring_x/damping = 1.0
+angular_spring_x/equilibrium_point = 0.25743607
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 10.0
+angular_spring_y/damping = 0.5
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 0.4
+script = ExtResource("3_ciiw8")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0

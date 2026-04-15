@@ -2,8 +2,8 @@
 1,      EYES_H,         int16 
 2,      EYES_V,         int16 
 3,      EYES_FOCUS,     int16
-4,      EYELID_TR,      int16
-5,      EYELID_TL,      int16
+4,      LID_WIDE_R,      int16
+5,      LID_WIDE_L,      int16
 6,      EYELID_BR,      int16
 7,      EYELID_BL,      int16
 8,      EAR_LEFT,       int16

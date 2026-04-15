@@ -36,6 +36,18 @@ func load_servo_csv(path: String) -> Dictionary:
 
 var table := load_servo_csv("id_mapping.csv")
 
+var oldest_packet_table = {}
+
+func store_packet(id: int, val: float):
+	oldest_packet_table[id] = val
+
+func get_oldest_val(from_id: int) -> float:
+	if from_id in oldest_packet_table:
+		return oldest_packet_table[from_id]
+	else:
+		return 0
+
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	print(table)
