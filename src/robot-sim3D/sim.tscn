@@ -1,13 +1,18 @@
-[gd_scene load_steps=20 format=3 uid="uid://cik6bbow78uf3"]
+[gd_scene load_steps=28 format=3 uid="uid://cik6bbow78uf3"]
 
 [ext_resource type="PackedScene" uid="uid://daxhm1rse2wnp" path="res://meshes/body.tscn" id="2_fhuon"]
 [ext_resource type="Script" uid="uid://cqvclyy2ksnqm" path="res://remote_joint.gd" id="3_l5cmi"]
 [ext_resource type="PackedScene" uid="uid://c3nnjk474ityy" path="res://meshes/testa.tscn" id="3_y25lv"]
 [ext_resource type="PackedScene" uid="uid://cxu0q26u8jjqt" path="res://meshes/mandibola_001.tscn" id="4_l5cmi"]
 [ext_resource type="PackedScene" uid="uid://cdnlxsl3i8dh1" path="res://meshes/braccio.tscn" id="5_5xdwo"]
+[ext_resource type="PackedScene" uid="uid://icg8ssjbimhm" path="res://meshes/eyebox_frame.tscn" id="5_l5cmi"]
+[ext_resource type="PackedScene" uid="uid://vfjly1bufv6q" path="res://meshes/eyelid_down.tscn" id="6_0kcsd"]
 [ext_resource type="PackedScene" uid="uid://byo8pd0hq6xcp" path="res://meshes/recchia.tscn" id="6_6f8aj"]
 [ext_resource type="PackedScene" uid="uid://bni5apittphnu" path="res://udpserver.tscn" id="7_0kcsd"]
+[ext_resource type="PackedScene" uid="uid://cwty6pr3wc3lq" path="res://meshes/eyelid_up.tscn" id="7_17ab5"]
+[ext_resource type="Script" uid="uid://ddwxb4lkgn0vg" path="res://lids_manager_joint.gd" id="7_bu0wj"]
 [ext_resource type="PackedScene" uid="uid://jfq0lnldklm2" path="res://meshes/avambraccio.tscn" id="7_fhuon"]
+[ext_resource type="PackedScene" uid="uid://bhc7mx5dvbc44" path="res://meshes/eye.tscn" id="8_bu0wj"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_i5arm"]
 sky_top_color = Color(0.34255823, 0.49520987, 0.77352816, 1)
@@ -40,6 +45,9 @@ height = 1.6341705
 [sub_resource type="BoxShape3D" id="BoxShape3D_jka67"]
 size = Vector3(0.6870117, 0.51660156, 1)
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_yj815"]
+radius = 0.001
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_i5arm"]
 size = Vector3(1.0913086, 0.49194336, 1.2924805)
 
@@ -49,10 +57,21 @@ radius = 0.3433543
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_r3fl7"]
 height = 1.5244141
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_0kcsd"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_17ab5"]
+
 [node name="env" type="Node3D"]
 
 [node name="udpserver" parent="." instance=ExtResource("7_0kcsd")]
 unique_name_in_owner = true
+
+[node name="eyelids_mng" type="Node" parent="."]
+script = ExtResource("7_bu0wj")
+axis_x_name = "LID_WIDE_R"
+x_min_angle = 0.0
+axis_y_name = "LID_WIDE_L"
+y_min_angle = 0.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_jsk3o")
@@ -95,7 +114,7 @@ input_format_z = 2
 invert_input_z = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(0.9647964, -0.0970591, 0.24443248, 1.34840805e-08, 0.92940986, 0.3690494, -0.26299757, -0.35605758, 0.8966913, 1.0715549, 5.56195, 4.3765736)
+transform = Transform3D(0.9756496, 0.057732686, -0.21160093, -7.4505815e-09, 0.96473694, 0.26321647, 0.21933535, -0.256807, 0.941245, -1.0851263, 4.948328, 4.4399157)
 
 [node name="body" type="RigidBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6373451, 0)
@@ -276,6 +295,229 @@ axis_y_name = "EAR_RIGHT"
 y_min_angle = -30.0
 y_max_angle = 50.0
 
+[node name="new_skelly_001" parent="head" instance=ExtResource("5_l5cmi")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 0.28479102, -0.11879015, 0.41608176)
+
+[node name="Node3D" type="Node3D" parent="."]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -0.33307028, 4.901093, 0.22556806)
+
+[node name="new_skelly_001" parent="Node3D" instance=ExtResource("5_l5cmi")]
+transform = Transform3D(-0.005, 0, -1.9470718e-09, 0, 0.005, 0, 1.9470718e-09, 0, -0.005, 0, 0.010399759, 0.080751106)
+visible = false
+
+[node name="eyelid_br" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0360014, 0.008307934, 0.07331133)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eyelid_br"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_005" parent="Node3D/eyelid_br" instance=ExtResource("6_0kcsd")]
+transform = Transform3D(-0.0038743361, -0.0031606199, -1.9470718e-09, -0.0031606199, 0.0038743361, 1.110223e-16, 1.5087221e-09, 1.2307909e-09, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link2" type="Generic6DOFJoint3D" parent="Node3D/eyelid_br"]
+transform = Transform3D(0.99999994, 0, 0, 0, -4.3711385e-08, 1, 0, -0.99999994, -4.371139e-08, 0.008353918, -0.055135727, -3.6516123e-10)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+angular_spring_z/equilibrium_point = 0.4712389
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_tr" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.07331133)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eyelid_tr"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_004" parent="Node3D/eyelid_tr" instance=ExtResource("7_17ab5")]
+transform = Transform3D(-0.0044913273, 0.0021972659, -1.9470718e-09, 0.0021972659, 0.0044913273, 1.110223e-16, 1.7489874e-09, -8.5564683e-10, -0.005, 0.020921288, -0.013947487, 0.7822449)
+
+[node name="link2" type="Generic6DOFJoint3D" parent="Node3D/eyelid_tr"]
+transform = Transform3D(0.99999994, 0, 0, 0, -4.3711385e-08, 1, 0, -0.99999994, -4.371139e-08, -0.025061784, -0.046782017, 1.0954856e-09)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_y/equilibrium_point = 0.5122541
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+angular_spring_z/equilibrium_point = 0.13002703
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_bl" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7043258)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eyelid_bl"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_005" parent="Node3D/eyelid_bl" instance=ExtResource("6_0kcsd")]
+transform = Transform3D(-0.0038743361, -0.0031606199, -1.9470718e-09, -0.0031606199, 0.0038743361, 1.110223e-16, 1.5087221e-09, 1.2307909e-09, -0.005, 2.9458354e-07, 0, 0.7822449)
+
+[node name="link2" type="Generic6DOFJoint3D" parent="Node3D/eyelid_bl"]
+transform = Transform3D(0.99999994, 0, 0, 0, -4.3711385e-08, 1, 0, -0.99999994, -4.371139e-08, -0.025061784, -0.046782017, 1.0954856e-09)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_y/equilibrium_point = -0.037524577
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+angular_spring_z/equilibrium_point = 0.13002703
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eyelid_tl" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.7043258)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eyelid_tl"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eyes2 v91_004" parent="Node3D/eyelid_tl" instance=ExtResource("7_17ab5")]
+transform = Transform3D(-0.0044913273, 0.0021972659, -1.9470718e-09, 0.0021972659, 0.0044913273, 1.110223e-16, 1.7489874e-09, -8.5564683e-10, -0.005, 0.020921288, -0.013947487, 0.7822449)
+
+[node name="link2" type="Generic6DOFJoint3D" parent="Node3D/eyelid_tl"]
+transform = Transform3D(0.99999994, 0, 0, 0, -4.3711385e-08, 1, 0, -0.99999994, -4.371139e-08, -0.025061784, -0.046782017, 1.0954856e-09)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_y/equilibrium_point = -0.015707964
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+angular_spring_z/equilibrium_point = 0.13002703
+script = ExtResource("3_l5cmi")
+axis_y_name = "EAR_LEFT"
+y_min_angle = -30.0
+y_max_angle = 50.0
+
+[node name="eye_l" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.023604907, -0.057657234, -0.7125707)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eye_l"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eye" parent="Node3D/eye_l" instance=ExtResource("8_bu0wj")]
+transform = Transform3D(1.5696854e-06, 4.998962, -0.1018773, -5, 1.5695823e-06, -2.1050507e-08, 1.0934825e-08, 0.1018773, 4.998962, 0, 0, 0)
+
+[node name="link" type="Generic6DOFJoint3D" parent="Node3D/eye_l"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0.020049391, 0, 1.0408341e-16)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+script = ExtResource("3_l5cmi")
+axis_y_name = "EYES_V"
+y_min_angle = -40.0
+y_max_angle = 40.0
+negate_output_y = true
+axis_z_name = "EYES_H"
+
+[node name="eye_r" type="RigidBody3D" parent="Node3D"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.020273603, -0.05463756, 0.06295531)
+collision_layer = 0
+collision_mask = 0
+mass = 0.001
+gravity_scale = 0.0
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Node3D/eye_r"]
+shape = SubResource("SphereShape3D_yj815")
+
+[node name="eye" parent="Node3D/eye_r" instance=ExtResource("8_bu0wj")]
+transform = Transform3D(1.5696854e-06, 4.998962, -0.1018773, -5, 1.5695823e-06, -2.1050507e-08, 1.0934825e-08, 0.1018773, 4.998962, 0, 0, 0)
+
+[node name="link2" type="Generic6DOFJoint3D" parent="Node3D/eye_r"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 1, 0, 0, 0)
+node_a = NodePath("../../../head")
+node_b = NodePath("..")
+angular_limit_y/enabled = false
+angular_limit_y/lower_angle = 0.017453292
+angular_limit_z/enabled = false
+angular_spring_x/stiffness = 100.0
+angular_spring_x/damping = 1.0
+angular_spring_y/enabled = true
+angular_spring_y/stiffness = 100.0
+angular_spring_y/damping = 2.0
+angular_spring_z/enabled = true
+angular_spring_z/stiffness = 100.0
+angular_spring_z/damping = 2.0
+script = ExtResource("3_l5cmi")
+axis_y_name = "EYES_V"
+y_min_angle = -40.0
+y_max_angle = 40.0
+negate_output_y = true
+axis_z_name = "EYES_H"
+
 [node name="jaw" type="RigidBody3D" parent="."]
 transform = Transform3D(-8.940697e-08, 0, -0.99999994, 0, 1, 0, 0.99999994, 0, -8.940697e-08, -0.0066685528, 4.210466, -0.07699682)
 mass = 0.01
@@ -402,3 +644,13 @@ shape = SubResource("CapsuleShape3D_r3fl7")
 
 [node name="COSMETIC_007" parent="ArmR_B" instance=ExtResource("7_fhuon")]
 transform = Transform3D(5, 0, 0, 0, 4.305, 0, 0, 0, 5, 0, -1.5486696, 5.570543e-23)
+
+[node name="RigidBody3D" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.168411, 0)
+mass = 3.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+shape = SubResource("SphereShape3D_0kcsd")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RigidBody3D"]
+mesh = SubResource("BoxMesh_17ab5")

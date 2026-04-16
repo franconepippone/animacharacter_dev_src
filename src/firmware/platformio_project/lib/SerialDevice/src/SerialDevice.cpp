@@ -24,10 +24,16 @@
 #endif
 
 
-//#define IGNORE_SERIAL_DEVICE_DEBUG_CODE
+#ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
-// you can define IGNORE_SERIAL_DEVICE_DEBUG_CODE to completely remove debug code, slithly lighter binary
-// =====defined================== DEBUG FUNCTIONS =======================
+/* The functions below are hooks that trigger debugging/testing callbacks, useful for checking
+if all the functionalities of the devices are working properly.
+
+To ignore this code, define IGNORE_SERIAL_DEVICE_DEBUG_CODE either in this file
+or in the platformio.ini file (add "build_flags = -D IGNORE_SERIAL_DEVICE_DEBUG_CODE" to your environment).
+This will produce a slightly lighter binary (might be needed for arduino nano).
+
+*/
 
 void _debug_blink_builtin(int times, int period) {
     pinMode(LED_BUILTIN, OUTPUT);
@@ -39,9 +45,6 @@ void _debug_blink_builtin(int times, int period) {
     }
     digitalWrite(LED_BUILTIN, LED_OFF);
 }
-
-
-#ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
 bool _debug_triggerIdent(SerialDevice* dev) {
     _debug_blink_builtin(20, 20);
