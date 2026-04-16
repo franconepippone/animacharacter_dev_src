@@ -1,15 +1,11 @@
 from __future__ import annotations
-from typing import ClassVar, Tuple
-from functools import wraps
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import pickle
-from enum import Enum
 
 from .constants import *
 from .utils import get_packtype_id
 
-type Address = Tuple[str, int]
 
 @dataclass
 class BasePacket(ABC):
@@ -39,8 +35,9 @@ class BasePacket(ABC):
         super().__init_subclass__(**kwargs)
 
         # encoder wrapper - adds additional packet data to the payload (mainly, packet id at the beginning)
+        original_encode = cls.encode
         def encoder_wrapper(*args, **kwargs) -> bytes:
-            payload = cls.encode(*args, **kwargs)
+            payload = original_encode(*args, **kwargs)
             packid = get_packtype_id(cls)
             return packid.to_bytes(PACKTYPEID_SIZE_BYTES, "big") + payload
 
@@ -57,12 +54,12 @@ class BasePacket(ABC):
     
     # ----- user defined methods ----
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def decode(bin: bytes) -> BasePacket: ...
     
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def encode(*args, **kwargs) -> bytes: ...
 
 

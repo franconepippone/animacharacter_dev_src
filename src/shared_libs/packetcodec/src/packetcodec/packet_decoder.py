@@ -7,6 +7,33 @@ from .constants import *
 
 
 class PacketDecoder:
+    """
+    The packet decoder in the packetcodec library. This will try to decode
+    any sequence of bytes passed to the `parse_bytes` method into an object of
+    one of the registered packet classes (derived from `BasePacket`). 
+    To register a new packet class, call `register_packet(YourPacketClass)`.
+
+    If a packet cannot be parsed by `parse_bytes`, an `UnknownPacket` will be returned.
+
+    Example usage (Python 3.10+):
+    ```python
+    # initialization
+    decoder = PacketDecoder()
+    decoder.register_packet(MyPacket)
+    ...
+
+    # execution
+    data = #... received some binary data from sockets / serial / other sources ...
+    packet = decoder.parse_bytes(data)
+    match packet:
+        case UnknownPacket():
+            # received a packet of unknown class
+        case MyPacket():
+            # we just received a packet of class MyPacket
+            print(packet.mydata1, packet.mydata2) # we can access the attributes
+
+    ```
+    """
     def __init__(self):
         # creates its own copy of the default packet_table
         self._PACKET_TABLE: Dict[int, Type[BasePacket]] = {}
