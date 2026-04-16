@@ -71,7 +71,6 @@ func _process(_delta: float) -> void:
 	var horizontal_ref = Utils.get_oldest_val(1) * -.8
 	set_lid_wideness(lid_bl, lid_tl, horizontal_ref, wid_l)
 	set_lid_wideness(lid_br, lid_tr, horizontal_ref, wid_r)
-	print(wid_l, wid_r)
 
 func set_lid_wideness(bottom: Generic6DOFJoint3D, top: Generic6DOFJoint3D, ref: float, val: float):
 	bottom.set_param_y(Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT, deg_to_rad(ref) - val)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://cik6bbow78uf3"]
+[gd_scene load_steps=28 format=3 uid="uid://cik6bbow78uf3"]
 
 [ext_resource type="PackedScene" uid="uid://daxhm1rse2wnp" path="res://meshes/body.tscn" id="2_fhuon"]
 [ext_resource type="Script" uid="uid://cqvclyy2ksnqm" path="res://remote_joint.gd" id="3_l5cmi"]
@@ -57,6 +57,10 @@ radius = 0.3433543
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_r3fl7"]
 height = 1.5244141
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_0kcsd"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_17ab5"]
+
 [node name="env" type="Node3D"]
 
 [node name="udpserver" parent="." instance=ExtResource("7_0kcsd")]
@@ -110,7 +114,7 @@ input_format_z = 2
 invert_input_z = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(0.9647964, -0.0970591, 0.24443248, 1.34840805e-08, 0.92940986, 0.3690494, -0.26299757, -0.35605758, 0.8966913, 1.0715549, 5.56195, 4.3765736)
+transform = Transform3D(0.9756496, 0.057732686, -0.21160093, -7.4505815e-09, 0.96473694, 0.26321647, 0.21933535, -0.256807, 0.941245, -1.0851263, 4.948328, 4.4399157)
 
 [node name="body" type="RigidBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6373451, 0)
@@ -640,3 +644,13 @@ shape = SubResource("CapsuleShape3D_r3fl7")
 
 [node name="COSMETIC_007" parent="ArmR_B" instance=ExtResource("7_fhuon")]
 transform = Transform3D(5, 0, 0, 0, 4.305, 0, 0, 0, 5, 0, -1.5486696, 5.570543e-23)
+
+[node name="RigidBody3D" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.168411, 0)
+mass = 3.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+shape = SubResource("SphereShape3D_0kcsd")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RigidBody3D"]
+mesh = SubResource("BoxMesh_17ab5")
