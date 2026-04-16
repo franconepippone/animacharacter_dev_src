@@ -14,8 +14,5 @@ testing:
   - "hardware_mng.hw_controllers.testing_plugins:C_Controller"
 
 simulator:
-  - "hardware_mng.hw_controllers.sim_teodore:HeadCtrlSim"
-  - "hardware_mng.hw_controllers.sim_teodore:BodyCtrlSim"
-  - "hardware_mng.hw_controllers.sim_teodore:LeftArmCtrlSim"
-  - "hardware_mng.hw_controllers.sim_teodore:RightArmCtrlSim"
+  - "hardware_mng.hw_controllers.sim_teodore:BaseControllerSim"
   

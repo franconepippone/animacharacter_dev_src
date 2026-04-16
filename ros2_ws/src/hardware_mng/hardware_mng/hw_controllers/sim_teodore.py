@@ -47,18 +47,19 @@ PACKID_PING = b'\x01'
 
 class BaseControllerSim(BaseHardwareController):
     """This controller is used to interface with a local/remote hardware simulator.
-    This just encodes and forwards the motion commands as udp packets to the simulator.
+    This just encodes and forwards the motion commands dispatched by the Hardware Manager as udp packets to the simulator.
+    A compatible simulator can be found at `src/robot-sim3D`.
     """
     
-    def __init__(self, name: str):
+    def __init__(self, name: str = "sim-bridge-controller"):
         super().__init__(name, flush_freq=30.0)
-
+        self.subscribe_to_command_group([i for i in range(100)]) # make sure we are subscribing to everything
         # helper class to drive the hardware
         self.peer = PeerUDP(SIMULATOR_ADDRESS)
 
     def _send_motion_packet(self, cmd: MotionCommand):
         axisid, value = cmd
-        # packets are (bits): 8 (packid) | 8 (axisid) | 32 (value) 
+        # packets structure: uint8 (packid) | uint8 (axisid) | float32 (value) 
         encoded = PACKID_MOTION + struct.pack("!Bf", axisid, value)
         self.peer.send(encoded)
     
@@ -83,6 +84,9 @@ class BaseControllerSim(BaseHardwareController):
 
 # creating the actual controllers, all derived from the same class
 
+"""
+We dont actually need these, just load the base controller
+
 class HeadCtrlSim(BaseControllerSim):
     def __init__(self):
         super().__init__("head-sim")
@@ -102,3 +106,5 @@ class RightArmCtrlSim(BaseControllerSim):
     def __init__(self):
         super().__init__("rightarm-sim")
         self.subscribe_to_command_group([])
+
+"""
