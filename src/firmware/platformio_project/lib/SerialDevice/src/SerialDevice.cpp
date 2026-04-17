@@ -337,7 +337,7 @@ uint8_t SerialDevice::sendBytes(const byte *buffer, size_t size, uint8_t packId)
     memcpy(txf.packet.txBuff, buffer, size);
     return txf.sendData(size, packId);
 }
-
+/*
 template <size_t N>
 uint8_t SerialDevice::sendPacket(char (&str)[N], uint8_t packId) {
     size_t len = strnlen(str, N);
@@ -349,7 +349,7 @@ uint8_t SerialDevice::sendPacket(const T& obj, uint8_t packId) {
     uint16_t size = txf.txObj(obj);
     return txf.sendData(size, packId);
 }
-
+*/
 uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
     uint16_t size = strnlen(str, 254);
     return sendBytes((byte*)str, size, packId);
@@ -396,11 +396,11 @@ uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, ui
 
 
 // ======================= RECEIVE API =======================
-
+/*
 template <typename T>
 size_t SerialDevice::recvPacket(T& obj) {
     return txf.rxObj(obj);
-}
+}*/
 
 size_t SerialDevice::recvBytes(byte* dst, size_t cap) {
     size_t n = min(cap, (size_t)txf.bytesRead);
@@ -419,6 +419,7 @@ size_t SerialDevice::recvPacket(char* dst, size_t cap) {
     return n;
 }
 
+/*
 template <size_t N>
 size_t SerialDevice::recvPacket(char (&dst)[N]) {
     size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
@@ -427,7 +428,7 @@ size_t SerialDevice::recvPacket(char (&dst)[N]) {
     memcpy(dst, txf.packet.rxBuff, n);
     dst[n] = '\0';
     return n;
-}
+}*/
 
 // ======================= RESET =======================
 

@@ -133,10 +133,16 @@ public:
     uint8_t sendBytes(const byte *buffer, size_t size, uint8_t packId = 0);
 
     template <size_t N>
-    uint8_t sendPacket(char (&str)[N], uint8_t packId = 0);
+    uint8_t sendPacket(char (&str)[N], uint8_t packId) {
+        size_t len = strnlen(str, N);
+        return sendBytes((byte*)str, len, packId);
+    }
 
     template <typename T>
-    uint8_t sendPacket(const T& obj, uint8_t packId = 0);
+    uint8_t sendPacket(const T& obj, uint8_t packId) {
+        uint16_t size = txf.txObj(obj);
+        return txf.sendData(size, packId);
+    }
 
     uint8_t sendPacket(const char* str, uint8_t packId = 0);
 
@@ -148,7 +154,9 @@ public:
 
     template <typename T>
     // recv arbitrary object from rx buffer
-    size_t recvPacket(T& obj);
+    size_t recvPacket(T& obj) {
+        return txf.rxObj(obj);
+    }
 
     // recv bytes from rx buffer
     size_t recvBytes(byte* dst, size_t cap);
@@ -156,7 +164,14 @@ public:
     size_t recvPacket(char* dst, size_t cap);
 
     template <size_t N>
-    size_t recvPacket(char (&dst)[N]);
+    size_t recvPacket(char (&dst)[N]) {
+        size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
+        if (n >= N) n = N - 1;
+
+        memcpy(dst, txf.packet.rxBuff, n);
+        dst[n] = '\0';
+        return n;
+    }
 
     // clears buffers and resets the device
     void reset();

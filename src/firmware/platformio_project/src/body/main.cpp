@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
-#include "user_interface.h"
+//#include "user_interface.h"
 
 #include <SerialDevice.h>
 #include "configs/psp_cfg.h"
@@ -32,7 +32,7 @@ void setup() {
         // notify commander of error during hardware initialization
         dev.sendPacket(PSP_PACKID_DIAGNOSTICS, PSP_ERRCODE_HARDWARE_INIT_FAIL);
         delay(1000);
-        system_restart(); // restarts
+        //system_restart(); // restarts
     }
 
     // hang until start request is made
@@ -46,9 +46,9 @@ void loop() {
 
     if (controlFlags.deinit_hw_rqst()) {
         deinitializeHardware();
-        system_restart(); // software reset TO BE TESTED!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //system_restart(); // software reset TO BE TESTED!!!!!!!!!!!!!!!!!!!!!!!!!!!
     }
     
-    uint32_t deltatime = loopclock.tick_ms(10); //ensures a refresh rate of 100Hz (period: 10ms)
+    loopclock.tick_ms(10); //ensures a refresh rate of 100Hz (period: 10ms)
     //Serial.println(deltatime);
 }
