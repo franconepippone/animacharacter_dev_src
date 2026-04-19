@@ -49,7 +49,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyserialdevice", editable = "../pySerialDevice" }]
+requires-dist = [{ name = "pyserialdevice", git = "https://github.com/franconepippone/pySerialDevice" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "mcudrivers", editable = "." }]
@@ -96,22 +96,13 @@ wheels = [
 [[package]]
 name = "pyserialdevice"
 version = "0.1.0"
-source = { editable = "../pySerialDevice" }
+source = { git = "https://github.com/franconepippone/pySerialDevice#ed5c70ad99b6cb3f93ef2f239287a949e8d8c037" }
 dependencies = [
     { name = "prompt-toolkit" },
     { name = "pyserial" },
     { name = "pyserialtransfer" },
     { name = "tabulate" },
     { name = "typer" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "prompt-toolkit", specifier = ">=3.0.52" },
-    { name = "pyserial", specifier = ">=3.5" },
-    { name = "pyserialtransfer", git = "https://github.com/franconepippone/pySerialTransfer?rev=master" },
-    { name = "tabulate", specifier = ">=0.9.0" },
-    { name = "typer", extras = ["all"], specifier = ">=0.20.1" },
 ]
 
 [[package]]
