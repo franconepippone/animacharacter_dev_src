@@ -2,7 +2,7 @@
 #include "SerialDevice.h"
 #include "build_info.h"
 #include <Hashtable.h>
-#include <timer/Timer.h>
+#include <timer.h>
 
 // for some reasons on these architectures min and max are renamed _min and _max, so we just redefine them here
 #if defined(ESP8266) || defined(ESP32)

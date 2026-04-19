@@ -8,41 +8,42 @@
 
 #include "env_dep/body/constants.h"
 #include "env_dep/body/serdev_handlers.h"
+#include "SerialDevice.h"
 
 FastAccelStepperEngine engine;
 FastAccelStepper* stepperR = nullptr;
 FastAccelStepper* stepperL = nullptr;
 AccelStepper stepperROT(AccelStepper::DRIVER, PIN_STP_ROT_STEP, PIN_STP_ROT_DIR);
 
-auto x = sizeof(FastAccelStepperEngine);
-
 int32_t stepperR_trgt = 0;
 int32_t stepperL_trgt = 0;
 
 /// @brief Initializes stepper motors objects
-int initializeHardware() {
+int8_t initializeHardware() {
+    _debug_blink_builtin(10, 100);
     engine.init();
     stepperL = engine.stepperConnectToPin(PIN_STP_L_STEP);
     stepperL->setEnablePin(PIN_STP_L_EN);
     stepperL->setDirectionPin(PIN_STP_L_DIR);
     stepperL->setSpeedInHz(20000); // max velocity
-    stepperL->setAcceleration(10000);
-
+    //stepperL->setAcceleration(10000);
+    
     stepperR = engine.stepperConnectToPin(PIN_STP_R_STEP);
     stepperR->setEnablePin(PIN_STP_R_EN);
     stepperR->setDirectionPin(PIN_STP_R_DIR);
     stepperR->setSpeedInHz(20000); // max velocity
-    stepperR->setAcceleration(10000);
-
+    //stepperR->setAcceleration(10000);
+    
     stepperROT.setMaxSpeed(1000);
     stepperROT.setAcceleration(500);
-
+    
     pinMode(PIN_STP_ROT_EN, OUTPUT);
     // Turns the drivers ON
     digitalWrite(PIN_STP_ROT_EN, LOW);
     stepperR->enableOutputs();
     stepperL->enableOutputs();
     
+    _debug_blink_builtin(10, 100);
     return 0;
 }
 

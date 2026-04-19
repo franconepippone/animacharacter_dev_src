@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "SerialTransfer.h"
 #include <Hashtable.h>
-#include <timer/Timer.h>
+#include <timer.h>
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 

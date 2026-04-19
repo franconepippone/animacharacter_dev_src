@@ -4,6 +4,7 @@
 //#include "user_interface.h"
 
 #include <SerialDevice.h>
+#include <timer.h>
 #include "utility/loop_clock.h"
 #include "configs/serdev.h"
 
@@ -14,31 +15,33 @@
 */
 #define PSP_DEVICE_NAME "AC01:BODY"
 
-Clock loopclock; //helper object to ensure consistent looping frequency
+//Clock loopclock; //helper object to ensure consistent looping frequency
 /*
 NOTE!! we changed max packet size from 256 to 128 due to RAM constraints!!
 */ 
 SerialDevice dev(Serial, PSP_DEVICE_NAME); // psp device object
-
+Timer looptimer(1000);
 
 
 void setup() {
     // this makes sure drivers are off until commander actually wants to initialize
     deinitializeHardware();
-    
+    pinMode(LED_BUILTIN, OUTPUT);
     // binds all custom packet handlers and begins serial communication
     setupAndStartPSPDevice(dev);
 
     // hang until initialization request is made
-    while (!controlFlags.init_hw_rqst()) {dev.poll(); delay(10);}
+    while (!controlFlags.init_hw_rqst()) {dev.poll();}
 
-    int errcode = initializeHardware();
+    int8_t errcode = initializeHardware();
     if (errcode != 0) {
         // notify commander of error during hardware initialization
         dev.sendPacket(PSP_PACKID_DIAGNOSTICS, PSP_ERRCODE_HARDWARE_INIT_FAIL);
         delay(1000);
         //system_restart(); // restarts
     }
+    while (!controlFlags.begin_all_rqst()) {dev.poll(); delay(10);}
+    stepperL->setAcceleration(100);
 
     // hang until start request is made
     while (!controlFlags.begin_all_rqst()) {dev.poll(); delay(10);}
@@ -46,6 +49,7 @@ void setup() {
 
 
 void loop() {
+
     dev.poll(); // receives commands and executes handlers
     driveHardare(); // drives hardware with the latest received commands
 
@@ -54,6 +58,13 @@ void loop() {
         //system_restart(); // software reset TO BE TESTED!!!!!!!!!!!!!!!!!!!!!!!!!!!
     }
     
-    loopclock.tick_ms(10); //ensures a refresh rate of 100Hz (period: 10ms)
+    while (!looptimer.expired()) {
+        digitalWrite(LED_BUILTIN, HIGH);
+        delay(50);
+        digitalWrite(LED_BUILTIN, LOW);
+        delay(50);
+    }
+
+    //loopclock.tick_ms(10); //ensures a refresh rate of 100Hz (period: 10ms)
     //Serial.println(deltatime);
 }
