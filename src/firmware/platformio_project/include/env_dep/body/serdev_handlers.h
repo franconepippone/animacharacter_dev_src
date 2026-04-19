@@ -2,14 +2,8 @@
 #include <Arduino.h>
 #include <SerialDevice.h>
 
-#include "configs/psp_cfg.h" // shared across all devices/environments
 #include "constants.h"
-
-
-// only returns true if bit specified by mask is 1, then sets it to 0
-inline bool checkAndClearBit(byte &c, byte mask) {
-    return (c & mask) ? (c &= ~mask), true : false;
-}
+#include "configs/serdev.h" // shared across all devices/environments
 
 // ------------------ Structs for storing received data from SerialDevice
 
@@ -28,19 +22,10 @@ struct BodyControlParams {
     uint16_t acc_rot;
 }  __attribute__((packed));
 
- BodyControlParams bodyControlParams;
+BodyControlParams bodyControlParams;
 
-// THIS IS ALWAYS DUPLICATE
-struct ControlFlags {
-    byte flags = 0; // flags byte
 
-    inline bool init_hw_rqst() {return checkAndClearBit(flags, INIT_HARDWARE);}
-    inline bool begin_all_rqst() {return checkAndClearBit(flags, BEGIN_ALL);}
-    inline bool deinit_hw_rqst() {return checkAndClearBit(flags, DEINIT_HARDWARE);}
-
-} __attribute__((packed));
-
- ControlFlags controlFlags;
+ControlFlags controlFlags;
 
 
 

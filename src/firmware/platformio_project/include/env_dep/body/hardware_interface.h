@@ -12,7 +12,9 @@
 FastAccelStepperEngine engine;
 FastAccelStepper* stepperR = nullptr;
 FastAccelStepper* stepperL = nullptr;
-AccelStepper stepperROT(AccelStepper::DRIVER, PIN_STP_ROT_STEP, PIN_STP_ROT_DIR);
+//rAccelStepper stepperROT(AccelStepper::DRIVER, PIN_STP_ROT_STEP, PIN_STP_ROT_DIR);
+
+auto x = sizeof(FastAccelStepperEngine);
 
 int32_t stepperR_trgt = 0;
 int32_t stepperL_trgt = 0;
@@ -32,8 +34,8 @@ int initializeHardware() {
     stepperR->setSpeedInHz(20000); // max velocity
     stepperR->setAcceleration(10000);
 
-    stepperROT.setMaxSpeed(1000);
-    stepperROT.setAcceleration(500);
+    //rstepperROT.setMaxSpeed(1000);
+    //rstepperROT.setAcceleration(500);
 
     pinMode(PIN_STP_ROT_EN, OUTPUT);
     // Turns the drivers ON
@@ -71,9 +73,9 @@ void driveHardare() {
         stepperL_trgt = bodyMotionVars.stp_l;
         stepperL->moveTo(bodyMotionVars.stp_l);
     }
-    if (bodyMotionVars.mot_rot != stepperROT.targetPosition()) 
-        stepperROT.moveTo(bodyMotionVars.mot_rot);
+    //rif (bodyMotionVars.mot_rot != stepperROT.targetPosition()) 
+    //r    stepperROT.moveTo(bodyMotionVars.mot_rot);
     
     // drive steppers (only the accell stepper one, others are timer-based)
-    stepperROT.run();
+    //rstepperROT.run();
 }

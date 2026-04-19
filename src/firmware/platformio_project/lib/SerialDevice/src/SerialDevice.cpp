@@ -18,11 +18,6 @@
   #define LED_OFF LOW
 #endif
 
-// This is only defined on esp8266
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2
-#endif
-
 
 #ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
@@ -36,6 +31,8 @@ This will produce a slightly lighter binary (might be needed for arduino nano).
 */
 
 void _debug_blink_builtin(int times, int period) {
+    // only if the led_builtin is defined
+    #ifdef LED_BUILTIN
     pinMode(LED_BUILTIN, OUTPUT);
     for (int i = 0; i < times; i++) {
         digitalWrite(LED_BUILTIN, LED_ON);
@@ -44,6 +41,7 @@ void _debug_blink_builtin(int times, int period) {
         delay(period);
     }
     digitalWrite(LED_BUILTIN, LED_OFF);
+    #endif
 }
 
 bool _debug_triggerIdent(SerialDevice* dev) {
@@ -356,7 +354,7 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
 }
 
 // ======================= LARGE TRANSFER =======================
- 
+
 
 uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, uint32_t timeoutMs, uint8_t chunkSize) 
 {

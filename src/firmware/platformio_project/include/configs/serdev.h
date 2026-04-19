@@ -1,3 +1,5 @@
+#pragma once
+#include <Arduino.h>
 
 // These is the base configuration shared across all the devices.
 // These protocol rules should be also followed by the commander devices (tipically python SerialDevice-based drivers)
@@ -18,3 +20,18 @@
 #define INIT_HARDWARE 1
 #define DEINIT_HARDWARE 2
 #define BEGIN_ALL 4
+
+// only returns true if bit specified by mask is 1, then sets it to 0
+inline bool checkAndClearBit(byte &c, byte mask) {
+    return (c & mask) ? (c &= ~mask), true : false;
+}
+
+struct ControlFlags {
+    byte flags = 0; // flags byte
+
+    inline bool init_hw_rqst() {return checkAndClearBit(flags, INIT_HARDWARE);}
+    inline bool begin_all_rqst() {return checkAndClearBit(flags, BEGIN_ALL);}
+    inline bool deinit_hw_rqst() {return checkAndClearBit(flags, DEINIT_HARDWARE);}
+
+} __attribute__((packed));
+
