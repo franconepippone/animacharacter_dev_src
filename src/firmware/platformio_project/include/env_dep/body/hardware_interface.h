@@ -20,19 +20,19 @@ int32_t stepperL_trgt = 0;
 
 /// @brief Initializes stepper motors objects
 int8_t initializeHardware() {
-    _debug_blink_builtin(10, 100);
+    _debug_blink_builtin(3, 100);
     engine.init();
     stepperL = engine.stepperConnectToPin(PIN_STP_L_STEP);
     stepperL->setEnablePin(PIN_STP_L_EN);
     stepperL->setDirectionPin(PIN_STP_L_DIR);
     stepperL->setSpeedInHz(20000); // max velocity
-    //stepperL->setAcceleration(10000);
+    stepperL->setAcceleration(10000); // NOTE: THIS CAUSE FATAL HANGS IF STEP PINS ARE INVALID
     
     stepperR = engine.stepperConnectToPin(PIN_STP_R_STEP);
     stepperR->setEnablePin(PIN_STP_R_EN);
     stepperR->setDirectionPin(PIN_STP_R_DIR);
     stepperR->setSpeedInHz(20000); // max velocity
-    //stepperR->setAcceleration(10000);
+    stepperR->setAcceleration(10000); // NOTE: THIS CAUSE FATAL HANGS IF STEP PINS ARE INVALID
     
     stepperROT.setMaxSpeed(1000);
     stepperROT.setAcceleration(500);
@@ -43,7 +43,7 @@ int8_t initializeHardware() {
     stepperR->enableOutputs();
     stepperL->enableOutputs();
     
-    _debug_blink_builtin(10, 100);
+    _debug_blink_builtin(10, 50);
     return 0;
 }
 

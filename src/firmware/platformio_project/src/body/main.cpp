@@ -40,8 +40,7 @@ void setup() {
         delay(1000);
         //system_restart(); // restarts
     }
-    while (!controlFlags.begin_all_rqst()) {dev.poll(); delay(10);}
-    stepperL->setAcceleration(100);
+
 
     // hang until start request is made
     while (!controlFlags.begin_all_rqst()) {dev.poll(); delay(10);}
