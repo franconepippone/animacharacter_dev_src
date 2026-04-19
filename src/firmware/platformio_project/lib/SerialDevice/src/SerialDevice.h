@@ -58,6 +58,7 @@ enum StreamOpOutcome {
 // debug hooks (reserved 220-230)
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 220
 #define PACKID_DEBUG_TRIGGER_LARGE_TX 221
+#define PACKID_DEBUG_FREERAM 222
 
 // ======================= SERIAL DEVICE CLASS =======================
 

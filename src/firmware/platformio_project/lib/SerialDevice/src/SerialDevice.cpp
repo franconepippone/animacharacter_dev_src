@@ -30,6 +30,31 @@ This will produce a slightly lighter binary (might be needed for arduino nano).
 
 */
 
+// __heap_start and __brkval only exposed in AVR boards
+#if defined(__AVR__)
+
+int freeRamAmount() {
+    extern int __heap_start, *__brkval;
+    int v;
+    return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+}
+
+#else
+
+int freeRamAmount() {
+    return -1; // unsupported platform
+}
+
+#endif
+
+
+bool _debug_onFreeRamAmount(SerialDevice* dev) {
+    _debug_blink_builtin(10, 50);
+    uint32_t val = freeRamAmount();
+    dev->sendPacket(val, 1);
+    return false;
+}
+
 void _debug_blink_builtin(int times, int period) {
     // only if the led_builtin is defined
     #ifdef LED_BUILTIN
@@ -226,6 +251,7 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     // assign debug triggers callbacks
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
     on(PACKID_DEBUG_TRIGGER_LARGE_TX, _debug_triggerLargeTx);
+    on(PACKID_DEBUG_FREERAM, _debug_onFreeRamAmount);
     // assign debug large rx handler (this is ment to be overwritten by user)
     onLargeRecv(_debug_onLargeRx);
     #endif
