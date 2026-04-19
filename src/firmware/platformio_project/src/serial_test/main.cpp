@@ -35,32 +35,36 @@ void setup()
   delay(200);
   Serial.println(F("settupping"));
   engine.init();
-  stepperL = engine.stepperConnectToPin(PIN_STP_L_STEP);
+  /*stepperL = engine.stepperConnectToPin(PIN_STP_L_STEP);
   stepperL->setEnablePin(PIN_STP_L_EN);
   stepperL->setDirectionPin(PIN_STP_L_DIR);
   stepperL->setSpeedInHz(20000); // max velocity
   stepperL->setAcceleration(10000);
-  
+  */
   stepperR = engine.stepperConnectToPin(PIN_STP_R_STEP);
   stepperR->setEnablePin(PIN_STP_R_EN);
   stepperR->setDirectionPin(PIN_STP_R_DIR);
-  stepperR->setSpeedInHz(20000); // max velocity
-  stepperR->setAcceleration(10000);
+  stepperR->setSpeedInHz(10000); // max velocity
+  stepperR->setAcceleration(6000);
 
-  while (1) {
-    Serial.println(F("finishing setupping"));
-    delay(1);
-  }
+  stepperR->enableOutputs();
+
+  Serial.println(F("finishing setupping"));
   _debug_blink_builtin(3, 100);
+  
   //led.blink(500, 800);
   // binds cb
   //dev.configLargeRx(largeRxBuffer, sizeof(largeRxBuffer));
 }
 
-
+int POSITIONS[] = {10000, 5000, 0, -1000, -10000};
 
 void loop()
 {
-  dev.poll();
+  stepperR->moveTo(4000, false);
+  delay(200);
+  stepperR->moveTo(-4000, true);
+  stepperR->moveTo(0, true);
+  delay(100);
   //led.loop();
 }

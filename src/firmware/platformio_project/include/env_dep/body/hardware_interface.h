@@ -25,23 +25,26 @@ int8_t initializeHardware() {
     stepperL = engine.stepperConnectToPin(PIN_STP_L_STEP);
     stepperL->setEnablePin(PIN_STP_L_EN);
     stepperL->setDirectionPin(PIN_STP_L_DIR);
-    stepperL->setSpeedInHz(20000); // max velocity
-    stepperL->setAcceleration(10000); // NOTE: THIS CAUSE FATAL HANGS IF STEP PINS ARE INVALID
+    stepperL->setSpeedInHz(MAX_SPEED_STPS); // max velocity
+    stepperL->setAcceleration(ACCEL_STPSS); // NOTE: THIS CAUSES FATAL HANGS IF STEP PINS ARE INVALID
     
     stepperR = engine.stepperConnectToPin(PIN_STP_R_STEP);
     stepperR->setEnablePin(PIN_STP_R_EN);
     stepperR->setDirectionPin(PIN_STP_R_DIR);
-    stepperR->setSpeedInHz(20000); // max velocity
-    stepperR->setAcceleration(10000); // NOTE: THIS CAUSE FATAL HANGS IF STEP PINS ARE INVALID
+    stepperR->setSpeedInHz(MAX_SPEED_STPS); // max velocity
+    stepperR->setAcceleration(ACCEL_STPSS); // NOTE: THIS CAUSES FATAL HANGS IF STEP PINS ARE INVALID
     
-    stepperROT.setMaxSpeed(1000);
-    stepperROT.setAcceleration(500);
+    stepperROT.setMaxSpeed(MAX_SPEED_ROT);
+    stepperROT.setAcceleration(ACCEL_ROT);
     
-    pinMode(PIN_STP_ROT_EN, OUTPUT);
     // Turns the drivers ON
+    pinMode(PIN_STP_ROT_EN, OUTPUT);
     digitalWrite(PIN_STP_ROT_EN, LOW);
     stepperR->enableOutputs();
     stepperL->enableOutputs();
+
+    stepperL->moveTo(0);
+    stepperR->moveTo(0);
     
     _debug_blink_builtin(10, 50);
     return 0;
