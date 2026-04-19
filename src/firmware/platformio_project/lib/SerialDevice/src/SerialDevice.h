@@ -19,10 +19,22 @@ typedef void (*LargePacketHandler)(SerialDevice* dev, byte *buffer, uint32_t siz
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 #define MAX_PACK_ID 255 // 0-255
 
+#define DEVICE_NAME_SIZE 16 // bytes to allocate for serialdevice name
+
 // keep track of large transfer rx state
 enum LargeRxState {
     READY = 0,
     RECVING = 1,
+};
+
+// return value of any operation on stream
+enum StreamOpOutcome {
+    OK = 0,
+    TIMED_OUT = -1,
+    ALREADY_INITIATED = -2,
+    NOT_INITIATED = -3,
+    REFUSED = -4,
+    OFFSET_OUT_OF_BOUNDS = -5
 };
 
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
@@ -73,9 +85,14 @@ public:
         uint32_t ExpectedSize = 0;
     } largeRxCtx;
 
+    struct {
+        uint32_t buffSize = 0;
+        bool initiated = false;
+    } streamCtx;
+
     SerialTransfer txf;
-    char peerName[32] = "";
-    char deviceName[32]; // used for authentication with the other device.
+    char peerName[DEVICE_NAME_SIZE] = "";
+    char deviceName[DEVICE_NAME_SIZE]; // used for authentication with the other device.
     HardwareSerial* ser;
     
     SerialDevice(HardwareSerial& serial, const char* name = "dev_default");
@@ -147,6 +164,15 @@ public:
     uint8_t sendPacket(const char* str, uint8_t packId = 0);
 
     // ======================= LARGE TRANSFER PROTOCOL =======================
+
+    // Requests the beginning of a large transfer chunk stream. True on success
+    StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs);
+
+    // Sends a chunk to be stored in the peer's rx buffer at given offset (after streamBegin has been called succesfully)
+    StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs);
+
+    // Ends a large transfer chunk stream. This notifies the peer that the whole payload has been received.
+    StreamOpOutcome SerialDevice::streamEnd(uint8_t packId);
 
     uint32_t sendLarge(byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 500, uint8_t chunkSize = LARGE_TRANSFER_CHUNK_SIZE);
 

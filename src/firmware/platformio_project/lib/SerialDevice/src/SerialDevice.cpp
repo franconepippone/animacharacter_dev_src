@@ -93,10 +93,21 @@ bool _handlePing(SerialDevice* dev) {
 }
 
 bool _handleInfoRqst(SerialDevice* dev) {
-    // NOTE that this may cause stack overflow
-    static char jsonInfoBuff[sizeof(BUILD_INFO_JSON)];
-    getBuildInfoJson(jsonInfoBuff, sizeof(BUILD_INFO_JSON));
-    dev->sendLarge((byte*)jsonInfoBuff, sizeof(jsonInfoBuff), PACKID_DEV_INFO_RESP);
+    
+    StreamOpOutcome result = dev->streamBegin(sizeof(BUILD_INFO_JSON), 500);
+    if (result != StreamOpOutcome::OK) return false;
+
+    const uint32_t chunkSize = 10;
+    uint32_t offset = 0;
+    while (offset + chunkSize < sizeof(BUILD_INFO_JSON)) {
+        static char tempBuff[chunkSize];
+        getBuildInfoJson(tempBuff, chunkSize, offset); // copies chunkSize bytes with offset from progmem to tempBuff
+        result = dev->streamChunk((byte*)tempBuff, chunkSize, offset, 500);
+        if (result != StreamOpOutcome::OK) return false;
+        offset += chunkSize;
+    }
+
+    dev->streamEnd(PACKID_DEV_INFO_RESP);
     return false;
 }
 
@@ -355,6 +366,52 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
 
 // ======================= LARGE TRANSFER =======================
 
+
+StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs) {
+    if (streamCtx.initiated) return StreamOpOutcome::ALREADY_INITIATED; // guard
+    sendPacket(buffSize, PACKID_LARGETX_BEGIN);
+    streamCtx.buffSize = buffSize;
+    auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
+    if (!rmning) return StreamOpOutcome::TIMED_OUT;
+
+    bool transfOk;
+    recvPacket(transfOk);
+
+    streamCtx.initiated = transfOk;
+    return transfOk ? StreamOpOutcome::OK : StreamOpOutcome::REFUSED;
+}
+
+StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs) {
+    if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED; // guard if stream was not accepted
+    
+    // E CORRETTO SIZE - OFFSET ?
+    if (offset >= size) return StreamOpOutcome::OFFSET_OUT_OF_BOUNDS;
+    auto actualChunkSize = min(streamCtx.buffSize, size - offset);
+    clearTxBuff(); // make sure tx buffer is clear
+
+    uint64_t rmning = 0;
+    for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
+        // fills the tx buffer
+        txObj(offset);
+        txBytes(buffer + offset, actualChunkSize);
+        send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
+
+        rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
+        if (rmning) break;
+    }
+    if (!rmning) {
+        streamCtx.initiated = false; // resets flag
+        return StreamOpOutcome::TIMED_OUT;  // if remaining is zero (timeout expired), transfer failed.
+    }    
+    return StreamOpOutcome::OK;
+}
+
+StreamOpOutcome SerialDevice::streamEnd(uint8_t packId) {
+    if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED;
+    sendPacket(packId, PACKID_LARGETX_END);
+    streamCtx.initiated = false;
+    return StreamOpOutcome::OK;
+}
 
 uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, uint32_t timeoutMs, uint8_t chunkSize) 
 {
