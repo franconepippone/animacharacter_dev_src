@@ -1,15 +1,27 @@
 from __future__ import annotations
-from typing import Iterable, Tuple, List, Literal
+from typing import Any, Tuple, List, Literal
 from enum import Enum
 import socket as s
+from dataclasses import dataclass
 import time
 import os
 import logging
 logger = logging.getLogger("remote_animacharacter")
 
 from sesscli.client import ACRemoteClient
-from animadummies.teodore import create_dummy
+from animadummies.teodore import create_dummy, TeodoreDummy
 from animadummies.base_components import ActuatorGroup
+
+
+@dataclass(frozen=True)
+class ConnectionResult:
+    errcode: int
+    errmsg: Any
+
+    @property
+    def ok(self) -> bool:
+        return self.errcode == 0
+
 
 
 class RECEPTION_STRATEGY(Enum):
@@ -28,9 +40,9 @@ class RemoteAnimacharacter:
     def __init__(self, host_port=DEFAULT_PORT):
         self.client = ACRemoteClient()
         self.host_port = host_port
-        self.mech: ActuatorGroup = create_dummy()
+        self.mech: TeodoreDummy = create_dummy()
 
-    def connect(self, ip: str, apikey: str) -> bool:
+    def connect(self, ip: str, apikey: str) -> ConnectionResult:
         """
         Attempts to connect and gain api access to an animatronic server.
         
@@ -50,7 +62,7 @@ class RemoteAnimacharacter:
         
         self._finish_connection_init()
         logger.info(f"Connection to server on {ip}:{self.host_port} successfull.")
-        return True
+        return ConnectionResult(0, 'ok')
 
     def _finish_connection_init(self):
         """After client is connected and granted access to the api, this method initializes the final things.\n
@@ -59,12 +71,17 @@ class RemoteAnimacharacter:
 
     def update_from(self, source: ActuatorGroup | Actuator):
         """
-        Updates harware directly from source, internal 'mech' object is left unmodified (Less overhead).
+        Updates harware directly from source mech, internal 'mech' object is left unmodified (Less overhead).
         
         Call this method if you are performing lots of updates rapidly or if you don't want to alter the
         mech object interal to the class.
         """
         ...
+    
+    def update(self):
+        """
+        Updates hardware from the internal state of 'mech' 
+        """
     
     def switch_to_UDP(self):
         """
@@ -86,6 +103,7 @@ class RemoteAnimacharacter:
 
     def _send_anim_packet(self, data: List[Tuple[int, int]]):
         """
+        OUTDATED
         Sends animation packet to control the animatronic hardware.
 
         Data must be in the format: [(id_mask_1, value_1), (id_mask_2, value_2), ..., (id_mask_n, value_n)]
@@ -199,3 +217,20 @@ class RemoteAnimacharacter:
         """
         Performs common file operations such as rename, delete, create
         """
+
+
+if __name__ == "__main__":
+    ac = RemoteAnimacharacter()
+    outcome = ac.connect('192.168.2.31', 'myPassword')
+    if not outcome.ok:
+        print(outcome.errmsg)
+        exit()
+
+    ac.mech.head.mouth.value = .5
+    ac.mech.body.lean.value = 1
+
+    ac.update()
+
+    ac.interpolate(ac.mech.head.mouth, start=0, end=1, period=1, interp='linear')
+    ac.play_behaviour('cicciomerda', loop=False)
+    ac.stop_behaviour('diocazzo')

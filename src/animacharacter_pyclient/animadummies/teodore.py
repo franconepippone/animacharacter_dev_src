@@ -145,9 +145,6 @@ class TeodoreDummy(ActuatorGroup):
 def create_dummy() -> TeodoreDummy:
     """
     Costructs and returns a teodore animadummy instance, the default animadummy for animacharacter platforms.
-    
-    :return: Description
-    :rtype: ActuatorGroup
     """
     return TeodoreDummy()
 
@@ -165,12 +162,12 @@ if __name__ == "__main__":
 
     x = mech.head.get_subgroups()
     x = HeadActuatorGroup()
-    print(x)
+    print(mech)
 
     packet = mech._gen_motiondata()
 
-    print(packet)
-    print()
-    print(mech.arm_left.elbow._gen_motiondata())
-    print()
-    print(mech.head.eyebox._gen_motiondata())
+    #print(packet)
+    #print()
+    #print(mech.arm_left.elbow._gen_motiondata())
+    #print()
+    #print(mech.head.eyebox._gen_motiondata())
