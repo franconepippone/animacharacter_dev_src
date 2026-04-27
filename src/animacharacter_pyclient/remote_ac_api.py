@@ -231,6 +231,18 @@ if __name__ == "__main__":
 
     ac.update()
 
-    ac.interpolate(ac.mech.head.mouth, start=0, end=1, period=1, interp='linear')
-    ac.play_behaviour('cicciomerda', loop=False)
-    ac.stop_behaviour('diocazzo')
+    #ac.interpolate(ac.mech.head.mouth, start=0, end=1, period=1, interp='linear')
+    #ac.play_behaviour('cicciomerda', loop=False)
+    #ac.stop_behaviour('diocazzo')
+
+
+"""
+def behaviour(intf):
+    axis = intf.create_axis(15, override=True)
+    value = axis.value
+    while True:
+        value += (axis.value - value) * 0.5 # learp
+        intf.move(15, value)
+        yield behaviouraction.sleep(.1)
+   """   
+    

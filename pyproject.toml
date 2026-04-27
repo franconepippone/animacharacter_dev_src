@@ -12,4 +12,22 @@ dependencies = [
 
 [tool.uv.sources]
 pysafeudp = { path = "../shared_libs/pysafeudp", editable = true }
+animacharacter-pyclient = { workspace = true, editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[dependency-groups]
+dev = [
+    "animacharacter-pyclient",
+    "pytest>=9.0.3",
+]
 #"pysafeudp" = { git = "https://github.com/franconepippone/animacharacter_dev_src", subdirectory = "src/shared_libs/pysafeudp" }

@@ -3,6 +3,7 @@ from typing import Any, Tuple, Iterable, List, Literal, Dict
 from abc import ABC, abstractmethod
 from enum import Enum
 
+from animacharacter_pyclient.src.animacharacter_pyclient.config_tree.utils import ConfigNode
 
 # TODO make actuators with different values types (int8-16-32, uint8-16-32)?
 
@@ -12,13 +13,14 @@ class Actuator:
     or use `posefrom(<actuator>)` to copy the values from another actuator to this one, updating the value locally on this object.
     """
 
-    def __init__(self, id: int, name: str = ''):
-        self._value: float = 0
+    def __init__(self, id: int, name: str = '', config_publisher: ConfigNode | None = None):
         if not isinstance(id, int):
             raise TypeError("Actuator ID must be an integer")
         # In the future add more rigorous checks on ID validity (for example if in byte range 0-255)
         if id < 0:
             raise ValueError("Actuator ID must be a non-negative integer")
+        self._value: float = 0
+        self.configpub: ConfigNode = config_publisher if config_publisher else ConfigNode(name)
         self.id: int = id
         self.name: str = name
 
@@ -40,13 +42,19 @@ class Actuator:
         # implements copying the pose information from actuator to actuatr
         self._value = self._validate_new_value(actuator.value)
     
-    # how to ahndle this?
-    """
-    def config(self, configs: Dict):
-        ""Sends an arbitrary config dict (this method is ment to be used by other methods of subclasses
-        that allow modifying actuator specific configurations more easily).""
-        self._server_link.send_config(configs)
-    """
+    def configure(self, json_cfg: Dict):
+        """
+        Send an arbitrary configuration json dictionary for this actuator. On server side,
+        hardware controllers needs to be programmed to reflect these configuration changes
+        onto the hardware.
+
+        Use this method inside other more explicitly named methods, to make configuration easier.
+        All calls to this method are merged until status is actually sent (via RemoteAnimacharacter.update()).
+        """
+        if self.configpub is None:
+            raise RuntimeError(f"Actuator {self.id} is not bound to a ConfigNode")
+        key = str(self.id)
+        self.configpub.publish(key, json_cfg)
 
     def _gen_motiondata(self) -> Tuple[int, int | float]:
         """Returns a simple representation of the actuator data: `tuple(<act_id>, <act_value>)`"""
@@ -67,11 +75,13 @@ class ActuatorGroup(ABC):
     It's recommended to subclass this to create custom groups with fixed contents and members for easier and typed access to actuators and subgroups.
     """
 
-    def __init__(self, contents: Iterable[Actuator | ActuatorGroup]) -> None:
+    def __init__(self, contents: Iterable[Actuator | ActuatorGroup], config_publisher: ConfigNode) -> None:
         self._actuatorsarray: Tuple[Actuator, ...] = tuple([c for c in contents if isinstance(c, Actuator)])
         self._subgroupsarray: Tuple[ActuatorGroup, ...]  = tuple([c for c in contents if isinstance(c, ActuatorGroup)])
         self._act_table: Dict[int, Actuator] = {act.id : act for act in self._actuatorsarray}
         self._act_names: Dict[int, str] = self._compute_act_names() # used in _repr_
+
+        self.configpub: ConfigNode = config_publisher
 
         # TODO further optimize this by creating _all_actuators field that contains all actuators contained in this whole branch. Easier
         # to do _gen_motionpacket then or to check for ownership
