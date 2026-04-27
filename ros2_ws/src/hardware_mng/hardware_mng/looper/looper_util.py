@@ -28,7 +28,7 @@ class LoopAction(Enum):
 
 @dataclass
 class LoopActionRequest:
-    """Raise this inside a lop job function to perform either PAUSE/STOP a loop from the inside."""
+    """Return this inside a lop job function to perform either PAUSE/STOP a loop from the inside."""
     action: LoopAction
 
 def _loop(

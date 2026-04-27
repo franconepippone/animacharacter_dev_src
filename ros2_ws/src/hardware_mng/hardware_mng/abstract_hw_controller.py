@@ -65,7 +65,8 @@ class BaseHardwareController(ABC):
                 except Empty:
                     continue
             try:
-                self.read() # first poll for any data
+                # if has_pending_config_changes: self.configure(self._pending_changes)
+                self.read() # first check for any data
                 self.control(commands) # then write command instructions
             
             except HardwareCrash as e:
@@ -80,8 +81,7 @@ class BaseHardwareController(ABC):
                 return LoopActionRequest(LoopAction.STOP)
 
     def _setup_wrappers(self):
-        # note this could cause issues if a initialize fails because hardware is alrady initialized; in that
-        # case _initialized will be marked as false even though hardware is ok. We could guard this but it's better to keep this stateless.
+        # explicitly applying "decorators" to init/denit methods to keep track of init status.
         original_init = self.initialize_hw
         original_deinit = self.deinitialize_hw
 
