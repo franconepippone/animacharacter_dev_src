@@ -54,8 +54,25 @@ class BaseControllerSim(BaseHardwareController):
     def __init__(self, name: str = "sim-bridge-controller"):
         super().__init__(name, flush_freq=30.0)
         self.subscribe_to_command_group([i for i in range(100)]) # make sure we are subscribing to everything
-        # helper class to drive the hardware
+        self.subscribe_to_config_path('hello/there/test', self.config_test_handler)
+        self.subscribe_to_config_path('hello/', self.config_test_handler)
+        self.subscribe_to_config_path('/simple/', self.config_test_handler)
+
+        # PUBLISH FAKE CONFIG UPDATES ON CLI:
+        # ros2 topic pub /config_update std_msgs/msg/String "data: '{\"hello\":{\"there\":{\"test\":{\"dio\":false}}}}'" 
+        
+        # helper class to connect to the simulator
         self.peer = PeerUDP(SIMULATOR_ADDRESS)
+    
+    def config_test_handler(self, data: dict):
+        print(data)
+
+    def config_test_handler_2(self, data: dict):
+        print(data)
+    
+    def config_test_handler_3(self, data: dict):
+        raise ValueError("gigio")
+
 
     def _send_motion_packet(self, cmd: MotionCommand):
         axisid, value = cmd
@@ -77,9 +94,12 @@ class BaseControllerSim(BaseHardwareController):
     def deinitialize_hw(self) -> bool:
         return True
     
-    def control(self, commands: Iterable[MotionCommand]):
+    def control(self, commands: list[MotionCommand]):
         # controls the simulated head hardware
+        if len(commands) > 0:
+            print(f"got {len(commands)} commands")
         for cmd in commands:
+            # just forwards the packets to the simulator
             self._send_motion_packet(cmd)
 
 # creating the actual controllers, all derived from the same class

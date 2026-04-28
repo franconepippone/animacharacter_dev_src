@@ -65,7 +65,7 @@ def import_module(path: str) -> ModuleType | None:
 
 def main(args=None):
     # simulate CLI input
-    INPUT_CONFIG = "simulator"
+    INPUT_CONFIG: str = ''
     YAML_FILE = "src/hardware_mng/hardware_mng/hw_configurations.yaml"
     STRICT_MODE = True #wheter to stop if any of the controllers fail to load
 
@@ -74,14 +74,27 @@ def main(args=None):
 
     # loading configs
     try:
-        config_data: dict[str, list[str]] = load_yaml_file(YAML_FILE)
+        config_data: dict[str, list[str] | str] = load_yaml_file(YAML_FILE)
     except RuntimeError as e:
         logger.fatal(f"Failed to load Hardwdare Configuration file -> {e}")
         exit(-1)
-    
-    hw_controllers_paths: list[str] | None = config_data.get(INPUT_CONFIG)
+
+    if INPUT_CONFIG == '':
+        default_config = config_data.get('default_config')
+        if default_config is None or not isinstance(default_config, str):
+            logger.fatal('No hardware configuration specified.')
+            exit(-1)
+        INPUT_CONFIG = default_config
+
+    hw_controllers_paths: list[str] | str | None = config_data.get(INPUT_CONFIG)
     if hw_controllers_paths is None:
         logger.fatal(f"Configuration '{INPUT_CONFIG}' not found in hardware configuration file at '{YAML_FILE}'")
+        exit(-1)
+    if not(
+        isinstance(hw_controllers_paths, list) and 
+        all(isinstance(path, str) for path in hw_controllers_paths)
+    ):
+        logger.fatal(f"Invalid configuration '{INPUT_CONFIG}' (is not a list of paths (strings))")
         exit(-1)
 
     total = len(hw_controllers_paths)

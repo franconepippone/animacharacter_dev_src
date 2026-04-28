@@ -1,10 +1,37 @@
 from collections.abc import Iterable, Callable
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Tuple, Dict, Any
 
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
 from .looper import LoopActionRequest, LoopAction
+
+SPECIAL_PATH_CHARS = {'@'}
+
+# ensures format of config path is correct
+def _cleanup_path(path: str) -> Tuple[str, ...]:
+    invalid = set(path) & SPECIAL_PATH_CHARS
+    if invalid:
+        raise ValueError(f"Path contains invalid characters: {invalid}")
+    parts = path.split('/')
+    parts = (part for part in parts if part.strip() != '')
+    return tuple(parts)
+
+# attempts to get an object within a nested dict tree
+
+def _fetch_dict_deep(d: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[bool, Any]:
+    """
+    Iteratively fetch a value from a nested dictionary using a list of keys.
+    Returns a tuple of (succ, value): succ is True if key was found.
+    """
+    current: Any = d
+
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return False, None
+        current = current[key]
+
+    return True, current
 
 class HardwareCrash(Exception):
     """
@@ -39,6 +66,8 @@ class BaseHardwareController(ABC):
         self.name = name
         self.flush_freq = flush_freq # flush frequency in Hz
         self.command_group = command_group
+        self._config_handlers: dict[Tuple[str, ...], Callable] = {}
+        self._cfg_updates_queue: Queue[dict] = Queue()
         self._initialized = False
 
         if self.flush_freq <= 0:
@@ -50,10 +79,50 @@ class BaseHardwareController(ABC):
     def subscribe_to_command_group(self, ids_group: Iterable[int]):
         """If not set during __init__, use this to subscribe to a set of motion commands"""
         self.command_group = set(ids_group)
+    
+    # handling configuration
+
+    def subscribe_to_config_path(self, path: str, handler: Callable[[dict], Any]):
+        """Bind a handler function to a specified path within the configuration tree.
+        Upon reception of a configuration tree in which this path exists, this handler will be invoked with the corresponding
+        configuration data contained under that path.
+        """
+        parts = _cleanup_path(path)
+        if hasattr(self._config_handlers, path):
+            self.logger.warn(f"Overriding config handler for '{path}'")
+        self._config_handlers[parts] = handler
+
+    def _queue_config_update(self, config: dict):
+        """
+        Queues a config dictionary in a thread safe way, so that handlers can be executed
+        deferredly on next loop iteration.
+        """
+        self._cfg_updates_queue.put(config)
+
+    def _execute_queued_config_updates(self):
+        # dispatches configs until queue is empty
+        while self._cfg_updates_queue.qsize() > 0:
+            configs = self._cfg_updates_queue.get()
+            self._dispatch_config(configs)
+            
+
+    def _dispatch_config(self, global_config: dict):
+        """Dispatches the appropriate branch of the config tree to registered handlers.
+        
+        NOTE: This should be called from the same thread of control() and read(). Call
+        _queue_config_update instead if you are in a different thread.
+        """
+        for path_parts, handler in self._config_handlers.items():
+            succ, subconfig = _fetch_dict_deep(global_config, path_parts)
+            if succ:
+                try:
+                    handler(subconfig)
+                except Exception as e:
+                    self.logger.error(f"Configuration handler '{handler.__name__}' subscribed to '{'/'.join(path_parts)}' failed -> {e}")
 
     # this is used as the "job" of the looper
     def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopActionRequest]:
-            if not self.is_initialized(): print("STO QUI BASTARDO")
+            if not self.is_initialized(): self.logger.warning(f"'_flush' was called but controller is marked as initialized (this should never happen)")
             if not self.is_initialized(): return # prevent flush if not initialized
 
             commands = []
@@ -65,7 +134,7 @@ class BaseHardwareController(ABC):
                 except Empty:
                     continue
             try:
-                # if has_pending_config_changes: self.configure(self._pending_changes)
+                self._execute_queued_config_updates()
                 self.read() # first check for any data
                 self.control(commands) # then write command instructions
             

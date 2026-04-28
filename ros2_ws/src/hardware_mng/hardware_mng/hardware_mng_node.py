@@ -1,6 +1,7 @@
+import json
 from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
-from enum import Enum, auto
 from interfaces.msg import MotionframeArray
+from std_msgs.msg import String
 
 from diagnostic_updater import Updater
 from diagnostic_updater import DiagnosticStatusWrapper, DiagnosticStatus
@@ -17,6 +18,7 @@ from .utils import flatten_for_diagnostics
 
 # of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
+CONFIG_TOPIC = 'config_update'
 
 class HardwareManagerNode(LifecycleNode):
     def __init__(self, 
@@ -28,6 +30,7 @@ class HardwareManagerNode(LifecycleNode):
         self.dispatcher: Dispatcher = dispatcher
         self.looper = looper
         self.loop_controllers_pairs = loop_controllers_pairs # loop and controller are always kept together in a tuple
+        self.loaded_hw_controllers = [t[1] for t in loop_controllers_pairs]
         self._is_active = False
 
         # ------------------------
@@ -70,7 +73,7 @@ class HardwareManagerNode(LifecycleNode):
         self.diagnostic_timer = self.create_timer(1.0, self.updater.update) # update 
 
         # -------------------------
-        # main subscription to input topic
+        # main subscription to input topic and configs
         # -------------------------
 
         self.sub = self.create_subscription(
@@ -80,19 +83,47 @@ class HardwareManagerNode(LifecycleNode):
             5
         )
 
+        self.sub_config = self.create_subscription(
+            String,
+            CONFIG_TOPIC,
+            self.update_config_callback,
+            5
+        )
+
+
         self.get_logger().info("Initialized!")
 
     # ---------------------------
-    # Main Reception callback
+    # Main callbacks
     # --------------------------
 
+    def update_config_callback(self, msg: String):
+        # WE MIGHT REMOVE THIS, CONFIGS ARE ALREADY QUEUED AUTOMATICALLY
+        if not self._is_active: return # skip if node not active
+
+        if not isinstance(msg.data, str):
+            self.get_logger().warning(f"Message received from config topic was not a string, but was of type: {type(msg.data)}")
+            return
+
+        try:
+            configs = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().warning(f"Failed to parse config json -> {e}")
+            return
+        
+        # updates all controllers with configs (calls subscribed handlers)
+        for ctrl in self.loaded_hw_controllers:
+            ctrl._queue_config_update(configs)
+
+            
     def motionframe_callback(self, msg: MotionframeArray):
         if not self._is_active: return # skip if node not active
 
         # create a motion command for each pair, and dispatch them to the queues
         for act_id, val in zip(msg.ids, msg.values):
             #self.get_logger().info(f"{act_id}:{val}")
-            self.dispatcher.dispatch(MotionCommand(act_id, val))
+            dispatcher_cmd = (act_id, MotionCommand(act_id, val)) # we do this to use the entire MotionCommand as payload
+            self.dispatcher.dispatch(dispatcher_cmd)
 
     # -----------------------------
     # Diagnostic Tasks
