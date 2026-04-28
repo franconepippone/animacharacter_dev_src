@@ -28,6 +28,5 @@ members = [
 [dependency-groups]
 dev = [
     "animacharacter-pyclient",
-    "pytest>=9.0.3",
 ]
 #"pysafeudp" = { git = "https://github.com/franconepippone/animacharacter_dev_src", subdirectory = "src/shared_libs/pysafeudp" }

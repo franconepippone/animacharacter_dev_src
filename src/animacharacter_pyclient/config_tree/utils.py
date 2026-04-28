@@ -12,18 +12,22 @@ def deep_merge(dst: dict, src: dict):
             dst[k] = v
 
 class ConfigNode:
-    def __init__(self, name: str | None = None, parent: ConfigNode | None = None):
+    def __init__(self, name: str = '', parent: ConfigNode | None = None):
         self.name = name
         self.parent = parent
+        if parent is not None:
+            parent.add_child(self)
         self._children: dict[str, ConfigNode] = {}
         self._data: dict = {}
 
     # --- tree building ---
 
+    def add_child(self, node: ConfigNode):
+        if node.name not in self._children:
+            self._children[node.name] = node
+
     def child(self, name: str) -> ConfigNode:
-        if name not in self._children:
-            self._children[name] = ConfigNode(name, self)
-        return self._children[name]
+        return ConfigNode(name, self)
 
     # --- publishing ---
 
@@ -71,7 +75,8 @@ class ConfigNode:
         for child in self._children.values():
             child.clear()
 
-
+    def __repr__(self) -> str:
+        return f"ConfigNode({self.name}, {self.parent})"
 
 if __name__ == "__main__":
     root = ConfigNode('')

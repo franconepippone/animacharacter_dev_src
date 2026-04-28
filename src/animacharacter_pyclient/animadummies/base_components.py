@@ -3,24 +3,24 @@ from typing import Any, Tuple, Iterable, List, Literal, Dict
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from animacharacter_pyclient.src.animacharacter_pyclient.config_tree.utils import ConfigNode
+from ..config_tree.utils import ConfigNode
 
 # TODO make actuators with different values types (int8-16-32, uint8-16-32)?
 
 class Actuator:
     """
-    Represents a controllable axys on an animacharacter's platform. Value can be accessed and set through the `.value` property.\n
+    Represents a controllable axis on an animacharacter's platform. Value can be accessed and set through the `.value` property.\n
     or use `posefrom(<actuator>)` to copy the values from another actuator to this one, updating the value locally on this object.
     """
 
-    def __init__(self, id: int, name: str = '', config_publisher: ConfigNode | None = None):
+    def __init__(self, id: int, name: str = '', cfg_publisher: ConfigNode | None = None):
         if not isinstance(id, int):
             raise TypeError("Actuator ID must be an integer")
         # In the future add more rigorous checks on ID validity (for example if in byte range 0-255)
         if id < 0:
             raise ValueError("Actuator ID must be a non-negative integer")
         self._value: float = 0
-        self.configpub: ConfigNode = config_publisher if config_publisher else ConfigNode(name)
+        self.cfgpub: ConfigNode = cfg_publisher if cfg_publisher else ConfigNode(name)
         self.id: int = id
         self.name: str = name
 
@@ -51,10 +51,10 @@ class Actuator:
         Use this method inside other more explicitly named methods, to make configuration easier.
         All calls to this method are merged until status is actually sent (via RemoteAnimacharacter.update()).
         """
-        if self.configpub is None:
+        if self.cfgpub is None:
             raise RuntimeError(f"Actuator {self.id} is not bound to a ConfigNode")
-        key = str(self.id)
-        self.configpub.publish(key, json_cfg)
+        key = f"{self.name}#{self.id}"
+        self.cfgpub.publish(key, json_cfg)
 
     def _gen_motiondata(self) -> Tuple[int, int | float]:
         """Returns a simple representation of the actuator data: `tuple(<act_id>, <act_value>)`"""
@@ -75,13 +75,13 @@ class ActuatorGroup(ABC):
     It's recommended to subclass this to create custom groups with fixed contents and members for easier and typed access to actuators and subgroups.
     """
 
-    def __init__(self, contents: Iterable[Actuator | ActuatorGroup], config_publisher: ConfigNode) -> None:
+    def __init__(self, contents: Iterable[Actuator | ActuatorGroup], cfg_publisher: ConfigNode) -> None:
         self._actuatorsarray: Tuple[Actuator, ...] = tuple([c for c in contents if isinstance(c, Actuator)])
         self._subgroupsarray: Tuple[ActuatorGroup, ...]  = tuple([c for c in contents if isinstance(c, ActuatorGroup)])
         self._act_table: Dict[int, Actuator] = {act.id : act for act in self._actuatorsarray}
-        self._act_names: Dict[int, str] = self._compute_act_names() # used in _repr_
+        self._fill_missing_act_names()
 
-        self.configpub: ConfigNode = config_publisher
+        self.cfgpub: ConfigNode = cfg_publisher
 
         # TODO further optimize this by creating _all_actuators field that contains all actuators contained in this whole branch. Easier
         # to do _gen_motionpacket then or to check for ownership
@@ -91,14 +91,20 @@ class ActuatorGroup(ABC):
         # and should already be initialized
         for sg in self._subgroupsarray:
             self._act_table.update(sg._act_table)
-        
+    
+    def _fill_missing_act_names(self):
+        # called upon __init__, names all unnamed actuators with attribute name
+        for attr, value in vars(self).items():
+            if isinstance(value, Actuator) and value.name == '':
+                value.name = attr
+
+
     def _compute_act_names(self) -> dict[int, str]:
         act_names = {}
 
         # first pass: use explicit actuator names
         for act in self._act_table.values():
-            if act.name:
-                act_names[act.id] = act.name
+            act_names[act.id] = act.name
 
         # second pass: infer names from attributes if missing
         for attr, value in vars(self).items():
@@ -139,6 +145,11 @@ class ActuatorGroup(ABC):
     def _repr(self, prefix="", is_last=True):
         name = f"Group {self.__class__.__name__}"
 
+        # generate id - name table for actuators
+        act_names = {}
+        for act in self._act_table.values():
+            act_names[act.id] = act.name
+
         if prefix:
             connector = "└── " if is_last else "├── "
             line = prefix + connector + name
@@ -158,7 +169,7 @@ class ActuatorGroup(ABC):
             else:
                 connector = "└── " if last else "├── "
                 lines.append(
-                    f"{next_prefix}{connector} {self._act_names[child.id]} id-{child.id}"
+                    f"{next_prefix}{connector} {act_names[child.id]} ─ id: {child.id}"
                 )
 
         return "\n".join(lines)
