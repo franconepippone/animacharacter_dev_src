@@ -1,7 +1,5 @@
 from animacharacter_pyclient.animadummies.teodore import create_dummy
-from animacharacter_pyclient.config_tree.utils import ConfigNode
-
-
+from animacharacter_pyclient.config_tree import ConfigNode
 
 def actuator_configs(group: dict):
     for key, value in group.items():

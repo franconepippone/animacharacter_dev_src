@@ -1,9 +1,8 @@
 from __future__ import annotations
 from typing import Any, Tuple, Iterable, List, Literal, Dict
-from abc import ABC, abstractmethod
-from enum import Enum
+from abc import ABC
 
-from ..config_tree.utils import ConfigNode
+from ..config_tree.config_node import ConfigNode
 
 # TODO make actuators with different values types (int8-16-32, uint8-16-32)?
 
@@ -53,7 +52,7 @@ class Actuator:
         """
         if self.cfgpub is None:
             raise RuntimeError(f"Actuator {self.id} is not bound to a ConfigNode")
-        key = f"{self.name}#{self.id}"
+        key = f"{self.name}@{self.id}" # we encode the id in the json key
         self.cfgpub.publish(key, json_cfg)
 
     def _gen_motiondata(self) -> Tuple[int, int | float]:

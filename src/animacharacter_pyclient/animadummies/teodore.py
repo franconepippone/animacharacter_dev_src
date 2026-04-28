@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .base_components import Actuator, ActuatorGroup
 
-from ..config_tree.utils import ConfigNode
+from ..config_tree.config_node import ConfigNode
 import tomllib
 
 # hack to load the file next to this one
