@@ -49,17 +49,25 @@ class BaseHardwareController(ABC):
     """
     A Hardware Controller or Module is responsible for the execution of motion commands. Hardware controller
     are highly coupled to hardware and might differ from robot to robot. A single robot might use multiple hardware controllers.
-    A Hardware Controller "subscribes" to a set of motion command ids (command_group set, passed in __init__ or via "subscribe_to_command_group"). All the recevied commands witch matching ids will be
-    passed to the "control" method of the subscribed hardware controllers at a frequency specified by flush_frequency. The control method handles updating the
+    A Hardware Controller "subscribes" to a set of motion command ids (command_group set, passed in __init__ or via `subscribe_to_command_group`). All the recevied commands witch matching ids will be
+    passed to the `control` method of the subscribed hardware controllers at a frequency specified by flush_frequency. The control method handles updating the
     hardware with the received motion commands values. 
 
-    Based on hardware implementation, the "control" method could either directly update hardware command per command, or could batch all updates in one hardware
-    update communication (ideal solution). In any case, implementation of "control" is completely up to the user, but must always take less than a loop period to ensure 
-    a constant update frequency.
+    Based on hardware implementation, the `control` method could either directly update hardware command per command, or could batch all updates in one hardware
+    update communication (ideal solution). In any case, implementation of `control` is completely up to the user, but must always take less than a loop period to ensure 
+    a constant update frequency. A `read` method can be overwritten to perfrom read-only operations on the hardware. This is called just before "control", and is just for
+    clarity (everything done in `read` can also be done at the start of `control`).
+
+    Low-frequency hardware configuration changes (i.e. motor_max_speed, limits, operating mode...) are exchanged as a pure user-defined json dictionary.
+    A controller can subscribe to a specific config path (a path within the config json tree) with a handler using `subscribe_to_config_path(path, handlr)`; the handler will be invoked when the path
+    exists within the received configuration json tree, and the corresponding value (potentially more json) will be passed to it.
+
+    Note that `control`, `read` and all the config handlers are always called from the same thread, meaning that they are naturally thread safe (they can interact with shared
+    state).
 
     Hardware controllers are dynamically loaded as a plugins by the hardware manager system. A Hardware Configuration is a set of hardware controllers that are loaded and used
-    by the hardware manager system. A Configuration can be registered in the "hw_configurations.yaml" file, and then used by passing it as an argument when launching
-    the hardware manager system.
+    by the hardware manager system. A Configuration can be registered in the `hw_configurations.yaml` file, and then used by passing it as an argument when launching
+    the hardware manager system or by optionally setting it as default by defining `default_config: <your-cfg-name>` in the yaml file.
     """
     
     def __init__(self, name: str, flush_freq: float, command_group: set[int] = set()) -> None:
@@ -119,6 +127,7 @@ class BaseHardwareController(ABC):
                     handler(subconfig)
                 except Exception as e:
                     self.logger.error(f"Configuration handler '{handler.__name__}' subscribed to '{'/'.join(path_parts)}' failed -> {e}")
+                    #raise HardwareCrash from e
 
     # this is used as the "job" of the looper
     def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopActionRequest]:
