@@ -6,7 +6,12 @@
 #)
 #from animacharacter.behaviours import BehaviourInterface as Interface
 from behavior_engine import BehaviorContext, BehaviorAction
-from typing import Generator, Literal
+from behavior_engine import AbstractBehavior
+from typing import Generator, List, Literal
+
+from behavior_engine.actions import BehaviorActionRaw
+from behavior_engine.executor import BehaviorExecutor
+
 
 def behaviour(name, group=None, every_ms=0):
     def dec(f):
@@ -82,6 +87,8 @@ def neck_control(intf: EngineInterface):
   """
   ROLL_VIRTUAL_AXIS = 16
   PITCH_VIRTUAL_AXIS = 17
+  NECK_L_ID = 1
+  NECK_R_ID = 2
   roll_axis = intf.create_virtual_axis(id=ROLL_VIRTUAL_AXIS, override=True)
   pitch_axis = intf.create_virtual_axis(id=PITCH_VIRTUAL_AXIS)
   config = intf.subscribe_to_conifg(path='config/path')
@@ -102,26 +109,44 @@ def neck_control(intf: EngineInterface):
     #intf.get_latest_value(from_axis_id: int) -> float | None (o 0)
     # per convenienza, si possono creare anche assi booleane
     # (internamente utilizzano sempre i float)
+    ID = 3
     flag = intf.create_boolean_axis(ID)
     flag.is_true() # True / False
     flag.changed()
     #Se non si vuole creare un generatore, viene offerta anche una classe da cui ereditare:
 
-
+def mark_behavior(name: str, groups: List[str] = []):
+    def dec(cls):
+        cls.__bhdata__ = {
+            "name": name,
+            "groups": groups
+        }
+        return cls
+    return dec
 
 #from animacharacter.behaviour Behaviour
 # the behaviour class acts exactly as a
 # generator with a while loop.
 # the tick method is called repeatedly inside that loop.
-@behaviour(name="test")
-class MyBehaviour(Behaviour):
-  def __init__(self):
+@mark_behavior(name="test", groups=['ciccio'])
+class MyBehaviour(AbstractBehavior[EngineInterface]):
+  def setup(self):
+    # this is called once at the beginning, you can do setup stuff here
+    self.interface = self.ctx
+  
+  def tick(self):
     #... custom code...
-  def tick(self, time: TimeUtil, intf: Interface):
-    #... custom code...
+    self.interface.publish_motion_cmd(1, 0.5)
 
 
+def bh2(ctx: EngineInterface):
+    sub = ctx.create_subscriber("ciccio")
+    yield
+    for _ in range(10):
+        print("bh2", [msg for msg in sub.pull()])
+        yield BehaviorAction.sleep(.1)
 
-
-
-
+ctx = EngineInterface()
+exec = BehaviorExecutor(ctx)
+exec.add(bh2, 0)
+exec.add(MyBehaviour, 0)

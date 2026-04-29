@@ -1,20 +1,22 @@
 import time
-from typing import List
+from typing import Generic, List
 from collections.abc import Iterator
-from .behavior import BehaviorInstance, BehaviorCallable, AbstractBehavior
+from .behavior import BehaviorInstance, BehaviorCallable, AbstractBehavior, ContextT
 from .context import BehaviorContext
 
 
-class BehaviorExecutor:
+class BehaviorExecutor(Generic[ContextT]):
     """
     Core engine that schedules and executes behaviors.
     """
 
-    def __init__(self, ctx: BehaviorContext):
+    def __init__(self, ctx: ContextT):
+        """Create an executor using the shared behavior context."""
         self.ctx = ctx
         self.behaviors: List[BehaviorInstance] = []
 
-    def add(self, behavior_fn: BehaviorCallable, priority: int = 0):
+    def add(self, behavior_fn: BehaviorCallable[ContextT], priority: int = 0) -> BehaviorInstance:
+        """Start a behavior and return its runtime instance."""
         gen = behavior_fn(self.ctx)
 
         # Ensure it's a a valid object
@@ -26,11 +28,15 @@ class BehaviorExecutor:
 
         # keep execution order deterministic and based on priority
         self.behaviors.sort(key=lambda b: b.priority)
+        return instance
+
+    def remove(self, instance: BehaviorInstance) -> None:
+        """Stop a running behavior instance."""
+        if instance in self.behaviors:
+            self.behaviors.remove(instance)
 
     def tick(self):
-        """
-        Ticks all running behaviors forward
-        """
+        """Advance all running behaviors by one time step."""
         time_now = time.monotonic()
         self.ctx.time._sync_time = time_now # all behavior have syncronized time for this iteration
 
@@ -57,7 +63,6 @@ if __name__ == "__main__":
         while True:
             pub.publish("hello")
             pub.publish("there")
-            pub.publish("asshole")
             print("published!", ctx.time.time())
             yield BehaviorAction.continue_()
     

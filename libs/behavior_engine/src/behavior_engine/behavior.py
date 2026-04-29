@@ -1,20 +1,22 @@
-from typing import Iterator
+from typing import Callable, Generic, Iterator, TypeVar
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from .actions import BehaviorAction, BehaviorActionRaw, BehaviorActionType
 from .context import BehaviorContext
 
-from typing import Callable, Iterator
+ContextT = TypeVar("ContextT", bound=BehaviorContext)
+BehaviorIterator = Iterator[BehaviorActionRaw | None]
+BehaviorCallable = Callable[[ContextT], BehaviorIterator]
 
-type BehaviorIterator  = Iterator[BehaviorActionRaw | None]
-BehaviorCallable = Callable[[BehaviorContext], BehaviorIterator]
+class AbstractBehavior(Generic[ContextT], ABC):
+    """Base class for behaviors implemented with setup/tick methods."""
 
-class AbstractBehavior(ABC):
-    def __init__(self, ctx: BehaviorContext):
+    def __init__(self, ctx: ContextT):
         self.ctx = ctx
         self._iterator = self._get_iterator()
     
     def _get_iterator(self) -> BehaviorIterator:
+        """Build the internal iterator from setup() and tick()."""
         self.setup()
         while True:
             yield self.tick()
@@ -27,20 +29,24 @@ class AbstractBehavior(ABC):
 
     @abstractmethod
     def setup(self) -> BehaviorActionRaw | None:
+        """Optional one-time initialization action."""
         ...
 
     @abstractmethod
     def tick(self) -> BehaviorActionRaw | None:
+        """Return the next action for this behavior step."""
         ...
 
 @dataclass
 class BehaviorInstance:
+    """Runtime wrapper for a behavior iterator and its scheduling state."""
     gen: BehaviorIterator 
     priority: int
     sleep_until: float = 0
-    done = False
+    done: bool = False
 
     def step(self, time: float) -> None | BehaviorActionRaw:
+        """Advance the behavior if it is awake and not done."""
         if self.done or time < self.sleep_until:
             return None
 

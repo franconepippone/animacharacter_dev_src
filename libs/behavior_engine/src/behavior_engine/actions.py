@@ -1,3 +1,4 @@
+from functools import cache
 from typing import Tuple
 from enum import Enum
 
@@ -16,12 +17,21 @@ class BehaviorAction:
     """
     @staticmethod
     def sleep(seconds: float):
-       return BehaviorActionType.SLEEP, seconds
+        """Put the bahavior to sleep for a certain amount of seconds."""
+        return BehaviorActionType.SLEEP, seconds
     
     @staticmethod
+    @cache
+    def loop(freq: float):
+        """Put the behavior to sleep for the amount of seconds corresponding to the given frequency in Hz."""
+        return BehaviorActionType.SLEEP, 1.0/freq
+
+    @staticmethod
     def stop(): 
+        """Stop the behavior and remove it from the executor."""
         return BehaviorActionType.STOP, 0
     
     @staticmethod
     def continue_():
-       return BehaviorActionType.CONTINUE, 0
+        """Continue the behavior without sleeping or stopping (default action when yielding None)."""
+        return BehaviorActionType.CONTINUE, 0
