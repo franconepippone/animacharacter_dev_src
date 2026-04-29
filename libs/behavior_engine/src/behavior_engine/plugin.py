@@ -102,3 +102,24 @@ def load_behaviors_from_file(engine: BehaviorEngineLike[ContextTV], path: str | 
     spec.loader.exec_module(module)
 
     return load_behaviors_from_module(engine, module)
+
+
+def load_behaviors_from_directory(
+    engine: BehaviorEngineLike[ContextTV],
+    directory: str | Path,
+    pattern: str = "*.py",
+    recursive: bool = False,
+) -> list[object]:
+    """Load all plugin Python files from a directory into the engine."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise NotADirectoryError(f"{directory!r} is not a directory")
+
+    entries: list[object] = []
+    matcher = directory.rglob if recursive else directory.glob
+    for path in sorted(matcher(pattern)):
+        if path.name.startswith("_"):
+            continue
+        if path.is_file():
+            entries.extend(load_behaviors_from_file(engine, path))
+    return entries

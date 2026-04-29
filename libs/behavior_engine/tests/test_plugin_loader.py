@@ -9,6 +9,7 @@ from behavior_engine import (
     BehaviorEngine,
     behavior,
     discover_behaviors,
+    load_behaviors_from_directory,
     load_behaviors_from_file,
     load_behaviors_from_module,
 )
@@ -88,3 +89,25 @@ def test_load_behaviors_from_file_loads_module_behaviors():
 
         entry = engine.get_behavior("file_behavior")
         assert entry.name == "file_behavior"
+
+
+def test_load_behaviors_from_directory_loads_all_py_files():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        plugin_dir = Path(tmpdir)
+        (plugin_dir / "plugin_a.py").write_text(
+            "from behavior_engine import behavior, BehaviorAction\n"
+            "@behavior('a', groups=['dir'])\n"
+            "def a(ctx):\n"
+            "    yield BehaviorAction.continue_()\n"
+        )
+        (plugin_dir / "plugin_b.py").write_text(
+            "from behavior_engine import behavior, BehaviorAction\n"
+            "@behavior('b', groups=['dir'])\n"
+            "def b(ctx):\n"
+            "    yield BehaviorAction.continue_()\n"
+        )
+
+        engine = BehaviorEngine(BehaviorContext())
+        load_behaviors_from_directory(engine, plugin_dir)
+
+        assert {entry.name for entry in engine.loaded_behaviors()} == {"a", "b"}
