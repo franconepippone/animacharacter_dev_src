@@ -15,3 +15,16 @@ behavior-engine = "behavior_engine:main"
 [build-system]
 requires = ["uv_build>=0.11.1,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[tool.uv.sources]
+behavior-engine = { workspace = true, editable = true }
+
+[dependency-groups]
+dev = [
+    "behavior-engine",
+]

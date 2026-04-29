@@ -5,16 +5,13 @@
 #  BehaviourAction
 #)
 #from animacharacter.behaviours import BehaviourInterface as Interface
-
+from behavior_engine import BehaviorContext, BehaviorAction
 from typing import Generator, Literal
 
 def behaviour(name, group=None, every_ms=0):
     def dec(f):
         pass
     return dec
-
-class TimeUtil:
-    def get_time_ms(self) -> float: ...
 
 class VirtualAxis:
     def __init__(self, id) -> None:
@@ -30,7 +27,7 @@ class ConfigSubscription:
    def has_new(self) -> bool: ...
    def data(self) -> dict: ...
 
-class EngineInterface:
+class EngineInterface(BehaviorContext):
     def publish_motion_cmd(self, id, value): ...
     def publish_config(self, dict): ...
     def subscribe_to_conifg(self, path) -> ConfigSubscription: ...
@@ -44,9 +41,9 @@ class EngineInterface:
     # these all use floats under the hood
     def create_virtual_axis(self, id, override: bool = True) -> VirtualAxis:
        return VirtualAxis(id)
-    def create_boolean_axis(self, id) -> BooleanAxis:
+    def create_boolean_axis(self, id, override: bool = True) -> BooleanAxis:
        return BooleanAxis(id)
-    def create_integer_axis(self, id, range) -> VirtualAxis: return VirtualAxis(id)
+    def create_integer_axis(self, id, range, override: bool = True) -> VirtualAxis: return VirtualAxis(id)
     
     # internally uses configurations to receive arbitrary data
     def create_data_channel(self, name: str): ...
@@ -58,35 +55,26 @@ class EngineInterface:
     def release_axis_ids(self): ... # realeases them
     def send_to_client(self, data): ...
 
-class BehaviourAction:
-    @staticmethod
-    def sleep(seconds: float):
-       return "sleep", seconds
-    @staticmethod
-    def stop(): return "stop", 0
-    @staticmethod
-    def continue_():
-       return "continue", 0
 
 def behaviour_action(action: Literal["continue", "stop", "sleep"], arg = 0):
    return (action, arg)
 
 @behaviour(name="blink", group="idle_animations", every_ms=1000)
-def blinking(time: TimeUtil, intf: EngineInterface) -> Generator[tuple[str, float]]:
+def blinking(intf: EngineInterface) -> Generator:
     BLINK_ID = 52
     while True:
     # every 1.5 seconds, send a blink cmd
-        if time.get_time_ms() % 1500 == 0:
+        if intf.time.time() % 1500 == 0:
             pass
             # interface è l'interfaccia verso il meccanismo di
             # send/recv di motionframes su ros
         intf.publish_motion_cmd(BLINK_ID, 1.0)
-        yield BehaviourAction.sleep(10)
+        yield BehaviorAction.sleep(10)
 
 # every_ms si può usare per specificare che il behaviour
 # deve essere eseguito a almeno 10ms di distanza
 @behaviour(name="neck_controller", every_ms=20)
-def neck_control(time: TimeUtil, intf: EngineInterface):
+def neck_control(intf: EngineInterface):
   """
   A behaviour for translating virtua roll/pitch
   neck motion into actual motor commands running as
@@ -105,7 +93,7 @@ def neck_control(time: TimeUtil, intf: EngineInterface):
       neck_r = 0#.. compute it ..
       intf.publish_motion_cmd(NECK_L_ID, neck_l)
       intf.publish_motion_cmd(NECK_R_ID, neck_r)
-    yield BehaviourAction._continue()
+    yield BehaviorAction.continue_()
 
     intf.publish_config({}) # any dict
 
