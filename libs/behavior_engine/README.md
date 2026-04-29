@@ -1,26 +1,155 @@
 # Behavior Engine
 
-A lightweight runtime for defining, registering, and executing behaviors in Python.
+A simple Python package for defining and executing behaviors over time.
 
-A behavior is a reusable unit of activity that runs over time and yields control back to the scheduler. In this package, a behavior can be either:
+The behavior engine is designed for systems where actions run in steps, can pause or stop, and need a shared context.
 
-- a generator function that yields `BehaviorAction` values, or
-- an `AbstractBehavior` subclass with `setup()` and `tick()` methods.
+## What this package does
 
-This package supports both generator-style behaviors and `AbstractBehavior` subclasses, and provides a simple registry-based API with a shared execution context.
+This package provides:
 
-## Key concepts
+- a way to register reusable behaviors by name,
+- a scheduler that runs active behaviors,
+- a shared context object passed into each behavior,
+- a small publish/subscribe message system inside the default context.
 
-- `BehaviorEngine`: high-level manager that holds a registry and executor.
-- `BehaviorRegistry`: stores named behaviors and optional groups.
-- `BehaviorExecutor`: schedules and runs active behavior instances.
-- `BehaviorContext`: shared runtime context passed into every behavior.
-- `BehaviorAction`: helper actions such as `sleep`, `stop`, and `continue`.
+## What is a behavior?
 
-## Quick start
+A behavior is a unit of work that executes over multiple steps instead of all at once.
+
+A behavior can:
+
+- perform work,
+- pause for some time,
+- stop when it is finished,
+- read and write shared context data.
+
+In this package, a behavior can be one of two forms:
+
+1. a generator function that receives a `BehaviorContext` and yields `BehaviorAction` values,
+2. an `AbstractBehavior` subclass that defines `setup()` and `tick()` methods.
+
+## Why use a behavior engine?
+
+Use this package when you need a simple scheduler for time-based or ordered tasks.
+
+Common use cases:
+
+- robot motion sequences,
+- simulation loops,
+- simple AI or game behaviors,
+- systems where multiple tasks need to share state safely.
+
+The behavior engine keeps behavior logic separate from execution and makes it easier to manage active behaviors.
+
+## Core concepts
+
+### BehaviorEngine
+
+`BehaviorEngine` is the main entry point.
+
+It holds:
+
+- a registry of known behaviors,
+- an executor for running active behaviors,
+- a list of currently running behavior instances.
+
+### BehaviorRegistry
+
+`BehaviorRegistry` stores behaviors by name and optional group labels.
+
+You can load a behavior once and play it later by name.
+
+### BehaviorExecutor
+
+`BehaviorExecutor` runs active behaviors in priority order and advances them on each `tick()`.
+
+### BehaviorContext
+
+`BehaviorContext` is the shared object passed into every behavior.
+
+The default context includes:
+
+- publisher/subscriber support for message passing,
+- helper methods to create publishers and subscribers.
+
+Use it to store runtime data or exchange messages between behaviors.
+
+### Plugin loading
+
+This package also includes a small plugin utility for loading behaviors from external Python modules.
+
+A plugin module can define behaviors using the `@behavior(name, groups=None, **metadata)` decorator.
+
+The loader provides:
+
+- `discover_behaviors(module)`: find decorated behaviors inside a module,
+- `load_behaviors_from_module(engine, module)`: register those behaviors with an engine,
+- `load_behaviors_from_file(engine, path)`: import a plugin file dynamically and register its behaviors.
+
+This keeps plugin loading separate from the engine core while allowing the same runtime behavior API.
+
+## How behaviors work
+
+### Generator-style behavior
+
+A generator-style behavior is a function that looks like this:
 
 ```python
-from behavior_engine import BehaviorAction, BehaviorContext, BehaviorEngine, AbstractBehavior
+from behavior_engine import BehaviorAction, BehaviorContext
+
+class DemoContext(BehaviorContext):
+    def __init__(self):
+        self.count = 0
+
+
+def blink(ctx: DemoContext):
+    while ctx.count < 3:
+        print(f"Blink {ctx.count + 1}")
+        ctx.count += 1
+        yield BehaviorAction.sleep(0.5)
+    yield BehaviorAction.stop()
+```
+
+Each time the scheduler advances the behavior, the function runs until the next `yield`.
+
+### AbstractBehavior subclass
+
+An `AbstractBehavior` subclass separates setup from repeated ticks:
+
+```python
+from behavior_engine import AbstractBehavior, BehaviorAction
+
+class SayHelloBehavior(AbstractBehavior[DemoContext]):
+    def setup(self):
+        return BehaviorAction.continue_()
+
+    def tick(self):
+        print("Hello")
+        return BehaviorAction.stop()
+```
+
+Use this form when you want a class-based behavior with state and explicit setup.
+
+## Context and messaging
+
+The default `BehaviorContext` provides a publish/subscribe pattern.
+
+Behaviors can create publishers and subscribers for named topics:
+
+```python
+sensor = ctx.create_publisher("sensor")
+actuator = ctx.create_subscriber("sensor")
+```
+
+When a behavior publishes a message, all subscribers on that topic receive it.
+
+This is useful when behaviors need to exchange data without directly calling each other.
+
+## Example usage
+
+```python
+from behavior_engine import BehaviorAction, BehaviorContext, BehaviorEngine
 
 class DemoContext(BehaviorContext):
     def __init__(self):
@@ -42,9 +171,20 @@ while engine.running_behaviors():
     engine.tick()
 ```
 
-## Examples
+## Installation
 
-A working example is provided in `examples/simple_usage.py`.
+Install from the package directory:
+
+```bash
+cd src/animacharacter_server/libs/behavior_engine
+pip install -e .
+```
+
+## Running the example
+
+A working example is available in `examples/simple_usage.py`.
+
+A plugin loader example is available in `examples/plugin_usage.py` and uses `examples/plugin_module.py`.
 
 Run it from the package directory:
 
@@ -52,14 +192,22 @@ Run it from the package directory:
 python examples/simple_usage.py
 ```
 
-## API overview
+```bash
+python examples/plugin_usage.py
+```
 
-- `load_behavior(name, behavior, groups=None, **metadata)`: register a behavior.
+## API summary
+
+- `load_behavior(name, behavior, groups=None, **metadata)`: register a behavior under a name.
 - `play_behavior(name, priority=0)`: start a registered behavior.
-- `tick()`: advance all active behaviors.
+- `tick()`: advance all running behaviors one scheduler step.
 - `stop_behavior(name)`: stop a running behavior.
 - `stop_all()`: stop every behavior currently running.
+- `running_behaviors()`: get a list of active behavior names.
+- `loaded_behaviors()`: get a list of registered behaviors.
 
-## Why use it
+## When to choose this package
 
-This package is useful when you want a small, explicit behavior scheduler for robotics, simulation, or simple AI systems. It keeps behavior definitions decoupled from execution details, and makes it easy to group and manage reusable behaviors.
+Choose this package when you need a small, explicit behavior scheduler with minimal dependencies.
+
+It is not a general-purpose workflow engine; it is intended for systems that can benefit from small, reusable behavior definitions and a shared runtime context.

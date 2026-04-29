@@ -40,8 +40,3 @@ def test_borrow_and_release():
     
     registry.release("bar")
     assert not entry.borrowed
-
-
-test_register_and_lookup()
-test_borrow_and_release()
-test_stress_registry()

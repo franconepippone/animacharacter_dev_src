@@ -41,6 +41,3 @@ def test_play_behavior_group_stops_all():
     engine.stop_all()
     assert engine.running_behaviors() == []
 
-
-test_behavior_engine_load_and_play()
-test_play_behavior_group_stops_all()
