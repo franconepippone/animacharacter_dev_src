@@ -5,7 +5,7 @@
 #include <timer.h>
 #include "FastTable.h"
 
-#define SERIALDEVICE_USE_HASHMAP
+//#define SERIALDEVICE_USE_HASHMAP
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
@@ -37,7 +37,7 @@ enum StreamOpOutcome {
     ALREADY_INITIATED = -2,
     NOT_INITIATED = -3,
     REFUSED = -4,
-    OFFSET_OUT_OF_BOUNDS = -5
+    CHUNK_OUT_OF_BOUNDS = -5
 };
 
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
@@ -174,13 +174,13 @@ public:
     // ======================= LARGE TRANSFER PROTOCOL =======================
 
     // Requests the beginning of a large transfer chunk stream. True on success
-    StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs);
+    StreamOpOutcome streamBegin(uint32_t buffSize, uint32_t timeoutMs);
 
     // Sends a chunk to be stored in the peer's rx buffer at given offset (after streamBegin has been called succesfully)
-    StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs);
+    StreamOpOutcome streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs);
 
     // Ends a large transfer chunk stream. This notifies the peer that the whole payload has been received.
-    StreamOpOutcome SerialDevice::streamEnd(uint8_t packId);
+    StreamOpOutcome streamEnd(uint8_t packId);
 
     uint32_t sendLarge(byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 500, uint8_t chunkSize = LARGE_TRANSFER_CHUNK_SIZE);
 

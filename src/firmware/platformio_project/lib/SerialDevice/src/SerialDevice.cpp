@@ -26,8 +26,9 @@ if all the functionalities of the devices are working properly.
 
 To ignore this code, define IGNORE_SERIAL_DEVICE_DEBUG_CODE either in this file
 or in the platformio.ini file (add "build_flags = -D IGNORE_SERIAL_DEVICE_DEBUG_CODE" to your environment).
-This will produce a slightly lighter binary (might be needed for arduino nano).
+This will produce a slightly lighter binary.
 
+NOTE: removing this could break some of the python CLI functionalities (test*, trigger*, and similar).
 */
 
 // __heap_start and __brkval only exposed in AVR boards
@@ -118,21 +119,31 @@ bool _handlePing(SerialDevice* dev) {
 }
 
 bool _handleInfoRqst(SerialDevice* dev) {
-    
     StreamOpOutcome result = dev->streamBegin(sizeof(BUILD_INFO_JSON), 500);
-    if (result != StreamOpOutcome::OK) return false;
+    if (result != StreamOpOutcome::OK) {
+        //_debug_blink_builtin(5, 250);
+        return false;
+    }
 
-    const uint32_t chunkSize = 10;
+    const uint32_t TargetChunkSize = 10;
     uint32_t offset = 0;
-    while (offset + chunkSize < sizeof(BUILD_INFO_JSON)) {
-        static char tempBuff[chunkSize];
+    const auto TOT_SIZE = sizeof(BUILD_INFO_JSON);
+    while (offset < TOT_SIZE) {
+        static char tempBuff[TargetChunkSize];
+        uint32_t chunkSize = min(TOT_SIZE - offset, TargetChunkSize); // bounds chunksize
         getBuildInfoJson(tempBuff, chunkSize, offset); // copies chunkSize bytes with offset from progmem to tempBuff
+        
         result = dev->streamChunk((byte*)tempBuff, chunkSize, offset, 500);
-        if (result != StreamOpOutcome::OK) return false;
+        if (result != StreamOpOutcome::OK) {
+            //_debug_blink_builtin(5, 250);
+            return false;
+        }
+        //_debug_blink_builtin(3, 10);
         offset += chunkSize;
     }
 
-    dev->streamEnd(PACKID_DEV_INFO_RESP);
+    result = dev->streamEnd(PACKID_DEV_INFO_RESP);
+    if (result != StreamOpOutcome::OK) _debug_blink_builtin(10, 100);
     return false;
 }
 
@@ -394,9 +405,11 @@ uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
 
 
 StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs) {
-    if (streamCtx.initiated) return StreamOpOutcome::ALREADY_INITIATED; // guard
+    // removed guard, because we want stream begin to always restart state
+    //if (streamCtx.initiated) return StreamOpOutcome::ALREADY_INITIATED; // guard
     sendPacket(buffSize, PACKID_LARGETX_BEGIN);
     streamCtx.buffSize = buffSize;
+
     auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
     if (!rmning) return StreamOpOutcome::TIMED_OUT;
 
@@ -410,16 +423,15 @@ StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs)
 StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs) {
     if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED; // guard if stream was not accepted
     
-    // E CORRETTO SIZE - OFFSET ?
-    if (offset >= size) return StreamOpOutcome::OFFSET_OUT_OF_BOUNDS;
-    auto actualChunkSize = min(streamCtx.buffSize, size - offset);
+    if (offset + size > streamCtx.buffSize) return StreamOpOutcome::CHUNK_OUT_OF_BOUNDS;
+    //auto actualChunkSize = min(streamCtx.buffSize, size - offset);
     clearTxBuff(); // make sure tx buffer is clear
 
     uint64_t rmning = 0;
     for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
         // fills the tx buffer
         txObj(offset);
-        txBytes(buffer + offset, actualChunkSize);
+        txBytes(buffer, size);
         send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
 
         rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
@@ -434,8 +446,8 @@ StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t 
 
 StreamOpOutcome SerialDevice::streamEnd(uint8_t packId) {
     if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED;
-    sendPacket(packId, PACKID_LARGETX_END);
     streamCtx.initiated = false;
+    sendPacket(packId, PACKID_LARGETX_END);
     return StreamOpOutcome::OK;
 }
 
