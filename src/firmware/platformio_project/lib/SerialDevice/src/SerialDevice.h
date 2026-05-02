@@ -40,6 +40,32 @@ enum StreamOpOutcome {
     CHUNK_OUT_OF_BOUNDS = -5
 };
 
+
+// ======================= DEFAULT PACKET IDs (reserved 208-239) =======================
+// note: shifted packets to fit in 16 wide slots, so that the handlers table is more efficient.
+// default packets IDs (reserved 208-229)
+#define PACKID_IDENT_RQST 208
+#define PACKID_IDENT_RESP 209
+#define PACKID_DIAGNOSTIC 210
+#define PACKID_PING 211
+#define PACKID_DEV_INFO_RQST 212
+#define PACKID_DEV_INFO_RESP 213
+#define PACKID_INVALID_PACKET 214
+
+// packets for large transfer
+#define PACKID_LARGETX_BEGIN 215
+#define PACKID_LARGETX_CHUNK 216
+#define PACKID_LARGETX_BEGIN_RESP 217
+#define PACKID_LARGETX_ACK 218
+#define PACKID_LARGETX_END 219
+
+// debug hooks (reserved 230-239)
+#define PACKID_DEBUG_TRIGGER_IDENT_RQST 230
+#define PACKID_DEBUG_TRIGGER_LARGE_TX 231
+#define PACKID_DEBUG_FREERAM 232
+
+
+/*  OLD VERSION
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
 // default packets IDs (reserved 200-219)
@@ -62,6 +88,8 @@ enum StreamOpOutcome {
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 220
 #define PACKID_DEBUG_TRIGGER_LARGE_TX 221
 #define PACKID_DEBUG_FREERAM 222
+*/
+
 
 // ======================= SERIAL DEVICE CLASS =======================
 
