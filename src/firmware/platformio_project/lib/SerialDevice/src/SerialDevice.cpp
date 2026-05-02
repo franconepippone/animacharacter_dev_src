@@ -446,45 +446,30 @@ StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t 
 
 StreamOpOutcome SerialDevice::streamEnd(uint8_t packId) {
     if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED;
-    streamCtx.initiated = false;
     sendPacket(packId, PACKID_LARGETX_END);
+    streamCtx.initiated = false;
     return StreamOpOutcome::OK;
 }
 
 uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, uint32_t timeoutMs, uint8_t chunkSize) 
 {
-    sendPacket(size, PACKID_LARGETX_BEGIN);
-    //sendBytes((byte*)&size, sizeof(size), PACKID_LARGETX_BEGIN);
-
-    auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
-    if (!rmning) return 0;  // if response times out
-
-    bool transfOk; // if peer has agreed to the transfer 
-    recvPacket(transfOk);
-    if (!transfOk) return 0;
+    if (streamBegin(size, timeoutMs) != StreamOpOutcome::OK) {
+        return 0;
+    }
 
     uint32_t offset = 0;
-    uint32_t actualChunkSize = 0;
-    while (offset < size)
-    {
-        actualChunkSize = min((uint32_t)chunkSize, size - offset);
-        clearTxBuff(); // make sure tx buffer is clear
-
-        for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
-            // fills the tx buffer
-            txObj(offset);
-            txBytes(buffer + offset, actualChunkSize);
-            send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
-
-            rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
-            if (rmning) break;
+    while (offset < size) {
+        uint32_t actualChunkSize = min((uint32_t)chunkSize, size - offset);
+        StreamOpOutcome result = streamChunk(buffer + offset, actualChunkSize, offset, timeoutMs);
+        if (result != StreamOpOutcome::OK) {
+            return 0;
         }
-        if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
         offset += actualChunkSize;
     }
 
-    sendPacket(packId, PACKID_LARGETX_END);
-    return offset + actualChunkSize;
+    // send end packet, preserve original behavior by not failing the return value on end error
+    streamEnd(packId);
+    return offset;
 }
 
 
