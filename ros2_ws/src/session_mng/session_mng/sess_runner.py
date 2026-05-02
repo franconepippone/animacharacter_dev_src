@@ -1,62 +1,66 @@
-from typing import Callable, Any
-from rclpy.logging import get_logger
+from rclpy.logging import RcutilsLogger
+from typing import Callable
 import threading
 import pynng
 import time
 from .sess_creator import SessionContext
-import logging
 
 ### NOTE this class also needs to have a ros2 publisher access to publish data to the correct topics,
 # we can pass it as a parameter to the constructor, or have a setter method
 
 class SessionRunner:
     def __init__(self):
-        self.logger = get_logger("session_runner")
+        self.logger = RcutilsLogger("session_runner")
         self.crnt_ctx: SessionContext | None = None
         self.on_termination_cb: Callable[[SessionContext], bool] | None = None
-    
-    def on_session_termination(self, cb: Callable[[SessionContext], bool]) -> None:
-        """
-        Register a function to be executed when a session needs to be terminated. This delegates
-        the handling of session destruction to an external entity; this class
-        simply signals the "intent" of termination via the callback.
-
-        TODO also stops the runner??
-        
-        :param cb: Callback function to be called upon session termination
-        :type cb: Callable[[SessionContext], None]
-        """
-        self.on_termination_cb = cb
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._run_session: Callable[[SessionContext, threading.Event], None] | None = None
 
     def run(self, ctx: SessionContext):
+        """Start the session runner in a background thread."""
         self.crnt_ctx = ctx
-        thread = threading.Thread(target=self._run_session, args=(ctx,))
-        thread.start()
-        # also start the stream (udp) packet forwarder here?
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_session_wrapper, args=(ctx,), daemon=True)
+        self._thread.start()
+        self.join(0.5)  # wait briefly to ensure the thread has started
 
-    def _run_session(self, ctx: SessionContext):
-        self.logger.info("Session runner started")
-        # example nng echo server
-        while True:
-            try:
-                data = ctx.nng_sock.recv(True)
-            except pynng.Timeout:
-                continue
+    def stop(self) -> None:
+        """Signal the runner thread to stop gracefully."""
+        self._stop_event.set()
+
+    def join(self, timeout: float | None = None) -> None:
+        """Wait for the runner thread to finish."""
+        if self._thread is not None:
+            self._thread.join(timeout)
+    
+    def bind_session_runner(self, runner: Callable[[SessionContext, threading.Event]]):
+        """Assigns the long running method that will be used to run the session.
+        Takes 'SessionContext' and a 'stop request' event as parameters. 
+        The runner should periodically check the 'stop request' event to know when to terminate.
+        """
+        self._run_session = runner
+
+    def _run_session_wrapper(self, ctx: SessionContext):
+        """Default session runner logic, can be overridden by bind_session_runner."""
+        if self._run_session is None:
+            self.logger.error("No session runner assigned")
+            return
             
-            self.logger.info(f"Received data from client: {data}")
-            ctx.nng_sock.send(data)
+        self.logger.info(f"Session runner started with context: {ctx}")
+        try:
+            self._run_session(ctx, self._stop_event)
+        except Exception as e:
+            self.logger.error(f"Session runner crashed -> {e}")
+
+        self.logger.info("Session runner stopping")
         
 
-        # implement session running logic here
-
-
-        
 
 
 
 
-
-
+"""
 
 
 def main():
@@ -123,8 +127,8 @@ def main():
 
 #@threaded
 def bin_packet_forwader(conn, session_running: threading.Event):
-    """Forwards binary motionframe packets directly to the hardware unit
-    """
+    ""\"Forwards binary motionframe packets directly to the hardware unit
+    "\""
     hardware_server = hwmng.get_current_connection()
     
     while session_running.is_set():
@@ -161,3 +165,4 @@ def process_packet(packet) -> bool:
         case SessionEnd():
             return True
 
+"""

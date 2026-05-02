@@ -2,34 +2,32 @@
 
 A simple Python package for defining, registering, and executing runtime behaviors.
 
-This package was built for the Animacharacter Engine, a ROS2-based system that uses behaviors to add custom functionality to robots. It provides a behavior context interface designed for direct interaction with ROS2 systems while keeping behavior execution separate from the application logic.
+This package was built for the Animacharacter Engine, a ROS2-based system that uses behaviors to add custom functionality to robots. It provides a behavior context interface designed for direct interaction with the otherwise hidden ROS2-based systems.
 
 ## What this package does
 
 This package provides:
 
-- a registry for named behaviors and group labels,
-- a scheduler that advances active behaviors on each tick,
-- a shared `BehaviorContext` passed into every behavior,
+- a registry for storing named behaviors and group labels,
+- a scheduler to run behaviors,
+- a shared customizable `BehaviorContext` object passed into every behavior,
 - a built-in publish/subscribe system for behavior-to-behavior messaging,
-- decorators and dynamic loading utilities for plugin modules.
+- decorators and dynamic loading of behaviors utilities for external plugin modules.
 
 ## What is a behavior?
 
-A behavior is a unit of work that runs over time, yields control back to the scheduler, and can stop when finished. Behaviors are intended for runtime logic that needs to execute in steps rather than all at once.
+A behavior is a unit of work that runs over time, yields control back to the scheduler, and can stop when finished. Behaviors are intended for logic that needs to be executed in the background to add custom functionality to a system.
 
 A behavior can be one of two forms:
 
 1. a generator function that receives a `BehaviorContext` and yields `BehaviorAction` values,
 2. an `AbstractBehavior` subclass that defines `setup()` and `tick()` methods.
 
-Common use cases include robot behaviors, simulation steps, or any stateful sequence that needs shared context and ordered execution.
-
 ## Core concepts
 
 ### BehaviorEngine
 
-`BehaviorEngine` is the main entry point.
+`BehaviorEngine` is the main higher-level class.
 
 It holds:
 
@@ -41,7 +39,7 @@ It holds:
 
 `BehaviorRegistry` stores behaviors by name and optional group labels.
 
-You can load a behavior once and play it later by name.
+You can load a behavior once and borrow it later by name.
 
 ### BehaviorExecutor
 
@@ -56,7 +54,8 @@ The default context includes:
 - publisher/subscriber support for message passing,
 - helper methods to create publishers and subscribers.
 
-Use it to store runtime data or exchange messages between behaviors.
+Use it to store runtime data or exchange messages between behaviors, and subclass it
+to create a custom interface for behaviors to interact with your external system.
 
 ### Plugin loading
 
@@ -182,21 +181,15 @@ python examples/plugin_usage.py
 
 ## API summary
 
-- `load_behavior(name, behavior, groups=None, **metadata)`: register a behavior under a name.
-- `play_behavior(name, priority=0)`: start a registered behavior.
-- `play_behavior_group(group, priority=0)`: start all behaviors in a group.
-- `tick()`: advance all running behaviors one scheduler step.
-- `stop_behavior(name)`: stop a running behavior.
-- `stop_all()`: stop every behavior currently running.
-- `running_behaviors()`: get a list of active behavior names.
-- `loaded_behaviors()`: get a list of registered behaviors.
+- `BehaviorEngine.load_behavior(name, behavior, groups=None, **metadata)`: register a behavior under a name.
+- `BehaviorEngine.play_behavior(name, priority=0)`: start a registered behavior.
+- `BehaviorEngine.play_behavior_group(group, priority=0)`: start all behaviors in a group.
+- `BehaviorEngine.tick()`: advance all running behaviors one scheduler step.
+- `BehaviorEngine.stop_behavior(name)`: stop a running behavior.
+- `BehaviorEngine.stop_all()`: stop every behavior currently running.
+- `BehaviorEngine.running_behaviors()`: get a list of active behavior names.
+- `BehaviorEngine.loaded_behaviors()`: get a list of registered behaviors.
 - `behavior(name, groups=None, **metadata)`: decorator for plugin behaviors.
 - `load_behaviors_from_module(engine, module)`: register decorated behaviors from a loaded module.
 - `load_behaviors_from_file(engine, path)`: import a plugin file and register its behaviors.
 - `load_behaviors_from_directory(engine, directory, pattern="*.py")`: import all plugin files in a folder.
-
-## When to choose this package
-
-Choose this package when you need a small, explicit behavior scheduler with minimal dependencies.
-
-It is not a general-purpose workflow engine; it is intended for systems that can benefit from small, reusable behavior definitions and a shared runtime context.

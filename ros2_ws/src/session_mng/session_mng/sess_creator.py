@@ -1,10 +1,10 @@
 from dataclasses import dataclass
+from rclpy.logging import RcutilsLogger
 import secrets
 import pynng
-from rclpy.logging import get_logger
 
 from pysafeudp import SafeUdpSock
-
+from packetcodec import PacketDecoder
 
 @dataclass
 class SessionContext:
@@ -43,7 +43,7 @@ class SessionCreator:
     """
 
     def __init__(self) -> None:
-        self.logger = get_logger("session_creator")
+        self.logger = RcutilsLogger("session_creator")
 
     def destroy_session(self, context: SessionContext) -> bool:
         """
@@ -75,7 +75,7 @@ class SessionCreator:
                 send_timeout=5000
             )
             sess_sock.listen("tcp://127.0.0.1:0")   # binds on random port on this host
-            sess_addr = sess_sock.listeners[0].url
+            sess_addr: str = sess_sock.listeners[0].url
             sess_port = int(sess_addr.split(":")[-1])
 
             stream_secret_key = secrets.token_urlsafe(32)
@@ -90,15 +90,14 @@ class SessionCreator:
                 stream_secret_key=stream_secret_key,
                 secret_token=sess_token
             )
-
-            self.active_session = ctx
+            self.logger.info(f"Session created successfully, ctx: {ctx}")
             return SessionCreationResult(
                 success=True,
                 context=ctx
             )
 
         except Exception as e:
-            self.logger.error(f"An unexpected exception was raised inside 'create_session': {e}")
+            self.logger.error(f"An unexpected exception was raised during 'create_session': {e}")
             return SessionCreationResult(
                 success=False,
                 context=None,
