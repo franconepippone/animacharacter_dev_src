@@ -5,7 +5,7 @@
 #include <timer.h>
 #include "FastTable.h"
 
-//#define USE_HASHMAP
+#define SERIALDEVICE_USE_HASHMAP
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
@@ -72,7 +72,7 @@ enum StreamOpOutcome {
 /// SerialTransfer repository: https://github.com/PowerBroker2/SerialTransfer
 class SerialDevice {
 private:
-#ifdef USE_HASHMAP
+#ifdef SERIALDEVICE_USE_HASHMAP
     // forced to use int instead of uint8_t, because there's no builting template specialization in the library
     Hashtable<int, PacketHandler> handlersTable;
 #else
