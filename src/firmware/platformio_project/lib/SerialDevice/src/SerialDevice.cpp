@@ -284,7 +284,7 @@ uint8_t SerialDevice::poll() {
     uint8_t amount = available();
     if (amount) {
         const uint8_t latestPackId = txf.currentPacketID();
-        PacketHandler *hndlr = handlersTable.get(latestPackId);
+        const PacketHandler* hndlr = handlersTable.get(latestPackId);
         if (hndlr) {
             (*hndlr)(this);
             return 0;
