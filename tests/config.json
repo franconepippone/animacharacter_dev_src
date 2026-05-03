@@ -1,8 +1,4 @@
 {
-   "_datachan" : {
-      "pippo" : false,
-      "msg" : "hello"
-   },
    "head": {
       "ear_left@8": {
          "exp_decay": 0.5
@@ -14,11 +10,9 @@
       },
       "eyes": {
          "eyelid_bl@7": {
-            "wideness": 3
-         },
-         "eyelid_tr@4": {
-            "wideness": 2,
-            "gehi": 12.3
+            "exp_decay": 0.5,
+            "limit_low": -1,
+            "limit_upper": 1
          },
          "eyes_h@1": {
             "closed": true,
@@ -44,12 +38,9 @@
       }
    },
    "body": {
-      "lean@24": {
-         "max_accel": 150,
-         "max_vel": 20
-      },
       "turn@25": {
-         "stop": false
+         "max_vel": 100,
+         "max_accel": 50
       }
    }
 }

@@ -15,6 +15,7 @@ channels = [
 
   # MOUTH
   { id = 10, name = "MOUTH",          type = "int16" },
+  { id = 10, name = "BODY_ROLL",          type = "int16" },
 
   # NECK
   { id = 11, name = "SERVO_NECK_R",   type = "int16" },
