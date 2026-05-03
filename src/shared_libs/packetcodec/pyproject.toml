@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Simple packet encoding / decoding framework between python objects <-> bytes"
 readme = "README.md"
 authors = []
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]

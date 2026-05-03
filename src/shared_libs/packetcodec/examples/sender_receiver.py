@@ -10,7 +10,7 @@ class MyPacket(BasePacket):
     val2: float
     msg: str
 
-    # optionally, encode could be called on the instance itself, but it's preferred to implement encode in order to avoid an object instantiation
+    # optionally, encode could be called on the instance itself, but it's preferred to implement static encode in order to avoid an object instantiation
     #def selfencode(self) -> bytes:
     #    return self.encode(self.val1, self.val2, self.msg)
 
