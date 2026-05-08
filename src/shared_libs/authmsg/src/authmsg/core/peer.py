@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 
 import pynng
-
+from ..udp_endpoint import UDPEndpoint
 
 from ..protocol.wire_protocol import SecureWireProtocol
 from ..protocol.crypto import normalize_psk
@@ -13,6 +13,18 @@ from .exceptions import IsAlreadyInitialized, IsNotInitialized
 Address = Tuple[str, int]
 
 class PeerBase(ABC):
+    """Base class for a Peer in a peer-to-peer authenticated connection.
+    Integrity and authentication are provided via psk-HMAC, and replay protection is provided via seq. number.
+
+    Use 'send' / 'recv' to exchange data with peer. Derived classes implement '_transport_send' and
+    '_transport_recv' to provide transport-dependant logic for forwarding / receiving bytes. Derived classes
+    should also implement some kind of 'dial' or 'connect' method to enstablish the connection, and setting the
+    peer state to initialized (overriding 'is_initialized').
+
+    Optional async '_transport_asend' and '_transport_arecv' can be implemented for async support via
+    'asend' / 'arecv'.
+
+    """
     def __init__(self, psk: str | bytes) -> None:
         self.proto = SecureWireProtocol(normalize_psk(psk))
 
@@ -26,8 +38,7 @@ class PeerBase(ABC):
         """Returns True if the peer is ready to send or recv"""
 
     @abstractmethod
-    def close(self):
-        """Closes this peer forever. This ends the peer's lifecycle."""
+    def _close(self): ...
 
     @abstractmethod
     def _drop_connection(self):
@@ -36,6 +47,11 @@ class PeerBase(ABC):
         
         How connections are re-acquired is implementation dependant.
         """
+
+    def close(self):
+        """Closes this peer forever. This ends the peer's lifecycle."""
+        self._require_initialized()
+        self._close()
 
     def _require_initialized(self):
         if not self.is_initialized():
@@ -57,11 +73,16 @@ class PeerBase(ABC):
         return msg
 
     def send(self, msg: bytes) -> bool:
+        """Sends a msg to peer. Returns 'True' on success."""
         self._require_initialized()
         packet = self.proto.pack(msg)
         return self._transport_send(packet)
 
     def recv(self) -> bytes:
+        """Attempts reception of a msg from peer. This might block or timeout,
+        depending on the derived class implementation. Usually and empty byte object b'' 
+        is returned when nothing is received.
+        """
         self._require_initialized()
         packet = self._transport_recv()
         return self._finish_recv(packet)
@@ -87,70 +108,74 @@ class PeerBase(ABC):
     async def _transport_asend(self, packet: bytes) -> bool: raise NotImplementedError()
     async def _transport_arecv(self) -> bytes | None: raise NotImplementedError()
 
-class PeerUDP(PeerBase):
-    def __init__(self, port: int, psk: str | bytes | None = None) -> None:
-        super().__init__(psk or b'')
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(("0.0.0.0", port))
-        self.sock.setblocking(True)
-        self.peer_addr = None
-        self._connected = False
 
-    def dial(self, peer_addr: Address) -> None:
+
+
+
+
+class PeerUDP(PeerBase):
+    """Datagram socket based Peer. Call 'dial' to set peer address. Supports asyncio.
+    After 'close' is called, this object should not be reused.
+    """
+    def __init__(self, bind_port: int = 0, psk: Optional[str | bytes] = None, timeout: float = 5.0) -> None:
+        super().__init__(psk or b'')
+        self.udp = UDPEndpoint(bind_port)
+        self.set_timeout(timeout)
+        self._init = False
+
+    @property
+    def remote_address(self) -> Address: return self.udp._require_peer()
+    @property
+    def local_address(self) -> Address: return self.udp.local_address 
+
+    def dial(self, host: str, port: int) -> None:
+        """\"Connect\" the datagram socket to the specified address (UDP is connectionless,
+        this does not perform any handshake)"""
         self._require_not_initialized('Cannot dial after Peer is alrady initialized')
-        self.peer_addr = peer_addr
-        self._connect_besteffort()
+        self.udp.connect(host, port)
+        self._init = True
+    
+    def set_timeout(self, timeout: float):
+        self.udp.timeout = timeout
+    
+    def _close(self):
+        self.udp.close()
+        self._init = False
+    
+    def _drop_connection(self):
+        # this really does nothing?
+        return
 
     def is_initialized(self) -> bool:
-        return self.peer_addr is not None
-
-    def _connect_besteffort(self) -> bool:
-        if self._connected:
-            return True
-        
-        if not self.peer_addr:
-            raise ForbiddenOperation('Cannot connect before dialing')
-        try:
-            self.sock.connect(self.peer_addr)
-        except OSError:
-            self._connected = False
-            return False
-        self._connected = True
-        return True
+        return self._init
 
     def _transport_send(self, packet: bytes) -> bool:
-        if not self._connect_besteffort():
-            return False
-        
-        if len(packet) < MIN_PACKET_SIZE:
-            raise FramingError("Packet is too small")
-        try:
-            self.sock.send(packet)
-            return True
-        except OSError:
-            self._connected = False
-            return False
+        return self.udp.send(packet)
 
-    def _transport_recv(self, timeout: float) -> bytes:
-        if not self._connect_besteffort():
-            return b""
-        
-        try:
-            if timeout == 0:
-                self.sock.setblocking(False)
-            else:
-                self.sock.setblocking(True)
-                self.sock.settimeout(timeout)
-            return self.sock.recv(65535)
-        except OSError:
-            self._connected = False
-            return b""
+    def _transport_recv(self) -> bytes | None:
+        return self.udp.recv()
+    
+    async def _transport_arecv(self) -> bytes | None:
+        return await self.udp.arecv()
+    
+    async def _transport_asend(self, packet: bytes) -> bool:
+        return await self.udp.asend(packet)
 
 
 
 
+
+def _validate_timeout(timeout: float) -> int:
+    """Converts timeout from secs in ms and raises if negative"""
+    t = int(timeout*1000)
+    if t < 0:
+        raise ValueError("timeout cannot be negative")
+    return t
 
 class PeerTCP(PeerBase):
+    """TCP Peer (based on pynng). Call 'dial' to connect to another peer, 'listen' to listen for connections.
+    Supports asyncio. 
+    """
     def __init__(self, 
             psk: str | bytes | None = None,
             recv_timeout: float = 5.0,
@@ -158,8 +183,8 @@ class PeerTCP(PeerBase):
         ) -> None:
         super().__init__(psk or b'')
         self.sock = pynng.Pair0(
-            recv_timeout=int(recv_timeout*1000), 
-            send_timeout=int(send_timeout*1000)
+            recv_timeout=_validate_timeout(recv_timeout), 
+            send_timeout=_validate_timeout(send_timeout)
         )
         self._init = False
         self.set_blocking(True, True)
@@ -182,6 +207,11 @@ class PeerTCP(PeerBase):
         NOTE: Blocking is always enabled for async send / recv!"""
         self._block_on_recv = on_recv
         self._block_on_send = on_send
+    
+    def set_timeout(self, recv: float | None = None, send: float | None = None):
+        """Sets timeouts for send and recv operations (only works if in blocking mode)"""
+        if send is not None: self.sock.send_timeout = _validate_timeout(send)
+        if recv is not None: self.sock.recv_timeout = _validate_timeout(recv)
 
     @property
     def remote_address(self) -> Address:
@@ -208,7 +238,7 @@ class PeerTCP(PeerBase):
     def is_initialized(self) -> bool:
         return self._init
 
-    def close(self):
+    def _close(self):
         self.sock.close()
 
     # send / recv
