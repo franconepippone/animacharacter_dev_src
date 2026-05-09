@@ -75,10 +75,10 @@ class SessManagerNode(Node):
 
         context: ACSessionContext = result.handle.ctx
         response.success = True
-        response.nng_port = context.nng_port
+        response.nng_port = context.tcp_port
         response.sudp_port = context.stream_port
-        response.sudp_secret_key = context.stream_secret_key
-        response.token = context.secret_token
+        response.sudp_secret_key = context.session_secret
+        response.token = context.session_secret #TODO XXX REMOVE
         return response
 
 
