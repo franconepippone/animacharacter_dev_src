@@ -49,7 +49,7 @@ class SessionManager(Generic[SessCtxT]):
         self.active_session: SessionHandle | None = None
         self._lock = threading.Lock()
 
-    def new_session(self) -> SessionStartResult:
+    def new_session(self, args) -> SessionStartResult:
         """Create and start a new session if no active session is running."""
         with self._lock:
             # ensure only one session can be active at a time
@@ -67,7 +67,7 @@ class SessionManager(Generic[SessCtxT]):
                 )
 
             # OK, try to create session resources
-            creation_result = self._creator.create_session()
+            creation_result = self._creator.create_session(args)
             if not creation_result.success or creation_result.context is None:
                 return SessionStartResult(
                     success=False,

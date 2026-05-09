@@ -45,10 +45,10 @@ class SessionResourceManager(Generic[CtxT], ABC):
     def __init__(self, logger: LoggerLike | None = None) -> None:
         self.logger = logger if logger is not None else StupidLogger()
 
-    def create_session(self) -> SessionCreationResult[CtxT]:
+    def create_session(self, args) -> SessionCreationResult[CtxT]:
         """Create a session context and return the result object."""
         try:
-            context = self.create()
+            context = self.create(args)
             if context is None:
                 raise SessionCreationError("Session creation failed: 'create' returned None.")
             self.logger.info("Session created successfully.")
@@ -78,6 +78,6 @@ class SessionResourceManager(Generic[CtxT], ABC):
         """Release resources owned by the provided session context."""
 
     @abstractmethod
-    def create(self) -> CtxT:
+    def create(self, args) -> CtxT:
         """Construct and return a valid session context."""
         

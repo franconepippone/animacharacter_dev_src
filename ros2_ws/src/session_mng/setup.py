@@ -28,8 +28,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'start = session_mng.sess_manager_node:main',
-            'listen = session_mng.session_listener.server:main'
+            'manager = session_mng.sess_manager_node:main',
+            'listener = session_mng.session_listener.server:main'
         ],
     },
 )

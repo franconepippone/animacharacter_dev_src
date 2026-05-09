@@ -1,12 +1,14 @@
 import threading
 from typing import TYPE_CHECKING, cast, Any
 from pydantic import BaseModel
-from array import array
+from dataclasses import dataclass
+
 import rclpy
 from rclpy.logging import get_logger
 from rclpy.node import Node
 from interfaces.srv import CreateSession  # replace with your service type
 from rclpy.executors import SingleThreadedExecutor
+
 
 if TYPE_CHECKING:
     from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
@@ -23,12 +25,18 @@ class SessionCreationHttpResponse(BaseModel):
     udp_secret_key: str = ""
     token: str = ""
 
+@dataclass
+class RequestArguments:
+    ip: str
+    udp_port: int
+    meta: Any = None
+
 class RosServiceNode(Node):
     def __init__(self):
-        super().__init__('fastapi_ros_node')
+        super().__init__('session_request_listener')
         self.cli = self.create_client(CreateSession, SERVICE_NAME)
 
-    def make_session_creation_request(self, client_info: str, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
+    def make_session_creation_request(self, args: RequestArguments, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
         """
         Create a session by making a ROS2 service call to the session manager node.
         This method sends a CreateSession request to the ROS2 service and waits
@@ -40,8 +48,11 @@ class RosServiceNode(Node):
             self.get_logger().warning('A request to create a session has been made, but service was not ready yet.')
             return SessionCreationHttpResponse(success=False)
         
+        # build request
         request = CreateSession.Request()
-        request.client_info = client_info
+        request.client_ip = args.ip
+        request.client_udp_port = args.udp_port
+
         future = self.cli.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
         result = future.result()
@@ -54,10 +65,10 @@ class RosServiceNode(Node):
         return SessionCreationHttpResponse(
             success=typed_result.success,
             msg=typed_result.msg,
-            nng_port=typed_result.nng_port,
-            udp_port=typed_result.sudp_port,
-            udp_secret_key=typed_result.sudp_secret_key,
-            token=typed_result.token
+            nng_port=typed_result.tcp_port,
+            udp_port=typed_result.udp_port,
+            udp_secret_key=typed_result.session_secret,
+            token=typed_result.session_secret
         )
 
 

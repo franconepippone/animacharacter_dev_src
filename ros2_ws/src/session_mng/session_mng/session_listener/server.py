@@ -2,11 +2,10 @@ from http import client
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, ValidationError
 import uvicorn
-import logging
 
 # main.py
-from fastapi import FastAPI
-from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse, get_logger
+from fastapi import FastAPI, HTTPException
+from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse, get_logger, RequestArguments
 
 # TODO: Security improvements
 # - Move SECRET_KEY and CLIENT_KEY to environment variables (e.g., os.getenv)
@@ -26,7 +25,7 @@ from .ros_node import spin_threaded, get_node, SessionCreationHttpResponse, get_
 
 ### LOGGING CONFIGURATION
 
-logger = get_logger("fastapi_authenticator")
+logger = get_logger("session_listener_server")
 
 
 # FASTAPI APP 
@@ -41,21 +40,25 @@ CLIENT_KEY = "supersecret-client-key"
 
 class AuthRequest(BaseModel):
     apikey: str
+    udp_port: int
 
 
 @app.post("/auth")
 def auth(req: AuthRequest, rqst: Request):
     # make this more robust, use hashes?
     if req.apikey != CLIENT_KEY:
-        return SessionCreationHttpResponse(success=False, msg="Wrong API key")
+        raise HTTPException(401, "Authentication failed: wrong key")
     
-    if rqst.client is not None:
-        client_info = f"({rqst.client.host}:{rqst.client.port})"
-    else:
-        client_info = "unknown-client-info"
-
+    if rqst.client is None:
+        raise HTTPException(400, "Could not get client address")
+    
+    creation_request_args = RequestArguments(
+        rqst.client.host,
+        req.udp_port
+    )
+    
     logger.info("Got auth request with valid API key, sending internal session creation request.")
-    sess_resp: SessionCreationHttpResponse = get_node().make_session_creation_request(client_info)
+    sess_resp: SessionCreationHttpResponse = get_node().make_session_creation_request(creation_request_args)
     
     logger.debug(f"Session response from node is: {sess_resp}")
 
@@ -75,7 +78,7 @@ def auth(req: AuthRequest, rqst: Request):
 def main():
     t = spin_threaded() # this launches the ros node in another thread
     uvicorn.run(
-        "fastapi_authenticator.auth_server:app",       # module:variable
+        "session_mng.session_listener.server:app",       # module:variable
         host="0.0.0.0",
         port=8000,
         reload=False      # reload=True breaks single-process ROS nodes

@@ -6,7 +6,7 @@ from std_msgs.msg import String
 from interfaces.srv import CreateSession
 from interfaces.msg import MotionframeArray
 
-from .session_implementations import ACSessionContext, ACSessionRunner, ACSessResourceMng
+from .session_implementations import ACSessionContext, ACSessionRunner, ACSessResourceMng, ACSessionCreationArguments
 from .session import SessionManager
 
 from typing import TYPE_CHECKING
@@ -20,7 +20,7 @@ CONFIG_TOPIC = 'config_update'
 
 class SessManagerNode(Node):
     def __init__(self) -> None:
-        super().__init__("sess_manager_node")
+        super().__init__("session_manager")
 
         self.srv = self.create_service(
             CreateSession,
@@ -62,9 +62,14 @@ class SessManagerNode(Node):
 
     # handler for session creation service
     def create_session_srv_cb(self, request: CreateSessionRequest, response: CreateSessionResponse) -> CreateSessionResponse:
-        self.get_logger().info(f"Received session creation request from {request.client_info}.")
+        self.get_logger().info(f"Received session creation request from {request.client_ip}.")
 
-        result = self.session_manager.new_session()
+        create_args = ACSessionCreationArguments(
+            request.client_ip,
+            request.client_udp_port
+        )
+
+        result = self.session_manager.new_session(create_args)
         if result.handle is None or not result.success: # on failure to make a new session
             response.success = False
             response.msg = result.error_msg if result.error_msg else "Unknown error"
@@ -75,10 +80,9 @@ class SessManagerNode(Node):
 
         context: ACSessionContext = result.handle.ctx
         response.success = True
-        response.nng_port = context.tcp_port
-        response.sudp_port = context.stream_port
-        response.sudp_secret_key = context.session_secret
-        response.token = context.session_secret #TODO XXX REMOVE
+        response.tcp_port = context.tcp_port
+        response.udp_port = context.stream_port
+        response.session_secret = context.session_secret
         return response
 
 

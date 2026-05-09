@@ -1,19 +1,24 @@
 from dataclasses import dataclass
+import secrets
 import asyncio
 
 from interfaces.msg import MotionframeArray
 
-from session import SessionResourceManager, SessionRunner
-from session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
+from .session import SessionResourceManager, SessionRunner
+from .session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
+from .packet_formats import *
 
-import secrets
 from authmsg import PeerTCP, PeerUDP
 from packetcodec import PacketDecoder, UnknownPacket
-from packet_formats import *
 
 # ====================
 # SESSION CONTEXT
 # ====================
+
+@dataclass(frozen=True)
+class ACSessionCreationArguments:
+    client_ip: str
+    client_udp_port: int
 
 
 @dataclass
@@ -45,7 +50,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
         except Exception as exc:
             raise SessionDestructionError() from exc
 
-    def create(self) -> ACSessionContext:
+    def create(self, args: ACSessionCreationArguments) -> ACSessionContext:
         """Allocate transport resources and return a session context."""
         sess_sock = None
         stream_sock = None
@@ -58,6 +63,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
             sess_port = sess_sock.local_address[1]
             
             stream_sock = PeerUDP(0, psk=session_secret)
+            stream_sock.dial(args.client_ip, args.client_udp_port)
             stream_port = stream_sock.local_address[1]
 
             codec = PacketDecoder()
@@ -135,7 +141,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
             # handle packets
 
-            
+
 
     async def _motionframe_forwarder(self, ctx: ACSessionContext, stop_event: asyncio.Event):
         """Receive motionframes from the stream socket and republish them in ros2 topics."""
