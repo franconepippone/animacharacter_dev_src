@@ -1,15 +1,15 @@
 from dataclasses import dataclass
-import threading
+import asyncio
 
 from interfaces.msg import MotionframeArray
-
-from pysafeudp.safeudpsock import SafeUdpSock
 
 from session import SessionResourceManager, SessionRunner
 from session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
 
-import pynng
 import secrets
+from authmsg import PeerTCP, PeerUDP
+from packetcodec import PacketDecoder, UnknownPacket
+from packet_formats import *
 
 # ====================
 # SESSION CONTEXT
@@ -22,12 +22,12 @@ class ACSessionContext:
     Container class for a session's data: includes open sockets, ports, secret keys/tokens.
     This is a pure data container and does not implement session lifecycle logic.
     """
-    nng_sock: pynng.Pair0
-    nng_port: int
-    stream_sock: SafeUdpSock
+    tcp_sock: PeerTCP
+    tcp_port: int
+    stream_sock: PeerUDP
     stream_port: int
-    stream_secret_key: str
-    secret_token: str
+    codec: PacketDecoder
+    session_secret: str
 
 
 # ====================
@@ -40,7 +40,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
     def destroy(self, context: ACSessionContext):
         """Release all resources held by a session context."""
         try:
-            context.nng_sock.close()
+            context.tcp_sock.close()
             context.stream_sock.close()
         except Exception as exc:
             raise SessionDestructionError() from exc
@@ -51,39 +51,39 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
         stream_sock = None
 
         try:
-            sess_token = secrets.token_urlsafe(64)
+            session_secret = secrets.token_urlsafe(64)
 
-            sess_sock = pynng.Pair0(recv_timeout=5000, send_timeout=5000)
-            sess_sock.listen("tcp://127.0.0.1:0")
-            sess_addr = sess_sock.listeners[0].url
-            sess_port = int(sess_addr.split(":")[-1])
+            sess_sock = PeerTCP(session_secret)
+            sess_sock.listen(0)
+            sess_port = sess_sock.local_address[1]
+            
+            stream_sock = PeerUDP(0, psk=session_secret)
+            stream_port = stream_sock.local_address[1]
 
-            stream_secret_key = secrets.token_urlsafe(32)
-            stream_sock = SafeUdpSock(stream_secret_key.encode())
-            stream_port = stream_sock.bind()
+            codec = PacketDecoder()
+            codec.register_packet(MyPacket)
+            # TODO configure this..
 
             ctx = ACSessionContext(
-                nng_sock=sess_sock,
-                nng_port=sess_port,
+                tcp_sock=sess_sock,
+                tcp_port=sess_port,
                 stream_sock=stream_sock,
                 stream_port=stream_port,
-                stream_secret_key=stream_secret_key,
-                secret_token=sess_token,
+                codec = codec,
+                session_secret=session_secret
             )
             self.logger.info(f"Session created successfully, ctx={ctx}")
             return ctx
 
         except Exception as exc:
-            if sess_sock is not None:
-                try:
-                    sess_sock.close()
-                except Exception:
-                    pass
-            if stream_sock is not None:
-                try:
-                    stream_sock.close()
-                except Exception:
-                    pass
+            try:
+                if sess_sock: sess_sock.close()
+            except Exception:
+                pass
+            try:
+                if stream_sock: stream_sock.close()
+            except Exception:
+                pass
             raise SessionCreationError() from exc
 
 
@@ -101,41 +101,63 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
     def run(self, ctx: ACSessionContext) -> None:
         """Core session logic, runs in a background thread. Should return when session ends."""
-        # once this returns, session ends.
+        asyncio.run(self._run_main(ctx))
 
     ####
     #### --------------------------- SESSION IMPLEMENTATION ---------------------------
-    ####
+    ####                              asyncio - based
 
-    def _motionframe_forwarder(self, ctx: ACSessionContext, stop_event: threading.Event):
-        """Receive motionframes from the session socket and republish them."""
+    # entrypoint
+    async def _run_main(self, ctx: ACSessionContext):
+        # once this returns, session ends.
+        all_stop = asyncio.Event()
+
+        loop = asyncio.get_running_loop()
+        t1 = loop.create_task(self._motionframe_forwarder(ctx, all_stop))
+        
+        await asyncio.gather(t1)
+    
+    async def _main_session_receiver(self, ctx: ACSessionContext, stop_event: asyncio.Event):
+        
+        peer_tcp = ctx.tcp_sock
+        peer_tcp.set_timeout(1.0, 1.0)
+
+        while not stop_event.is_set():
+            # should never raise
+            msg = await peer_tcp.arecv()
+
+            packet = ctx.codec.parse_bytes(msg)
+            match packet:
+                case MyPacket():
+                    ...
+                case UnknownPacket():
+                    self.logger.warning('Unknown packet received')
+
+            # handle packets
+
+            
+
+    async def _motionframe_forwarder(self, ctx: ACSessionContext, stop_event: asyncio.Event):
+        """Receive motionframes from the stream socket and republish them in ros2 topics."""
+
+        peer = ctx.stream_sock
+        peer.set_timeout(1.0)
+
         while not stop_event.is_set():
             try:
-                motionframes_raw = ctx.stream_sock.recv(timeout=1.0)
+                motionframes_raw = await peer.arecv()
             except Exception as exc:
                 self.logger.error(f"Error receiving motionframes: {exc}")
                 continue
             
-            # convert motionframes raw 
+            if motionframes_raw == b"":
+                continue # either timeout or invalid message
+            
 
+            # TODO convert motionframes raw 
             motionframe_message = MotionframeArray()
             self.motionframe_publisher.publish(motionframe_message)
 
         stop_event.set()
-
-    ## core method
-
-    def _run_session(self, ctx: ACSessionContext):
-        # once this returns, session ends.
-
-        all_stop = threading.Event()
-        
-        t_stream = threading.Thread(
-            target=self._motionframe_forwarder,
-            args=(ctx, all_stop),
-            daemon=True,
-        )
-        t_stream.start()
-        t_stream.join()
 
     ###### --------------------------------------

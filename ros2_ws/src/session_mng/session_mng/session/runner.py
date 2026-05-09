@@ -17,9 +17,8 @@ class SessionRunnerCallable(Protocol, Generic[SessCtxT]):
 class SessionCleanupCallable(Protocol, Generic[SessCtxT]):
     def __call__(self, ctx: SessCtxT) -> None: ...
 
-
-class SessionRunnerError(RuntimeError):
-    pass
+# exception
+class SessionRunnerError(RuntimeError): ...
 
 
 @dataclass
