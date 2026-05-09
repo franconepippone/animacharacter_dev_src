@@ -11,7 +11,11 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'uvicorn',
+        'fastapi' 
+    ],
     zip_safe=True,
     maintainer='americo',
     maintainer_email='americo.cherubini2003@gmail.com',
@@ -24,7 +28,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'start = session_mng.sess_manager_node:main'
+            'start = session_mng.sess_manager_node:main',
+            'listen = session_mng.session_listener.server:main'
         ],
     },
 )

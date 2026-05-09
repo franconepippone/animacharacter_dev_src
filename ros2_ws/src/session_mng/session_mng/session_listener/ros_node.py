@@ -7,7 +7,6 @@ from rclpy.logging import get_logger
 from rclpy.node import Node
 from interfaces.srv import CreateSession  # replace with your service type
 from rclpy.executors import SingleThreadedExecutor
-import yaml
 
 if TYPE_CHECKING:
     from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
