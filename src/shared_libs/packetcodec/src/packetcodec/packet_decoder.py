@@ -60,5 +60,5 @@ class PacketDecoder:
         
         payload_data: bytes = data[PACKTYPEID_SIZE_BYTES:]
         packet = packet_class.decode(payload_data)
-        packet._raw_bytes = payload_data
+        packet._raw_bytes = data
         return packet 
