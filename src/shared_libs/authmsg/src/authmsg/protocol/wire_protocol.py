@@ -15,6 +15,9 @@ class SecureWireProtocol:
         self.send_sequence: int = 0
         self.last_received_sequence: int = 0
     
+    def set_psk(self, psk: bytes):
+        self.psk = psk
+    
     def pack(self, msg: bytes) -> bytes:
         """Construct a ready-to-send frame wrapping 'msg'"""
         self.send_sequence += 1

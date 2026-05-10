@@ -20,8 +20,9 @@ def test_normal_usage():
     with pytest.raises(IsNotInitialized):
         peer2.recv()
 
-    peer1.listen(8001)
-    peer2.dial('127.0.0.1', 8001)
+    peer1.listen(0)
+    print(peer1.local_address)
+    peer2.dial(*peer1.local_address)
 
     time.sleep(.5)
 
@@ -46,8 +47,8 @@ def test_wrong_key():
     peer1 = PeerTCP(psk=KEY1, recv_timeout=.5)
     peer2 = PeerTCP(psk=KEY2, recv_timeout=1)
 
-    peer1.listen(8001)
-    peer2.dial('127.0.0.1', 8001)
+    peer1.listen(0)
+    peer2.dial(*peer1.local_address)
 
     assert peer1.send(b"try")
     assert peer2.recv() == b"" # receives empty
@@ -64,8 +65,8 @@ async def test_async():
     peer1 = PeerTCP()
     peer2 = PeerTCP()
 
-    peer1.listen(8001)
-    peer2.dial('127.0.0.1', 8001)
+    peer1.listen(0)
+    peer2.dial(*peer1.local_address)
 
     async def deffered_send():
         await asyncio.sleep(2.0)
@@ -82,3 +83,6 @@ async def test_async():
     assert (await peer2.arecv()) == b"last"
     print("got it")
     await task
+
+    peer1.close()
+    peer2.close()

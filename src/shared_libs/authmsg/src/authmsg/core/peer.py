@@ -27,6 +27,9 @@ class PeerBase(ABC):
     """
     def __init__(self, psk: str | bytes) -> None:
         self.proto = SecureWireProtocol(normalize_psk(psk))
+    
+    def set_psk(self, psk: str | bytes):
+        self.proto.set_psk(normalize_psk(psk))
 
     @property
     def remote_address(self) -> Address: raise NotImplementedError()
@@ -222,6 +225,11 @@ class PeerTCP(PeerBase):
     
     @property
     def local_address(self) -> Address:
+        if self.sock.listeners:
+            url: str = self.sock.listeners[0].url
+            host, port = url.split('//')[1].split(':')
+            return host, int(port)
+        
         if not self.sock.pipes:
             raise IsNotInitialized("Failed to get address (socket has no pipes)")
         pipe: pynng.nng.Pipe = self.sock.pipes[0]
