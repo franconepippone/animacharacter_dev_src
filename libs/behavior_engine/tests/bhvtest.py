@@ -26,7 +26,7 @@ class VirtualAxis:
        return False
 
 class BooleanAxis(VirtualAxis):
-    def is_true(self) -> bool: return True
+    def true(self) -> bool: return True
 
 class ConfigSubscription:
    def has_new(self) -> bool: ...
@@ -51,7 +51,7 @@ class EngineInterface(BehaviorContext):
     def create_integer_axis(self, id, range, override: bool = True) -> VirtualAxis: return VirtualAxis(id)
     
     # internally uses configurations to receive arbitrary data
-    def create_data_channel(self, name: str): ...
+    def create_data_channel(self, name: str) -> object: ...
 
     # low level
     def get_latest_axis_value(self, id): ...
@@ -104,6 +104,15 @@ def neck_control(intf: EngineInterface):
 
     intf.publish_config({}) # any dict
 
+    # this internally uses the json data channels for configs to exchange information from client <-> server
+    #essentially, this is just intf.subscribe_to_configs(path='__channels__/channel-a')
+    channel_a = intf.create_data_channel('channel-a')
+    channel_a.publish(dict()) # publish any json-serializable object
+    channel_a.pending() # returns the amount of pending messages
+    channel_a.read() # read the next message, raise if there aren't any
+    channel_a.readall() # returns iterable of all the pending messages
+    channel_a.get_latest() # returns the latest received message. clears the pending queue
+
     # potenzialmente intf puo esporre anche metodi a piu basso livello
     # come: (che è internamente chiamato dagli oggetti "virtual_axis")
     #intf.get_latest_value(from_axis_id: int) -> float | None (o 0)
@@ -111,7 +120,7 @@ def neck_control(intf: EngineInterface):
     # (internamente utilizzano sempre i float)
     ID = 3
     flag = intf.create_boolean_axis(ID)
-    flag.is_true() # True / False
+    flag.true() # True / False
     flag.changed()
     #Se non si vuole creare un generatore, viene offerta anche una classe da cui ereditare:
 

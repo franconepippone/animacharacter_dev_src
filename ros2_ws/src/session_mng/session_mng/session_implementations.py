@@ -120,8 +120,9 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
         loop = asyncio.get_running_loop()
         t1 = loop.create_task(self._motionframe_forwarder(ctx, all_stop))
+        t2 = loop.create_task(self._main_session_receiver(ctx, all_stop))
         
-        await asyncio.gather(t1)
+        await asyncio.gather(t1, t2)
     
     async def _main_session_receiver(self, ctx: ACSessionContext, stop_event: asyncio.Event):
         
@@ -131,6 +132,8 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         while not stop_event.is_set():
             # should never raise
             msg = await peer_tcp.arecv()
+
+            self.logger.info(f"got {msg}")
 
             packet = ctx.codec.parse_bytes(msg)
             match packet:
@@ -159,6 +162,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             if motionframes_raw == b"":
                 continue # either timeout or invalid message
             
+            self.logger.info(f"got {motionframes_raw}")
 
             # TODO convert motionframes raw 
             motionframe_message = MotionframeArray()
