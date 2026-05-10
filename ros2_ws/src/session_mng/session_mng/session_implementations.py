@@ -1,15 +1,19 @@
 from dataclasses import dataclass
+from typing import Callable
 import secrets
 import asyncio
+import time
 
 from interfaces.msg import MotionframeArray
 
-from .session import SessionResourceManager, SessionRunner
+from authmsg import PeerTCP, PeerUDP
+from packetcodec import PacketDecoder, UnknownPacket
+
+
+from .session import SessionResourceManager, SessionRunner, SessionManager
 from .session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
 from .packet_formats import *
 
-from authmsg import PeerTCP, PeerUDP
-from packetcodec import PacketDecoder, UnknownPacket
 
 # ====================
 # SESSION CONTEXT
@@ -40,7 +44,10 @@ class ACSessionContext:
 # ====================
 
 class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
-    """Create and destroy session transport resources."""
+    """Create and destroy a AC session context. This object creates and safely destroys all resources
+    necessary to run a AC session, such as two data channels (TCP and UDP) for reception of
+    data from the client.
+    """
 
     def destroy(self, context: ACSessionContext):
         """Release all resources held by a session context."""
@@ -51,7 +58,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
             raise SessionDestructionError() from exc
 
     def create(self, args: ACSessionCreationArguments) -> ACSessionContext:
-        """Allocate transport resources and return a session context."""
+        """Allocate resources and return a session context."""
         sess_sock = None
         stream_sock = None
 
@@ -68,7 +75,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
 
             codec = PacketDecoder()
             codec.register_packet(MyPacket)
-            # TODO configure this..
+            codec.register_packet(HeartBeat)
 
             ctx = ACSessionContext(
                 tcp_sock=sess_sock,
@@ -99,7 +106,14 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
 
 from rclpy.publisher import Publisher
 
+
+
+
 class ACSessionRunner(SessionRunner[ACSessionContext]):
+    
+    class params:
+        HEARTBEAT_TIMEOUT_SEC = 10
+
     def __init__(self, motionframe_publisher: Publisher, config_publisher: Publisher, logger: LoggerLike | None = None) -> None:
         super().__init__(logger=logger)
         self.motionframe_publisher = motionframe_publisher
@@ -107,7 +121,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
     def run(self, ctx: ACSessionContext) -> None:
         """Core session logic, runs in a background thread. Should return when session ends."""
-        asyncio.run(self._run_main(ctx))
+        asyncio.run(self._run_main(ctx), debug=True)
 
     ####
     #### --------------------------- SESSION IMPLEMENTATION ---------------------------
@@ -118,29 +132,47 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         # once this returns, session ends.
         all_stop = asyncio.Event()
 
+        self.heartbeat_deadline = time.time() + self.params.HEARTBEAT_TIMEOUT_SEC
+
         loop = asyncio.get_running_loop()
-        t1 = loop.create_task(self._motionframe_forwarder(ctx, all_stop))
-        t2 = loop.create_task(self._main_session_receiver(ctx, all_stop))
-        
-        await asyncio.gather(t1, t2)
+
+        await asyncio.gather(
+            loop.create_task(self._motionframe_forwarder(ctx, all_stop)),
+            loop.create_task(self._main_packet_handler(ctx, all_stop)),
+            loop.create_task(self._brackground_session_controller(all_stop))
+        )
     
-    async def _main_session_receiver(self, ctx: ACSessionContext, stop_event: asyncio.Event):
+    async def _brackground_session_controller(self, stop_event: asyncio.Event):
+        while not stop_event.is_set():
+            await asyncio.sleep(1.0)
+
+            # check for heartbeat
+            if time.time() > self.heartbeat_deadline:
+                stop_event.set()
+                self.logger.warning("Missed heartbeat, assuming client is dead. Terminating session...")
+
+    async def _main_packet_handler(self, ctx: ACSessionContext, stop_event: asyncio.Event):
         
         peer_tcp = ctx.tcp_sock
-        peer_tcp.set_timeout(1.0, 1.0)
+        peer_tcp.set_timeout(5.0, 1.0)
 
         while not stop_event.is_set():
-            # should never raise
+            # should never raise, only return on regular intervals
             msg = await peer_tcp.arecv()
-
-            self.logger.info(f"got {msg}")
 
             packet = ctx.codec.parse_bytes(msg)
             match packet:
                 case MyPacket():
                     ...
+                case HeartBeat():
+                    now = time.time()
+                    last_heartbeat = self.heartbeat_deadline - self.params.HEARTBEAT_TIMEOUT_SEC
+                    time_since_last = now - last_heartbeat             
+                    self.heartbeat_deadline = time.time() + self.params.HEARTBEAT_TIMEOUT_SEC
+                    self.logger.info(f'Got heartbeat, time since last was {time_since_last} seconds.')
+                
                 case UnknownPacket():
-                    self.logger.warning('Unknown packet received')
+                    self.logger.warning(f'Unknown packet received, data = {packet._raw_bytes}')
 
             # handle packets
 
@@ -162,7 +194,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             if motionframes_raw == b"":
                 continue # either timeout or invalid message
             
-            self.logger.info(f"got {motionframes_raw}")
+            self.logger.info(f"udp got {motionframes_raw}")
 
             # TODO convert motionframes raw 
             motionframe_message = MotionframeArray()
@@ -171,3 +203,24 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         stop_event.set()
 
     ###### --------------------------------------
+
+
+
+
+def create_session_manager(
+        motionframe_publisher: Publisher, 
+        config_publisher: Publisher,
+        check_session_creation_criteria: Callable[[], bool],
+        logger_resource_manager: LoggerLike, 
+        logger_session_runner: LoggerLike
+    ):
+    """Utility method to build a configured session manager to run AC sessions."""
+    return SessionManager(
+        sess_resource_manager=ACSessResourceMng(logger=logger_resource_manager),
+        sess_runner=ACSessionRunner(
+            motionframe_publisher, 
+            config_publisher,
+            logger=logger_session_runner
+        ),
+        session_creation_criteria=check_session_creation_criteria
+    )

@@ -39,9 +39,10 @@ class SessionManager(Generic[SessCtxT]):
         self._creator = sess_resource_manager
         self._runner = sess_runner
 
+        old_cleanup = self._runner.cleanup
         def _combined_cleanup(ctx: SessCtxT) -> None:
             self._cleanup_active_session(ctx)
-            self._runner.cleanup(ctx)
+            old_cleanup(ctx)
 
         self._runner.bind_session_cleanup(_combined_cleanup)
         self._session_creation_criteria = session_creation_criteria
@@ -49,7 +50,7 @@ class SessionManager(Generic[SessCtxT]):
         self.active_session: SessionHandle | None = None
         self._lock = threading.Lock()
 
-    def new_session(self, args) -> SessionStartResult:
+    def new_session(self, args) -> SessionStartResult[SessCtxT]:
         """Create and start a new session if no active session is running."""
         with self._lock:
             # ensure only one session can be active at a time
@@ -116,6 +117,7 @@ class SessionManager(Generic[SessCtxT]):
         """Destroy session resources after the session runner has finished."""
         result = self._creator.destroy_session(ctx)
         if result.success:
+            self.active_session = None
             self.logger.info("Session cleanup completed.")
         else:
             self.logger.warning(

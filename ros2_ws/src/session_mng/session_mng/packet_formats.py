@@ -3,6 +3,19 @@ from dataclasses import dataclass
 from packetcodec import BasePacket
 
 
+@dataclass
+class HeartBeat(BasePacket):
+    """Implements an echo mechanism. Regularly sent from client to notify the server of its presence.
+    Server disconnects client if heartbeat is not received within timeout
+    """
+    nonce: bytes
+
+    @staticmethod
+    def encode(nonce: bytes): return nonce
+    @staticmethod
+    def decode(bin: bytes): return HeartBeat(nonce=bin)
+
+
 # define your own packet scheme
 @dataclass
 class MyPacket(BasePacket):

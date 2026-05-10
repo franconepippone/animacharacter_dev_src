@@ -6,8 +6,7 @@ from std_msgs.msg import String
 from interfaces.srv import CreateSession
 from interfaces.msg import MotionframeArray
 
-from .session_implementations import ACSessionContext, ACSessionRunner, ACSessResourceMng, ACSessionCreationArguments
-from .session import SessionManager
+from .session_implementations import create_session_manager, ACSessionCreationArguments
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -44,20 +43,18 @@ class SessManagerNode(Node):
         logger_sess_runner = self.get_logger().get_child("runner")
 
         # create session manager with custom resource manager and runner objects
-        self.session_manager = SessionManager(
-            sess_resource_manager=ACSessResourceMng(logger=logger_sess_resource),
-            sess_runner=ACSessionRunner(
-                self.motionframe_publisher, 
-                self.config_publisher,
-                logger=logger_sess_runner
-            ),
-            session_creation_criteria=self.validate_session_request_criteria
+        self.session_manager = create_session_manager(
+            self.motionframe_publisher,
+            self.config_publisher,
+            self.validate_session_request_criteria,
+            logger_sess_resource,
+            logger_sess_runner
         )
 
         self.get_logger().info("Session manager node initialized.")
 
     def validate_session_request_criteria(self) -> bool:
-        # XXX TODO check for hardware avaliablility
+        # TODO check for hardware avaliablility
         return True
 
     # handler for session creation service
@@ -78,7 +75,7 @@ class SessManagerNode(Node):
 
         self.get_logger().info("Session began successfully.")
 
-        context: ACSessionContext = result.handle.ctx
+        context = result.handle.ctx
         response.success = True
         response.tcp_port = context.tcp_port
         response.udp_port = context.stream_port
