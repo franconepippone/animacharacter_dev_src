@@ -1,14 +1,12 @@
 from __future__ import annotations
 from typing import Any, Tuple, List, Literal
 from enum import Enum
-import socket as s
 from dataclasses import dataclass
-import time
 import os
 import logging
 logger = logging.getLogger("remote_animacharacter")
 
-from sesscli.client import ACRemoteClient
+from ac_sess_client.client import ACRemoteClient
 from animadummies.teodore import create_dummy, TeodoreDummy
 from animadummies.base_components import ActuatorGroup
 
@@ -83,23 +81,8 @@ class RemoteAnimacharacter:
         Updates hardware from the internal state of 'mech' 
         """
     
-    def switch_to_UDP(self):
-        """
-        Starts using udp for animation packets (default).
-        
-        Generally this is the best and only option for streaming animation data; switch to TCP only if frequency of
-        updates is low and network is highly congested.
-        """
-        ...
-    
-    def switch_to_TCP(self):
-        """
-        Starts using tcp for animation packets.
-        
-        This is not recomended if you are streaming animation data. Only use tcp if you are performing low frequency
-        updates (hardware response tests) or sending updates from a far away network. 
-        """
-        ...
+    def send_msg(self, channel: str, msg: Any):
+        """Send a generic json-serializable message under a custom channel. Behaviours can react to this."""
 
     def _send_anim_packet(self, data: List[Tuple[int, int]]):
         """

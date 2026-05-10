@@ -5,14 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "authmsg",
+    "packetcodec",
     "pynng>=0.8.1",
-    "pysafeudp",
     "requests>=2.32.5",
 ]
 
 [tool.uv.sources]
-pysafeudp = { path = "../shared_libs/pysafeudp", editable = true }
 animacharacter-pyclient = { workspace = true, editable = true }
+authmsg = { path = "../shared_libs/authmsg", editable = true }
+packetcodec = { path = "../shared_libs/packetcodec", editable = true }
 
 [tool.setuptools]
 package-dir = {"" = "src"}

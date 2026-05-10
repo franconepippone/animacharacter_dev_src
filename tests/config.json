@@ -1,4 +1,7 @@
 {
+   "__channels__" : {
+      "custom_var" : true
+   },
    "head": {
       "ear_left@8": {
          "exp_decay": 0.5

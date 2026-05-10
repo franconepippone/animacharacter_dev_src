@@ -21,7 +21,7 @@ class ConfigNode:
 
     Calling `get_config()` returns the complete configuration tree (from that node downards) as
     a nested dictionary. Each publication is put at the corresponding dictionary path defined by the 
-    node tree hierarchy. All publications can be cleared by calling `clear()`.
+    node position inside the node tree hierarchy. All publications can be cleared by calling `clear()`.
     """
 
     def __init__(self, name: str = '', parent: ConfigNode | None = None):
