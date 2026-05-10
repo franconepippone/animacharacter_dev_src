@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Any, Tuple, Iterable, List, Literal, Dict
 from abc import ABC
 
-from ..config_tree.config_node import ConfigNode
+from .. import json_tree as jt
 
 # TODO make actuators with different values types (int8-16-32, uint8-16-32)?
 
@@ -12,14 +12,14 @@ class Actuator:
     or use `posefrom(<actuator>)` to copy the values from another actuator to this one, updating the value locally on this object.
     """
 
-    def __init__(self, id: int, name: str = '', cfg_publisher: ConfigNode | None = None):
+    def __init__(self, id: int, name: str = '', cfg_publisher: jt.Node | None = None):
         if not isinstance(id, int):
             raise TypeError("Actuator ID must be an integer")
         # In the future add more rigorous checks on ID validity (for example if in byte range 0-255)
         if id < 0:
             raise ValueError("Actuator ID must be a non-negative integer")
         self._value: float = 0
-        self.cfgpub: ConfigNode = cfg_publisher if cfg_publisher else ConfigNode(name)
+        self.cfgpub: jt.Node = cfg_publisher if cfg_publisher else jt.Node(name)
         self.id: int = id
         self.name: str = name
 
@@ -51,7 +51,7 @@ class Actuator:
         All calls to this method are merged until status is actually sent (via RemoteAnimacharacter.update()).
         """
         if self.cfgpub is None:
-            raise RuntimeError(f"Actuator {self.id} is not bound to a ConfigNode")
+            raise RuntimeError(f"Actuator {self.id} is not bound to a jt.Node")
         key = f"{self.name}@{self.id}" # we encode the id in the json key
         self.cfgpub.publish(key, json_cfg)
 
@@ -74,13 +74,13 @@ class ActuatorGroup(ABC):
     It's recommended to subclass this to create custom groups with fixed contents and members for easier and typed access to actuators and subgroups.
     """
 
-    def __init__(self, contents: Iterable[Actuator | ActuatorGroup], cfg_publisher: ConfigNode) -> None:
+    def __init__(self, contents: Iterable[Actuator | ActuatorGroup], cfg_publisher: jt.Node) -> None:
         self._actuatorsarray: Tuple[Actuator, ...] = tuple([c for c in contents if isinstance(c, Actuator)])
         self._subgroupsarray: Tuple[ActuatorGroup, ...]  = tuple([c for c in contents if isinstance(c, ActuatorGroup)])
         self._act_table: Dict[int, Actuator] = {act.id : act for act in self._actuatorsarray}
         self._fill_missing_act_names()
 
-        self.cfgpub: ConfigNode = cfg_publisher
+        self.cfgpub: jt.Node = cfg_publisher
 
         # TODO further optimize this by creating _all_actuators field that contains all actuators contained in this whole branch. Easier
         # to do _gen_motionpacket then or to check for ownership

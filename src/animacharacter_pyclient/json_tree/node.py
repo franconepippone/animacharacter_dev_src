@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 
 def deep_merge(dst: dict, src: dict):
     for k, v in src.items():
@@ -11,44 +12,44 @@ def deep_merge(dst: dict, src: dict):
         else:
             dst[k] = v
 
-class ConfigNode:
+class Node:
     """
-    Represents a node in a hierarchical configuration tree.
+    Represents a node in a hierarchical json-based tree.
 
     Each node exists under a unique name (or "topic") and can have child nodes,
-    forming a tree structure. A node can publish configuration data as dictionaries
-    (JSON-like format) to specific keys.
+    forming a tree structure. Each node can publish data as JSON serializable
+    values to specific keys.
 
-    Calling `get_config()` returns the complete configuration tree (from that node downards) as
-    a nested dictionary. Each publication is put at the corresponding dictionary path defined by the 
+    Calling `gather()` returns the complete rendered tree (from that node downards) as
+    a nested json serializable dictionary. Each publication is put at the corresponding dictionary path defined by the 
     node position inside the node tree hierarchy. All publications can be cleared by calling `clear()`.
     """
 
-    def __init__(self, name: str = '', parent: ConfigNode | None = None):
+    def __init__(self, name: str = '', parent: Node | None = None):
         self.name = name
         self.parent = parent
         if parent is not None:
             parent.add_child(self)
-        self._children: dict[str, ConfigNode] = {}
+        self._children: dict[str, Node] = {}
         self._data: dict = {}
 
     # --- tree building ---
 
-    def add_child(self, node: ConfigNode):
+    def add_child(self, node: Node):
         """
         Adds a child node to this node
         """
         if node.name not in self._children:
             self._children[node.name] = node
 
-    def child(self, name: str) -> ConfigNode:
-        return ConfigNode(name, self)
+    def child(self, name: str) -> Node:
+        return Node(name, self)
 
     # --- publishing ---
 
     def publish(self, key: str, value: dict):
         """
-        Publish config at this node under a specified key.
+        Publish json data at this node under a specified key.
         `value` must be a JSON-serializable object.
         """
         if key not in self._data:
@@ -56,12 +57,11 @@ class ConfigNode:
 
         deep_merge(self._data[key], value)
 
-    # --- build config ---
+    # --- build rendered tree ---
 
     def _build(self) -> dict:
         result = {}
 
-        # include local actuator configs
         for k, v in self._data.items():
             result[k] = v
 
@@ -75,7 +75,7 @@ class ConfigNode:
 
     # --- root helpers ---
 
-    def get_root(self) -> ConfigNode:
+    def get_root(self) -> Node:
         """
         Returns the root node of the current tree.
         """
@@ -84,18 +84,18 @@ class ConfigNode:
         else:
             return self.parent.get_root()
     
-    def get_config(self) -> dict:
+    def gather(self) -> dict:
         """
         Builds and returns the complete configuration tree with all
-        published configs so far, considering this node as root.
+        data published so far, considering this node as root.
 
-        To get the full tree, call `get_root().get_config()` instead.
+        To get the full tree, call `get_root().gather()` instead.
         """
         return self._build()
 
     def clear(self):
         """
-        Clears all published configs from this configuration tree,
+        Clears all publications from this tree,
         considering this node as the root.
 
         To clear the full tree, call `get_root().clear()`.
@@ -103,12 +103,20 @@ class ConfigNode:
         self._data.clear()
         for child in self._children.values():
             child.clear()
+    
+    def get_json(self) -> str:
+        """
+        Returns the json serialized result of `gather()`.
+
+        To get json for the full tree, call `get_root().get_json()`.
+        """
+        return json.dumps(self.gather())
 
     def __repr__(self) -> str:
-        return f"ConfigNode({self.name}, parent={self.parent})"
+        return f"Node({self.name}, parent={self.parent})"
 
 if __name__ == "__main__":
-    root = ConfigNode('')
+    root = Node('')
     ch1 = root.child('chi1')
     ch2 = root.child('chi2')
     ch1_1 = ch1.child('bob')
@@ -122,4 +130,4 @@ if __name__ == "__main__":
     ch1_2.publish('hi', {'moby': 'dick'})
     ch2_1.publish('', {3:2})
 
-    print(root.get_config())
+    print(root.gather())
