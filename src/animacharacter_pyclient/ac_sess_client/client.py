@@ -104,8 +104,21 @@ class AnimacharacterSessionClient:
         # NOTE this does not check for echo package. Eventually it should be checked in a centrailized recv handler
     
     def send_motionframe(self, motionframe: Sequence[Tuple[int, float]]) -> bool:
+        """Encodes and sends a motionframe packet. 
+        
+        Returns True on success.
+        """
         encoded = encode_motionframe_packet(motionframe)
         return self.peerudp.send(encoded)
+
+    def send_config(self, config: dict[str, object]) -> bool:
+        """Encodes and sends a json-config dictionary. 
+        Raises if passed dict is invalid.
+        
+        Returns True on success.
+        """
+        data = ConfigurationPacket.encode(config)
+        return self.peertpc.send(data)
 
     def initiate_session(self):
         udp_port = self.peerudp.local_address[1]
@@ -138,9 +151,9 @@ if __name__ == "__main__":
     client.initiate_session()
 
     for _ in range(10):
-        client.send_motionframe([(0, 0.5), (1, 1.5), (2, 2.3)])
+        client.send_motionframe([(10, 0.5), (1, 1.5), (2, 2.3)])
         time.sleep(.5)
-        client.peertpc.send(ConfigurationPacket.encode({'hello': {'there': {'test': "cfg-msg-test"}}, 'simple': 15.0}))
+        client.send_config({'hello': {'there': {'test': "cfg-msg-test"}}, 'simple': 15.0})
         time.sleep(1)
     
     client.peertpc.send(SessionEndRequestPacket.encode())
