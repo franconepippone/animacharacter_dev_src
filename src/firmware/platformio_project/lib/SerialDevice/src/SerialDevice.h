@@ -2,7 +2,10 @@
 #include <Arduino.h>
 #include "SerialTransfer.h"
 #include <Hashtable.h>
-#include <timer/Timer.h>
+#include <timer.h>
+#include "FastTable.h"
+
+//#define SERIALDEVICE_USE_HASHMAP
 
 // ======================= CONSTANTS / TYPEDEFS =======================
 
@@ -19,12 +22,50 @@ typedef void (*LargePacketHandler)(SerialDevice* dev, byte *buffer, uint32_t siz
 #define LARGE_TRANSFER_SEND_RETRY_AMOUNT 5
 #define MAX_PACK_ID 255 // 0-255
 
+#define DEVICE_NAME_SIZE 16 // bytes to allocate for serialdevice name
+
 // keep track of large transfer rx state
 enum LargeRxState {
     READY = 0,
     RECVING = 1,
 };
 
+// return value of any operation on stream
+enum StreamOpOutcome {
+    OK = 0,
+    TIMED_OUT = -1,
+    ALREADY_INITIATED = -2,
+    NOT_INITIATED = -3,
+    REFUSED = -4,
+    CHUNK_OUT_OF_BOUNDS = -5
+};
+
+
+// ======================= DEFAULT PACKET IDs (reserved 208-239) =======================
+// note: shifted packets to fit in 16 wide slots, so that the handlers table is more efficient.
+// default packets IDs (reserved 208-229)
+#define PACKID_IDENT_RQST 208
+#define PACKID_IDENT_RESP 209
+#define PACKID_DIAGNOSTIC 210
+#define PACKID_PING 211
+#define PACKID_DEV_INFO_RQST 212
+#define PACKID_DEV_INFO_RESP 213
+#define PACKID_INVALID_PACKET 214
+
+// packets for large transfer
+#define PACKID_LARGETX_BEGIN 215
+#define PACKID_LARGETX_CHUNK 216
+#define PACKID_LARGETX_BEGIN_RESP 217
+#define PACKID_LARGETX_ACK 218
+#define PACKID_LARGETX_END 219
+
+// debug hooks (reserved 230-239)
+#define PACKID_DEBUG_TRIGGER_IDENT_RQST 230
+#define PACKID_DEBUG_TRIGGER_LARGE_TX 231
+#define PACKID_DEBUG_FREERAM 232
+
+
+/*  OLD VERSION
 // ======================= DEFAULT PACKET IDs (reserved 200-230) =======================
 
 // default packets IDs (reserved 200-219)
@@ -46,6 +87,9 @@ enum LargeRxState {
 // debug hooks (reserved 220-230)
 #define PACKID_DEBUG_TRIGGER_IDENT_RQST 220
 #define PACKID_DEBUG_TRIGGER_LARGE_TX 221
+#define PACKID_DEBUG_FREERAM 222
+*/
+
 
 // ======================= SERIAL DEVICE CLASS =======================
 
@@ -56,8 +100,12 @@ enum LargeRxState {
 /// SerialTransfer repository: https://github.com/PowerBroker2/SerialTransfer
 class SerialDevice {
 private:
+#ifdef SERIALDEVICE_USE_HASHMAP
     // forced to use int instead of uint8_t, because there's no builting template specialization in the library
     Hashtable<int, PacketHandler> handlersTable;
+#else
+    FastTable<PacketHandler> handlersTable;
+#endif
     WidePacketHandler baseHandler = nullptr;
     size_t txBuffNextIdx = 0;   // used with txObj, txBytes, send (keeps track of objects in tx buff)
     // attributes for large transfer rx state machine
@@ -73,9 +121,14 @@ public:
         uint32_t ExpectedSize = 0;
     } largeRxCtx;
 
+    struct {
+        uint32_t buffSize = 0;
+        bool initiated = false;
+    } streamCtx;
+
     SerialTransfer txf;
-    char peerName[32] = "";
-    char deviceName[32]; // used for authentication with the other device.
+    char peerName[DEVICE_NAME_SIZE] = "";
+    char deviceName[DEVICE_NAME_SIZE]; // used for authentication with the other device.
     HardwareSerial* ser;
     
     SerialDevice(HardwareSerial& serial, const char* name = "dev_default");
@@ -133,14 +186,29 @@ public:
     uint8_t sendBytes(const byte *buffer, size_t size, uint8_t packId = 0);
 
     template <size_t N>
-    uint8_t sendPacket(char (&str)[N], uint8_t packId = 0);
+    uint8_t sendPacket(char (&str)[N], uint8_t packId) {
+        size_t len = strnlen(str, N);
+        return sendBytes((byte*)str, len, packId);
+    }
 
     template <typename T>
-    uint8_t sendPacket(const T& obj, uint8_t packId = 0);
+    uint8_t sendPacket(const T& obj, uint8_t packId) {
+        uint16_t size = txf.txObj(obj);
+        return txf.sendData(size, packId);
+    }
 
     uint8_t sendPacket(const char* str, uint8_t packId = 0);
 
     // ======================= LARGE TRANSFER PROTOCOL =======================
+
+    // Requests the beginning of a large transfer chunk stream. True on success
+    StreamOpOutcome streamBegin(uint32_t buffSize, uint32_t timeoutMs);
+
+    // Sends a chunk to be stored in the peer's rx buffer at given offset (after streamBegin has been called succesfully)
+    StreamOpOutcome streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs);
+
+    // Ends a large transfer chunk stream. This notifies the peer that the whole payload has been received.
+    StreamOpOutcome streamEnd(uint8_t packId);
 
     uint32_t sendLarge(byte *buffer, uint32_t size, uint8_t packId = 0, uint32_t timeoutMs = 500, uint8_t chunkSize = LARGE_TRANSFER_CHUNK_SIZE);
 
@@ -148,7 +216,9 @@ public:
 
     template <typename T>
     // recv arbitrary object from rx buffer
-    size_t recvPacket(T& obj);
+    size_t recvPacket(T& obj) {
+        return txf.rxObj(obj);
+    }
 
     // recv bytes from rx buffer
     size_t recvBytes(byte* dst, size_t cap);
@@ -156,7 +226,14 @@ public:
     size_t recvPacket(char* dst, size_t cap);
 
     template <size_t N>
-    size_t recvPacket(char (&dst)[N]);
+    size_t recvPacket(char (&dst)[N]) {
+        size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
+        if (n >= N) n = N - 1;
+
+        memcpy(dst, txf.packet.rxBuff, n);
+        dst[n] = '\0';
+        return n;
+    }
 
     // clears buffers and resets the device
     void reset();

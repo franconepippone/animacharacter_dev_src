@@ -2,39 +2,30 @@
 #include <Arduino.h>
 #include <SerialDevice.h>
 
-#include "configs/psp_cfg.h" // shared across all devices/environments
 #include "constants.h"
-
-
-// only returns true if bit specified by mask is 1, then sets it to 0
-inline bool checkAndClearBit(byte &c, byte mask) {
-    return (c & mask) ? (c &= ~mask), true : false;
-}
+#include "configs/serdev.h" // shared across all devices/environments
 
 // ------------------ Structs for storing received data from SerialDevice
 
-struct {
-    int16_t stp_r = 0;
-    int16_t stp_l = 0;           
-    int16_t mot_rot = 0;
-} __attribute__((packed)) bodyMotionVars;
+struct BodyMotionVars {
+    int16_t stp_r;
+    int16_t stp_l;
+    int16_t mot_rot;
+} __attribute__((packed));
 
-struct {
+ BodyMotionVars bodyMotionVars;
+
+struct BodyControlParams {
     // rotational acceleration (stp/s^2) of the motion controllers
-    uint16 acc_r;
-    uint16 acc_l;
-    uint16 acc_rot;
-}  __attribute__((packed)) bodyControlParams;
+    uint16_t acc_r;
+    uint16_t acc_l;
+    uint16_t acc_rot;
+}  __attribute__((packed));
 
-// THIS IS ALWAYS DUPLICATE
-struct {
-    byte flags = 0; // flags byte
+BodyControlParams bodyControlParams;
 
-    inline bool init_hw_rqst() {return checkAndClearBit(flags, INIT_HARDWARE);}
-    inline bool begin_all_rqst() {return checkAndClearBit(flags, BEGIN_ALL);}
-    inline bool deinit_hw_rqst() {return checkAndClearBit(flags, DEINIT_HARDWARE);}
 
-} controlFlags;
+ControlFlags controlFlags;
 
 
 
