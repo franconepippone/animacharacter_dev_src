@@ -1,17 +1,21 @@
+"""
+In this files all abstract classes from "session_mng/session" package are subclasses,
+implementing the specific session logic for an animacharacter session.
+"""
+
+
 from dataclasses import dataclass
 from typing import Callable
 import secrets
 import asyncio
 import time
-from array import array
-
 from interfaces.msg import MotionframeArray
 from std_msgs.msg import String
 
 from authmsg import PeerTCP, PeerUDP
 from packetcodec import PacketDecoder, UnknownPacket
 
-from commons.network.udp_motionframe_schema import decode_motionframe_packet
+from commons.network.udp_motionframe_schema import decode_motionframe_packet_into_arrays
 from commons.network.packet_schemas import (
     HeartBeatPacket,
     ConfigurationPacket,
@@ -20,7 +24,7 @@ from commons.network.packet_schemas import (
 
 
 from .session import SessionResourceManager, SessionRunner, SessionManager
-from .session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
+from .session.resource_manager import LoggerLike, SessionDestructionError, SessionCreationError
 
 
 
@@ -84,7 +88,6 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
 
             codec = PacketDecoder()
             codec.register_packets(
-                MyPacket,
                 HeartBeatPacket,
                 SessionEndRequestPacket,
                 ConfigurationPacket
@@ -120,7 +123,14 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
 from rclpy.publisher import Publisher
 
 
+@dataclass
+class MetricsTracker:
+    rec_tcp: int = 0
+    rec_udp: int = 0
 
+    def reset(self):
+        self.rec_tcp = 0
+        self.rec_udp = 0
 
 class ACSessionRunner(SessionRunner[ACSessionContext]):
     
@@ -131,6 +141,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         super().__init__(logger=logger)
         self.motionframe_publisher = motionframe_publisher
         self.config_publisher = config_publisher
+        self.metrics = MetricsTracker()
 
     def run(self, ctx: ACSessionContext) -> None:
         """Core session logic, runs in a background thread. Should return when session ends."""
@@ -157,7 +168,15 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
     
     async def _brackground_session_controller(self, stop_event: asyncio.Event):
         while not stop_event.is_set():
+            last_time = time.time()
             await asyncio.sleep(1.0)
+            delta_time = time.time() - last_time # exact computation
+
+            # process metrics
+            rec_tcp_per_second = self.metrics.rec_tcp / delta_time
+            rec_udp_per_second = self.metrics.rec_udp / delta_time
+            self.metrics.reset()
+            self.logger.info(f"Metrics: {rec_tcp_per_second}  {rec_udp_per_second}") # eventually we will publish this on /diagnostics
 
             # check for heartbeat
             if time.time() > self.heartbeat_deadline:
@@ -166,6 +185,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
     async def _main_packet_handler(self, ctx: ACSessionContext, stop_event: asyncio.Event):
         
+        metrics = self.metrics
         peer_tcp = ctx.tcp_sock
         peer_tcp.set_timeout(5.0, 1.0)
 
@@ -175,6 +195,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             if msg == b"": 
                 continue
 
+            metrics.rec_tcp += 1 # track stat
             packet = ctx.codec.parse_bytes(msg)
             match packet:
                 case ConfigurationPacket():
@@ -209,26 +230,27 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
     async def _motionframe_forwarder(self, ctx: ACSessionContext, stop_event: asyncio.Event):
         """Receive motionframes from the stream socket and republish them in ros2 topics."""
 
+        metrics = self.metrics
         peer = ctx.stream_sock
         peer.set_timeout(1.0)
 
         while not stop_event.is_set():
             try:
-                motionframes_raw = await peer.arecv()
+                motionframe_raw = await peer.arecv()
             except Exception as exc:
                 self.logger.error(f"Error receiving motionframes: {exc}")
                 continue
             
-            if motionframes_raw == b"":
+            if motionframe_raw == b"":
                 continue # either timeout or invalid message
             
-            self.logger.info(f"udp got {motionframes_raw}")
+            metrics.rec_udp += 1 # track stat
 
-            # TODO convert motionframes raw 
+            # uses arrays because python rosldi expects them
             motionframe_message = MotionframeArray()
-            # should use arrays because python rosldi expects them
-            motionframe_message.ids = array('H', (0, 0, 1, 0))
-            motionframe_message.values = array('f', (1,0,1,1,1))
+            arr_ids, arr_values = decode_motionframe_packet_into_arrays(motionframe_raw)
+            motionframe_message.ids = arr_ids
+            motionframe_message.values = arr_values
             self.motionframe_publisher.publish(motionframe_message)
 
         stop_event.set()

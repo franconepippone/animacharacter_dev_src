@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 SRV_NAME = 'create_session'
 CONFIG_TOPIC = 'config_update'
+MOTIONFRAME_TOPIC = 'input_motionframes'
 
 class SessManagerNode(Node):
     def __init__(self) -> None:
@@ -29,7 +30,7 @@ class SessManagerNode(Node):
 
         self.motionframe_publisher = self.create_publisher(
             MotionframeArray,
-            'input_motionframes',
+            MOTIONFRAME_TOPIC,
             10,
         )
 
