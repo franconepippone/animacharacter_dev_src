@@ -1,6 +1,22 @@
-import requests
+from collections.abc import Sequence
+from typing import Tuple
 from dataclasses import dataclass
+import requests
+import random
+import time
+
 from authmsg import PeerTCP, PeerUDP
+import threading as th
+
+from commons.network.udp_motionframe_schema import encode_motionframe_packet
+from commons.network.packet_schemas import (
+    HeartBeatPacket,
+    ConfigurationPacket,
+    SessionEndRequestPacket,
+)
+
+
+
 
 @dataclass  
 class SessionData:
@@ -49,7 +65,8 @@ def send_session_request(
         token=response.get("token", "")
     )
     return session_data
-    
+
+
 
 class AnimacharacterSessionClient:
     """
@@ -66,7 +83,29 @@ class AnimacharacterSessionClient:
         self.url = f"http://{self.ip}:{self.port}/auth"
         self.peertpc = PeerTCP()
         self.peerudp = PeerUDP()
+        self._tcp_lock = th.Lock()
+        self._heartbeat_thread = th.Thread(target=self.__heartbeat_threaded, daemon=True)
         self.session_data: SessionData = SessionData(success=False)
+
+    def __heartbeat_threaded(self):
+        while True:
+            time.sleep(5)
+            ok = self._send_heartbeat()
+            if not ok:
+                print("eartbeat could not be sent")
+
+    def _send_heartbeat(self) -> bool:
+        """Sends a heathbeat packet. This is called periodically from another thread"""
+        nonce = random.randbytes(16)
+        msg = HeartBeatPacket.encode(nonce)
+        with self._tcp_lock:
+            return self.peertpc.send(msg)
+        
+        # NOTE this does not check for echo package. Eventually it should be checked in a centrailized recv handler
+    
+    def send_motionframe(self, motionframe: Sequence[Tuple[int, float]]) -> bool:
+        encoded = encode_motionframe_packet(motionframe)
+        return self.peerudp.send(encoded)
 
     def initiate_session(self):
         udp_port = self.peerudp.local_address[1]
@@ -86,7 +125,7 @@ class AnimacharacterSessionClient:
         self.peertpc.dial(self.ip, self.session_data.nng_port)
         self.peerudp.dial(self.ip, self.session_data.udp_port)
 
-        
+        self._heartbeat_thread.start()
 
 
 
@@ -99,7 +138,10 @@ if __name__ == "__main__":
     client.initiate_session()
 
     for _ in range(10):
-        client.peerudp.send(b"hellothere")
-        client.peertpc.send(b"hitcp")
+        client.send_motionframe([(0, 0.5), (1, 1.5), (2, 2.3)])
+        time.sleep(.5)
+        client.peertpc.send(ConfigurationPacket.encode({'hello': {'there': {'test': "cfg-msg-test"}}, 'simple': 15.0}))
         time.sleep(1)
+    
+    client.peertpc.send(SessionEndRequestPacket.encode())
     

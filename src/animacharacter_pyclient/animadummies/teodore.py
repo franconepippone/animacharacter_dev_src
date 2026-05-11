@@ -5,7 +5,7 @@ from pathlib import Path
 import tomllib
 
 from .base_components import Actuator, ActuatorGroup
-from ..config_tree.config_node import ConfigNode
+from .. import json_tree as jt
 
 # hack to load the file next to this one
 with open(Path(__file__).parent / "teodore.toml", "rb") as f:
@@ -56,8 +56,8 @@ class EyeboxActuatorGroup(ActuatorGroup):
     with the eyebox mechanism.
     """
 
-    def __init__(self, parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode('eyes', parent=parent_cfg)
+    def __init__(self, parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node('eyes', parent=parent_cfg)
         self.eyes_h = SimpleActuator(IDTABLE["EYES_H"], cfg_publisher=my_cfg)
         self.eyes_v = SimpleActuator(IDTABLE["EYES_V"], cfg_publisher=my_cfg)
         self.eyes_focus = SimpleActuator(IDTABLE["EYES_FOCUS"], cfg_publisher=my_cfg)
@@ -86,8 +86,8 @@ class NeckActuatorGroup(ActuatorGroup):
     three different axys
     """
 
-    def __init__(self, parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode('neck', parent_cfg)
+    def __init__(self, parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node('neck', parent_cfg)
         self.servo_r = SimpleActuator(IDTABLE["SERVO_NECK_R"], cfg_publisher=my_cfg)
         self.servo_l = SimpleActuator(IDTABLE["SERVO_NECK_L"], cfg_publisher=my_cfg)
         self.rotation = SimpleActuator(IDTABLE["NECK_ROTATION"], cfg_publisher=my_cfg)
@@ -105,8 +105,8 @@ class HeadActuatorGroup(ActuatorGroup):
     with the head and neck animatronics
     """
 
-    def __init__(self, parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode('head', parent_cfg)
+    def __init__(self, parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node('head', parent_cfg)
         self.ear_left = SimpleActuator(IDTABLE["EAR_LEFT"], cfg_publisher=my_cfg)
         self.ear_right = SimpleActuator(IDTABLE["EAR_RIGHT"], cfg_publisher=my_cfg)
         self.mouth = SimpleActuator(IDTABLE["MOUTH"], cfg_publisher=my_cfg)
@@ -123,8 +123,8 @@ class ShoulderActuatorGroup(ActuatorGroup):
     with the animatronic's arm shoulder joint
     """
 
-    def __init__(self, side: Literal["left", "right"], parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode('shoulder', parent_cfg)
+    def __init__(self, side: Literal["left", "right"], parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node('shoulder', parent_cfg)
         self.motorA = Actuator(IDTABLE["ARMR_STEPPERA"] if side == "right" else IDTABLE["ARML_STEPPERA"], cfg_publisher=my_cfg)   
         self.motorB = Actuator(IDTABLE["ARMR_STEPPERB"] if side == "right" else IDTABLE["ARML_STEPPERB"], cfg_publisher=my_cfg)
         super().__init__([self.motorA, self.motorB], my_cfg)
@@ -142,8 +142,8 @@ class ArmActuatorGroup(ActuatorGroup):
     with an animatronic arm
     """
 
-    def __init__(self, side: Literal["left", "right"], parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode(f'arm_{side}', parent_cfg)
+    def __init__(self, side: Literal["left", "right"], parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node(f'arm_{side}', parent_cfg)
         self.shoulder = ShoulderActuatorGroup(side, my_cfg)
         self.elbow = SimpleActuator(IDTABLE["ARMR_ELBOW"] if side == "right" else IDTABLE["ARML_ELBOW"], cfg_publisher=my_cfg)
         self.wrist = SimpleActuator(IDTABLE["ARMR_WRIST"] if side == "right" else IDTABLE["ARML_WRIST"], cfg_publisher=my_cfg)
@@ -155,8 +155,8 @@ class ArmActuatorGroup(ActuatorGroup):
         pass 
 
 class BodyActuatorGroup(ActuatorGroup):
-    def __init__(self, parent_cfg: ConfigNode | None = None):
-        my_cfg = ConfigNode('body', parent_cfg)
+    def __init__(self, parent_cfg: jt.Node | None = None):
+        my_cfg = jt.Node('body', parent_cfg)
         self.lean = AccelActuator(IDTABLE["BODY_LEAN"], cfg_publisher=my_cfg)
         self.turn = AccelActuator(IDTABLE["BODY_ROTATION"], cfg_publisher=my_cfg)
         self.roll = AccelActuator(IDTABLE["BODY_ROLL"], cfg_publisher=my_cfg)
@@ -164,7 +164,7 @@ class BodyActuatorGroup(ActuatorGroup):
 
 class TeodoreDummy(ActuatorGroup):
     def __init__(self):
-        my_cfg = ConfigNode('root')
+        my_cfg = jt.Node('root')
         self.head = HeadActuatorGroup(my_cfg)
         self.arm_left = ArmActuatorGroup("left", my_cfg)
         self.arm_right = ArmActuatorGroup("right", my_cfg)

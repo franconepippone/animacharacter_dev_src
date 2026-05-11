@@ -43,9 +43,9 @@ class Actuator:
     
     def configure(self, json_cfg: Dict):
         """
-        Send an arbitrary configuration json dictionary for this actuator. On server side,
-        hardware controllers needs to be programmed to reflect these configuration changes
-        onto the hardware.
+        Publish an arbitrary configuration json dictionary for this actuator. On server side,
+        hardware controllers needs to be programmed to forward these configuration changes
+        to the hardware.
 
         Use this method inside other more explicitly named methods, to make configuration easier.
         All calls to this method are merged until status is actually sent (via RemoteAnimacharacter.update()).

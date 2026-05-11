@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "authmsg",
+    "commons",
     "packetcodec",
     "pynng>=0.8.1",
     "requests>=2.32.5",
@@ -15,6 +16,7 @@ dependencies = [
 animacharacter-pyclient = { workspace = true, editable = true }
 authmsg = { path = "../shared_libs/authmsg", editable = true }
 packetcodec = { path = "../shared_libs/packetcodec", editable = true }
+commons = { path = "../shared_libs/commons", editable = true }
 
 [tool.setuptools]
 package-dir = {"" = "src"}
