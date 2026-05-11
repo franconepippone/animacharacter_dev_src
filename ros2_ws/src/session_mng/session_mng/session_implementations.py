@@ -3,16 +3,25 @@ from typing import Callable
 import secrets
 import asyncio
 import time
+from array import array
 
 from interfaces.msg import MotionframeArray
+from std_msgs.msg import String
 
 from authmsg import PeerTCP, PeerUDP
 from packetcodec import PacketDecoder, UnknownPacket
 
+from commons.network.udp_motionframe_schema import decode_motionframe_packet
+from commons.network.packet_schemas import (
+    HeartBeatPacket,
+    ConfigurationPacket,
+    SessionEndRequestPacket,
+)
+
 
 from .session import SessionResourceManager, SessionRunner, SessionManager
 from .session.resource_manager import LoggerLike, LoggerLike, SessionDestructionError, SessionCreationError
-from .packet_formats import *
+
 
 
 # ====================
@@ -74,8 +83,12 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
             stream_port = stream_sock.local_address[1]
 
             codec = PacketDecoder()
-            codec.register_packet(MyPacket)
-            codec.register_packet(HeartBeat)
+            codec.register_packets(
+                MyPacket,
+                HeartBeatPacket,
+                SessionEndRequestPacket,
+                ConfigurationPacket
+            )
 
             ctx = ACSessionContext(
                 tcp_sock=sess_sock,
@@ -159,22 +172,37 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         while not stop_event.is_set():
             # should never raise, only return on regular intervals
             msg = await peer_tcp.arecv()
+            if msg == b"": 
+                continue
 
             packet = ctx.codec.parse_bytes(msg)
             match packet:
-                case MyPacket():
-                    ...
-                case HeartBeat():
+                case ConfigurationPacket():
+                    if not packet.valid:
+                        self.logger.warning(f"Got config packet containing invalid json: {packet.json_str}")
+                        continue
+
+                    self.logger.info(f"Got valid config packet")
+                    msg = String()
+                    msg.data = packet.json_str
+                    self.config_publisher.publish(msg)
+
+                case SessionEndRequestPacket():
+                    self.logger.info("Client requested session termination. Terminating session...")
+                    stop_event.set()
+
+                case HeartBeatPacket():
                     now = time.time()
                     last_heartbeat = self.heartbeat_deadline - self.params.HEARTBEAT_TIMEOUT_SEC
                     time_since_last = now - last_heartbeat             
                     self.heartbeat_deadline = time.time() + self.params.HEARTBEAT_TIMEOUT_SEC
-                    self.logger.info(f'Got heartbeat, time since last was {time_since_last} seconds.')
+                    self.logger.info(f'Got heartbeat, time since last was {time_since_last:.2f} seconds.')
                 
                 case UnknownPacket():
                     self.logger.warning(f'Unknown packet received, data = {packet._raw_bytes}')
-
-            # handle packets
+                
+                case _:
+                    self.logger.warning(f'Handler missing for packet: {packet}')
 
 
 
@@ -198,6 +226,9 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
             # TODO convert motionframes raw 
             motionframe_message = MotionframeArray()
+            # should use arrays because python rosldi expects them
+            motionframe_message.ids = array('H', (0, 0, 1, 0))
+            motionframe_message.values = array('f', (1,0,1,1,1))
             self.motionframe_publisher.publish(motionframe_message)
 
         stop_event.set()
