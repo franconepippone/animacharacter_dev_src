@@ -1,4 +1,4 @@
-import configdata.utils as utls
+import commons.utils as utls
 from pathlib import Path
 
 

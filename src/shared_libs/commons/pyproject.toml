@@ -1,7 +1,7 @@
 [project]
-name = "configdata"
+name = "commons"
 version = "0.1.0"
-description = "Contains shared configuration files and utilities."
+description = "Contains shared configuration data and utilities."
 readme = "README.md"
 authors = []
 requires-python = ">=3.12"

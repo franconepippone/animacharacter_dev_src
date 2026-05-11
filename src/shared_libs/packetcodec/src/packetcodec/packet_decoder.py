@@ -43,7 +43,11 @@ class PacketDecoder:
         #self.register_packet(UnknownPacket) we should never receive this directly
 
     # ---------------- interface ----------------
-         
+    
+    def register_packets(self, *packets: Type[BasePacket]):
+        for p in packets:
+            self.register_packet(p)
+    
     def register_packet(self, packet_class: Type[BasePacket]):
         """Registers a new packet type. From now on, packets of the new type will can be
         automatically decoded.
