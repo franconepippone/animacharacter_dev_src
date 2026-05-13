@@ -87,7 +87,7 @@ class DatabusTopic(Generic[DatabusMsgType]):
 
         Increments the sequence number automatically.
         """
-        self._state = (new_val, self._state[1] + 1)
+        self._state = (new_val, self._state[1] + 1) # atomic write, dont need locks
 
     @property
     def seqnum(self) -> int:
@@ -227,7 +227,7 @@ class Databus:
         
         topic = self.topics[name]
         if topic._msg_type != msg_type:
-            raise DatabusTopologyError(f'Topic message type mismatch: got "{msg_type}", but topic type is "{topic._msg_type}"')
+            raise DatabusTopologyError(f'Topic \'{topic.name}\' message type mismatch: got "{msg_type}", but topic is of type is "{topic._msg_type}"')
         return self.topics[name]
 
     def _register_writer(self, writer: DataWriter):

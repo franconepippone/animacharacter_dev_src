@@ -74,6 +74,7 @@ class BaseHardwareController(ABC):
     by the hardware manager system. A Configuration can be registered in the `hw_configurations.yaml` file, and then used by passing it as an argument when launching
     the hardware manager system or by optionally setting it as default by defining `default_config: <your-cfg-name>` in the yaml file.
     """
+    _databus: Databus | None = None # to be set externally later
     
     def __init__(self, name: str, flush_freq: float, command_group: set[int] = set()) -> None:
         self.name = name
@@ -82,7 +83,6 @@ class BaseHardwareController(ABC):
         self._config_handlers: dict[Tuple[str, ...], Callable] = {}
         self._cfg_updates_queue: Queue[dict] = Queue()
         self._initialized = False
-        self._databus: Databus | None = None # to be set externally later
 
         if self.flush_freq <= 0:
             raise ValueError(f"flush_freq must be positive, got {self.flush_freq}")
@@ -99,7 +99,7 @@ class BaseHardwareController(ABC):
         
         This can only be done at controller initialization. Writers cannot be created at runtime.
         """
-        if not self._databus:
+        if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
         
         return self._databus.create_writer(topic, data_type, initial)
@@ -111,7 +111,7 @@ class BaseHardwareController(ABC):
         
         This can only be done at controller initialization. Readers cannot be created at runtime.
         """
-        if not self._databus:
+        if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
         
         return self._databus.create_reader(topic, data_type)

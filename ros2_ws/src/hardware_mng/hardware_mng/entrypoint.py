@@ -2,7 +2,7 @@
 Startup script for the Hardware Manager process.
 Configures objects, launches background threads, and spins the ros2 node.
 """
-from typing import Protocol
+from typing import Protocol, cast, Type
 from types import ModuleType
 import importlib
 import rclpy
@@ -15,11 +15,14 @@ from .looper import LoopSupervisor, LoopDescriptor
 from .databus import Databus, DatabusError
 
 import yaml
+import inspect
 
+def is_type_of_base(obj, BaseClass):
+    return inspect.isclass(obj) and issubclass(obj, BaseClass)
 
-# used to avoid type checker for complaining down below...
-class ControllerClass(Protocol):
-    def __call__(self) -> BaseHardwareController: ...
+class ConcreteController(BaseHardwareController):
+    def __init__(self) -> None: ...
+
 
 def load_yaml_file(path: str):
     try:
@@ -38,7 +41,7 @@ def load_yaml_file(path: str):
 
 logger = RcutilsLogger('HW-mng starter')
 
-def import_class(path: str) -> type:
+def import_class(path: str) -> Type:
     try:
         modulename, classname = path.split(":")
     except ValueError as e:
@@ -104,15 +107,19 @@ def main(args=None):
     
     # creating the shared databus for controllers
     databus = Databus()
+    BaseHardwareController._databus = databus # binding at abstract class level
 
     # building controllers
     for i, path in enumerate(hw_controllers_paths):
         try:
-            class_obj: ControllerClass = import_class(path)
+            class_obj: Type[ConcreteController] = import_class(path)
         except RuntimeError as e:
             logger.warning(f"[{i+1}/{total}] Failed to load hw controller at '{path}' -> {e}")
             continue
-
+        
+        if not is_type_of_base(class_obj, BaseHardwareController):
+            logger.warning(f"[{i+1}/{total}] Controller at '{path}' class is not derived from 'BaseHardwareController'")
+            continue
 
         try:
             controller = class_obj()
@@ -124,11 +131,19 @@ def main(args=None):
             logger.warning(f"[{i+1}/{total}] Controller is of invalid class: {type(controller)}")
             continue
 
-        # bind databus instance
-        controller._databus = databus
 
         logger.info(f"[{i+1}/{total}] loaded and instantiated hw controller at '{path}'")
         controllers.append(controller)
+    
+    # attempts to freeze databus topology
+    try:
+        databus.finalize()
+    except DatabusError as e:
+        logger.error(f"Databus finalization error -> {e}")
+        logger.fatal(f"shutting down.")
+        exit(-1)
+    finally:
+        logger.info(f"Databus finalized.")
     
     ok = len(controllers)
     if ok == total:

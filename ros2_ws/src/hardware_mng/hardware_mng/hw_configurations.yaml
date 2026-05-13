@@ -1,7 +1,7 @@
 # this file defines all hardware configurations. Write your hardware module "plugins" paths as path.to.module:class, and add them
 # to a custom configuration here if you are using this on a custom robot. You can specify the used configuration as a launch argument
 
-default_config: "simulator" # default configuration to use
+default_config: "testing2" # default configuration to use
 
 teodore:
   - "hardware_mng.hw_controllers.teodore_plugins:HeadController"
@@ -17,4 +17,9 @@ testing:
 
 simulator:
   - "hardware_mng.hw_controllers.sim_teodore:BaseControllerSim"
-  
+
+
+testing2:
+  - "hardware_mng.hw_controllers.testing_databus:A_Controller"
+  - "hardware_mng.hw_controllers.testing_databus:B_Controller"
+  - "hardware_mng.hw_controllers.testing_databus:C_Controller"
