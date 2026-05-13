@@ -55,6 +55,10 @@ class BehaviorContext:
 
     Subclass this to abstract interaction with the outside system
     (logging, messaging, robot APIs, etc.).
+
+    *NOTE: a context should only expose functionalities behaviours can use. Storing shared
+    state directly in context should be done carefully and lock protected. Use publishers/subscribers
+    for data exchange.*
     """
 
     class time:

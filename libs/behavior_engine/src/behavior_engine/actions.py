@@ -7,6 +7,7 @@ class BehaviorActionType(Enum):
     STOP = 0
     CONTINUE = 1
     SLEEP = 2
+    TICK = 3
 
 type BehaviorActionRaw = Tuple[BehaviorActionType, float] # generic (type, arg) format
 
@@ -17,14 +18,13 @@ class BehaviorAction:
     """
     @staticmethod
     def sleep(seconds: float):
-        """Put the bahavior to sleep for a certain amount of seconds."""
+        """Put the behavior to sleep for a certain amount of seconds."""
         return BehaviorActionType.SLEEP, seconds
     
     @staticmethod
-    @cache
-    def loop(freq: float):
-        """Put the behavior to sleep for the amount of seconds corresponding to the given frequency in Hz."""
-        return BehaviorActionType.SLEEP, 1.0/freq
+    def tick(freq: float):
+        """Attempts to awake the behaviour in time to ensure a constant frequency in Hz."""
+        return BehaviorActionType.TICK, freq
 
     @staticmethod
     def stop(): 
@@ -33,5 +33,7 @@ class BehaviorAction:
     
     @staticmethod
     def continue_():
-        """Continue the behavior without sleeping or stopping (default action when yielding None)."""
+        """Continue the behavior without sleeping or stopping (default action when yielding None).
+        This resumes the behaviour as soon as possible.
+        """
         return BehaviorActionType.CONTINUE, 0

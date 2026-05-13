@@ -8,6 +8,9 @@ from .context import BehaviorContext
 class BehaviorExecutor(Generic[ContextT]):
     """
     Core engine that schedules and executes behaviors.
+
+    Scheduling is best-effort, meaning that accurate timing is not guardanteed.
+    For hard timing requirements, use a 'DeterministicExecutor' instead.
     """
 
     def __init__(self, ctx: ContextT):
