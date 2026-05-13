@@ -1,10 +1,11 @@
 from collections.abc import Iterable, Callable
-from typing import NamedTuple, Optional, Tuple, Dict, Any
+from typing import NamedTuple, Optional, Tuple, Dict, Any, Generic, TypeVar, Type
 
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
 from .looper import LoopActionRequest, LoopAction
+from .databus import Databus, DataReader, DataWriter
 
 SPECIAL_PATH_CHARS = {'@'}
 
@@ -45,6 +46,10 @@ class MotionCommand(NamedTuple):
     id: int
     value: float
 
+
+T = TypeVar('T')
+
+
 class BaseHardwareController(ABC):
     """
     A Hardware Controller or Module is responsible for the execution of motion commands. Hardware controller
@@ -77,6 +82,7 @@ class BaseHardwareController(ABC):
         self._config_handlers: dict[Tuple[str, ...], Callable] = {}
         self._cfg_updates_queue: Queue[dict] = Queue()
         self._initialized = False
+        self._databus: Databus | None = None # to be set externally later
 
         if self.flush_freq <= 0:
             raise ValueError(f"flush_freq must be positive, got {self.flush_freq}")
@@ -84,8 +90,36 @@ class BaseHardwareController(ABC):
         self.logger = RcutilsLogger(f"HWController-{self.name}")
         self._setup_wrappers()
 
+    # shared databus api
+
+    def create_databus_writer(self, topic: str, data_type: Type[T], initial: T) -> DataWriter[T]:
+        """Create a writer on the shared databus across all controller. Any controller can read the data
+        posted by a writer. Writers enforce a unique writable data type, which must be immutable. 
+        An initial value is required to initialize the topic with.
+        
+        This can only be done at controller initialization. Writers cannot be created at runtime.
+        """
+        if not self._databus:
+            raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
+        
+        return self._databus.create_writer(topic, data_type, initial)
+
+    
+    def create_databus_reader(self, topic: str, data_type: Type[T]) -> DataReader[T]:
+        """Create a reader of the shared databus across all controller. Use a reader to read
+        data posted by other controllers. Data type must match that specified by the writers.
+        
+        This can only be done at controller initialization. Readers cannot be created at runtime.
+        """
+        if not self._databus:
+            raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
+        
+        return self._databus.create_reader(topic, data_type)
+    
+    # subscription to motion commands
+
     def subscribe_to_command_group(self, ids_group: Iterable[int]):
-        """If not set during __init__, use this to subscribe to a set of motion commands"""
+        """If not passed to __init__, use this to subscribe to a set of motion commands"""
         self.command_group = set(ids_group)
     
     # handling configuration

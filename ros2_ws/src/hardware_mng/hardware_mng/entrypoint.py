@@ -2,7 +2,7 @@
 Startup script for the Hardware Manager process.
 Configures objects, launches background threads, and spins the ros2 node.
 """
-from typing import Protocol, Callable
+from typing import Protocol
 from types import ModuleType
 import importlib
 import rclpy
@@ -12,6 +12,7 @@ from .abstract_hw_controller import BaseHardwareController, MotionCommand
 from .hardware_mng_node import HardwareManagerNode
 from .dispatcher import Dispatcher
 from .looper import LoopSupervisor, LoopDescriptor
+from .databus import Databus, DatabusError
 
 import yaml
 
@@ -100,6 +101,9 @@ def main(args=None):
     total = len(hw_controllers_paths)
 
     controllers: list[BaseHardwareController] = []
+    
+    # creating the shared databus for controllers
+    databus = Databus()
 
     # building controllers
     for i, path in enumerate(hw_controllers_paths):
@@ -109,12 +113,20 @@ def main(args=None):
             logger.warning(f"[{i+1}/{total}] Failed to load hw controller at '{path}' -> {e}")
             continue
 
+
         try:
             controller = class_obj()
         except Exception as e:
             logger.warning(f"[{i+1}/{total}] Failed to instantiate hw controller at '{path}' -> {e}")
             continue
         
+        if not isinstance(controller, BaseHardwareController):
+            logger.warning(f"[{i+1}/{total}] Controller is of invalid class: {type(controller)}")
+            continue
+
+        # bind databus instance
+        controller._databus = databus
+
         logger.info(f"[{i+1}/{total}] loaded and instantiated hw controller at '{path}'")
         controllers.append(controller)
     
@@ -122,7 +134,7 @@ def main(args=None):
     if ok == total:
         logger.info(f"Succesfully loaded {ok}/{ok} hw controllers from configuration '{INPUT_CONFIG}'")
     elif not STRICT_MODE:
-        logger.warning(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded. The hardware may not work completely.")
+        logger.warning(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded. Hardware may not work completely.")
     else:
         logger.fatal(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded, shutting down.")
         exit(-1)
@@ -153,7 +165,7 @@ def main(args=None):
     
     # spin ros2 node in this thread 
     rclpy.init(args=args)
-    node = HardwareManagerNode(dispatcher, looper, loop_ctrl_pairs)
+    node = HardwareManagerNode(dispatcher, looper, loop_ctrl_pairs, databus)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

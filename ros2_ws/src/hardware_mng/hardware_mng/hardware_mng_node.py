@@ -9,6 +9,7 @@ from diagnostic_updater import DiagnosticStatusWrapper, DiagnosticStatus
 from .dispatcher import Dispatcher
 from .looper import LoopSupervisor, display_status_from_json, LoopDescriptor 
 from .abstract_hw_controller import MotionCommand, BaseHardwareController
+from .databus import Databus
 from .hw_controller_state_reconciler import (
     HWControllerStateReconciler,
     ControllerState,
@@ -24,7 +25,8 @@ class HardwareManagerNode(LifecycleNode):
     def __init__(self, 
             dispatcher: Dispatcher, 
             looper: LoopSupervisor, 
-            loop_controllers_pairs: list[tuple[LoopDescriptor, BaseHardwareController]]
+            loop_controllers_pairs: list[tuple[LoopDescriptor, BaseHardwareController]],
+            databus: Databus
         ):
         super().__init__('hardware_manager')
         self.dispatcher: Dispatcher = dispatcher
@@ -32,6 +34,7 @@ class HardwareManagerNode(LifecycleNode):
         self.loop_controllers_pairs = loop_controllers_pairs # loop and controller are always kept together in a tuple
         self.loaded_hw_controllers = [t[1] for t in loop_controllers_pairs]
         self._is_active = False
+        self._controller_databus = databus # we dont really need it, but we keep track of it just in case.
 
         # ------------------------
         # Controller state automatic reconciliation
