@@ -127,10 +127,12 @@ from rclpy.publisher import Publisher
 class MetricsTracker:
     rec_tcp: int = 0
     rec_udp: int = 0
+    motion_cmds: int = 0
 
     def reset(self):
         self.rec_tcp = 0
         self.rec_udp = 0
+        self.motion_cmds = 0
 
 class ACSessionRunner(SessionRunner[ACSessionContext]):
     
@@ -175,8 +177,9 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             # process metrics
             rec_tcp_per_second = self.metrics.rec_tcp / delta_time
             rec_udp_per_second = self.metrics.rec_udp / delta_time
+            motion_cmds_per_second = self.metrics.motion_cmds / delta_time
             self.metrics.reset()
-            self.logger.info(f"Metrics: {rec_tcp_per_second}  {rec_udp_per_second}") # eventually we will publish this on /diagnostics
+            self.logger.info(f"Metrics: {rec_tcp_per_second:.2f} tcp/s  {rec_udp_per_second:.2f} udp/s {motion_cmds_per_second} cmd/s") # eventually we will publish this on /diagnostics
 
             # check for heartbeat
             if time.time() > self.heartbeat_deadline:
@@ -209,7 +212,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
                     self.config_publisher.publish(msg)
 
                 case SessionEndRequestPacket():
-                    self.logger.info("Client requested session termination. Terminating session...")
+                    self.logger.warning("Client requested session termination. Terminating session...")
                     stop_event.set()
 
                 case HeartBeatPacket():
@@ -232,7 +235,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
         metrics = self.metrics
         peer = ctx.stream_sock
-        peer.set_timeout(1.0)
+        peer.set_timeout(2.0)
 
         while not stop_event.is_set():
             try:
@@ -244,7 +247,6 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             if motionframe_raw == b"":
                 continue # either timeout or invalid message
             
-            metrics.rec_udp += 1 # track stat
 
             # uses arrays because python rosldi expects them
             motionframe_message = MotionframeArray()
@@ -252,6 +254,9 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             motionframe_message.ids = arr_ids
             motionframe_message.values = arr_values
             self.motionframe_publisher.publish(motionframe_message)
+
+            metrics.rec_udp += 1 # track stat
+            metrics.motion_cmds += len(arr_ids)
 
         stop_event.set()
 
