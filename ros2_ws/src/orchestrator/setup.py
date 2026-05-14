@@ -32,6 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'lifecycle_supervisor = orchestrator.lifecycle_supervisor:main'
         ],
     },
 )

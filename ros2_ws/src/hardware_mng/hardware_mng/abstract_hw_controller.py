@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Callable
-from typing import NamedTuple, Optional, Tuple, Dict, Any, Generic, TypeVar, Type
+from typing import NamedTuple, Optional, Tuple, Dict, Any, TypeVar, Type
 
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
@@ -92,10 +92,10 @@ class BaseHardwareController(ABC):
 
     # shared databus api
 
-    def create_databus_writer(self, topic: str, data_type: Type[T], initial: T) -> DataWriter[T]:
-        """Create a writer on the shared databus across all controller. Any controller can read the data
+    def create_databus_writer(self, topic: str, data_type: type[T], initial: T) -> DataWriter[T]:
+        """Create a writer on the shared databus across all controllers. Any controller can read the data
         posted by a writer. Writers enforce a unique writable data type, which must be immutable. 
-        An initial value is required to initialize the topic with.
+        An initial value is required to initialize the bus with.
         
         This can only be done at controller initialization. Writers cannot be created at runtime.
         """
@@ -106,8 +106,8 @@ class BaseHardwareController(ABC):
 
     
     def create_databus_reader(self, topic: str, data_type: Type[T]) -> DataReader[T]:
-        """Create a reader of the shared databus across all controller. Use a reader to read
-        data posted by other controllers. Data type must match that specified by the writers.
+        """Create a reader of the shared databus across all controllers. Use a reader to read
+        data posted by other controllers. Data type must match that specified by the topic writer
         
         This can only be done at controller initialization. Readers cannot be created at runtime.
         """

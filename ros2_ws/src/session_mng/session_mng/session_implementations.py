@@ -174,7 +174,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
             await asyncio.sleep(1.0)
             delta_time = time.time() - last_time # exact computation
 
-            # process metrics
+            # compute metrics
             rec_tcp_per_second = self.metrics.rec_tcp / delta_time
             rec_udp_per_second = self.metrics.rec_udp / delta_time
             motion_cmds_per_second = self.metrics.motion_cmds / delta_time

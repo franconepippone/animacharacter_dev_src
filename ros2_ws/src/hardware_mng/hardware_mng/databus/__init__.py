@@ -246,6 +246,8 @@ class Databus:
 
         Creating a writer also initializes the topic value.
         """
+        if not isinstance(initial, topic_msg_type):
+            raise DatabusError(f'Initial value provided to writer of \'{topic_name}\' is not of the declared type: {topic_msg_type}')
         self._require_unfinalized()
         topic = self._require_topic(topic_name, topic_msg_type)
         writer = DataWriter(topic, topic_msg_type, initial)

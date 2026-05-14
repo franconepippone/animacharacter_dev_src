@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
+from lifecycle_msgs.msg import Transition, State
+from lifecycle_msgs.srv import GetState, ChangeState
+
 from std_msgs.msg import String
 from interfaces.srv import CreateSession
 from interfaces.msg import MotionframeArray
@@ -18,9 +21,24 @@ SRV_NAME = 'create_session'
 CONFIG_TOPIC = 'config_update'
 MOTIONFRAME_TOPIC = 'input_motionframes'
 
+HARDWARE_MANAGER_NODE = "/hardware_manager"
+
 class SessManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("session_manager")
+
+        self.get_state_cli = self.create_client(
+            GetState,
+            f"{HARDWARE_MANAGER_NODE}/get_state"
+        )
+
+        self.change_state_cli = self.create_client(
+            ChangeState,
+            f"{HARDWARE_MANAGER_NODE}/change_state"
+        )
+
+        self.get_state_cli.wait_for_service()
+        self.change_state_cli.wait_for_service()
 
         self.srv = self.create_service(
             CreateSession,
@@ -55,7 +73,23 @@ class SessManagerNode(Node):
         self.get_logger().info("Session manager node initialized.")
 
     def validate_session_request_criteria(self) -> bool:
-        # TODO check for hardware avaliablility
+        req = ChangeState.Request()
+        req.transition.id = Transition.TRANSITION_ACTIVATE
+
+        future = self.change_state_cli.call_async(req)
+
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        result = future.result()
+
+        if result is None:
+            self.get_logger().error("activate transition failed (no response)")
+            return False
+
+        if not result.success:
+            self.get_logger().error("activate transition rejected by lifecycle node")
+            return False
+
+        self.get_logger().info("hardware_manager activated successfully")
         return True
 
     # handler for session creation service
