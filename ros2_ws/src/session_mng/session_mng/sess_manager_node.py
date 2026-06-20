@@ -102,7 +102,7 @@ class SessManagerNode(Node):
         )
 
         result = self.session_manager.new_session(create_args)
-        if result.handle is None or not result.success: # on failure to make a new session
+        if result.success == False or result.handle is None: # on failure to make a new session
             response.success = False
             response.msg = result.error_msg if result.error_msg else "Unknown error"
             self.get_logger().warning(f"Session creation failed: {response.msg}")

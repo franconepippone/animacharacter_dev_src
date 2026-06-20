@@ -4,22 +4,22 @@
 default_config: "testing2" # default configuration to use
 
 teodore:
-  - "hardware_mng.hw_controllers.teodore_plugins:HeadController"
-  - "hardware_mng.hw_controllers.teodore_plugins:BodyController"
-  - "hardware_mng.hw_controllers.teodore_plugins:LeftArmController"
-  - "hardware_mng.hw_controllers.teodore_plugins:RightArmController"
+  - "teodore_plugins:HeadController"
+  - "teodore_plugins:BodyController"
+  - "teodore_plugins:LeftArmController"
+  - "teodore_plugins:RightArmController"
 
 # uses fake controllers just for testing
 testing:
-  - "hardware_mng.hw_controllers.testing_plugins:A_Controller"
-  - "hardware_mng.hw_controllers.testing_plugins:B_Controller"
-  - "hardware_mng.hw_controllers.testing_plugins:C_Controller"
+  - "testing_plugins:A_Controller"
+  - "testing_plugins:B_Controller"
+  - "testing_plugins:C_Controller"
 
 simulator:
-  - "hardware_mng.hw_controllers.sim_teodore:BaseControllerSim"
+  - "sim_teodore:BaseControllerSim"
 
 
 testing2:
-  - "hardware_mng.hw_controllers.testing_databus:A_Controller"
-  - "hardware_mng.hw_controllers.testing_databus:B_Controller"
-  - "hardware_mng.hw_controllers.testing_databus:C_Controller"
+  - "testing_databus:A_Controller"
+  - "testing_databus:B_Controller"
+  - "testing_databus:C_Controller"

@@ -1,5 +1,5 @@
 """
-In this files all abstract classes from "session_mng/session" package are subclasses,
+In this files all abstract classes from "session_mng/session" package are subclassed,
 implementing the specific session logic for an animacharacter session.
 """
 
@@ -78,10 +78,12 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
         try:
             session_secret = secrets.token_urlsafe(64)
 
+            # tcp, low-throughput socket
             sess_sock = PeerTCP(session_secret)
             sess_sock.listen(0)
             sess_port = sess_sock.local_address[1]
             
+            # udp, fast streaming socket
             stream_sock = PeerUDP(0, psk=session_secret)
             stream_sock.dial(args.client_ip, args.client_udp_port)
             stream_port = stream_sock.local_address[1]

@@ -2,9 +2,7 @@
 Startup script for the Hardware Manager process.
 Configures objects, launches background threads, and spins the ros2 node.
 """
-from typing import Protocol, cast, Type
-from types import ModuleType
-import importlib
+from typing import Type
 import rclpy
 from rclpy.logging import RcutilsLogger
 
@@ -13,8 +11,8 @@ from .hardware_mng_node import HardwareManagerNode
 from .dispatcher import Dispatcher
 from .looper import LoopSupervisor, LoopDescriptor
 from .databus import Databus, DatabusError
+from . import plugins_loader as pld
 
-import yaml
 import inspect
 
 def is_type_of_base(obj, BaseClass):
@@ -23,64 +21,28 @@ def is_type_of_base(obj, BaseClass):
 class ConcreteController(BaseHardwareController):
     def __init__(self) -> None: ...
 
-
-def load_yaml_file(path: str):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-    except FileNotFoundError:
-        raise RuntimeError(f"YAML file not found: {path}")
-    except yaml.YAMLError as e:
-        raise RuntimeError(f"Invalid YAML in {path}: {e}")
-
-    if data is None:
-        return {}  # or raise, depending on your needs
-
-    return data
-
-
 logger = RcutilsLogger('HW-mng starter')
 
-def import_class(path: str) -> Type:
-    try:
-        modulename, classname = path.split(":")
-    except ValueError as e:
-        raise RuntimeError(f"Invalid class path '{path}', use 'path.to.module:class' syntax.")
-    
-    module = import_module(modulename)
-    try:
-        _class = getattr(module, classname)
-    except AttributeError:
-        raise RuntimeError(f"class '{classname}' not found in module {modulename}")
-    
-    return _class
-    
-
-def import_module(path: str) -> ModuleType | None:
-    """ Attempts import of hardare controller module at runtime """
-    # NOTE for now this only works with a symlink install
-    try:
-        hw_controller_class = importlib.import_module(path)
-        return hw_controller_class
-    
-    except Exception as e:
-        raise RuntimeError(f"Failed to import hardware controller '{path}': {e}.")
-
-
 def main(args=None):
-    # simulate CLI input
-    INPUT_CONFIG: str = ''
-    YAML_FILE = "src/hardware_mng/hardware_mng/hw_configurations.yaml"
-    STRICT_MODE = True #wheter to stop if any of the controllers fail to load
-
+    # input is given via env variables
     import os
+    PLUGIN_DIRS = os.getenv("PLUGIN_DIRS", "/plugins").split(":")
+    CONFIG_FILE = os.getenv("CONFIG_FILE", "/config.yaml")
+    INPUT_CONFIG = os.getenv("INPUT_CONFIG", "")
+    STRICT_MODE = os.getenv("STRICT_MODE", "true").lower() == "true" #wheter to stop if any of the controllers fail to load
+
+    pld.register_plugin_dirs(PLUGIN_DIRS) # now we can import them
+
+    logger.debug(f"Plugins source directories are: {"\n\t- ".join(PLUGIN_DIRS)}")
+    logger.debug(f"Configuration file source: {CONFIG_FILE}, current input config: {INPUT_CONFIG}")
+
     logger.info(f"Beginning hardare manager system initialization. CWD: {os.getcwd()}")
 
     # loading configs
     try:
-        config_data: dict[str, list[str] | str] = load_yaml_file(YAML_FILE)
+        config_data: dict[str, list[str] | str] = pld.load_yaml_file(CONFIG_FILE)
     except RuntimeError as e:
-        logger.fatal(f"Failed to load Hardwdare Configuration file -> {e}")
+        logger.fatal(f"Failed to load Hardware Configuration file -> {e}")
         exit(-1)
 
     if INPUT_CONFIG == '':
@@ -89,10 +51,12 @@ def main(args=None):
             logger.fatal('No hardware configuration specified.')
             exit(-1)
         INPUT_CONFIG = default_config
+    
+    logger.info(f"Using configuration: '{INPUT_CONFIG}'")
 
     hw_controllers_paths: list[str] | str | None = config_data.get(INPUT_CONFIG)
     if hw_controllers_paths is None:
-        logger.fatal(f"Configuration '{INPUT_CONFIG}' not found in hardware configuration file at '{YAML_FILE}'")
+        logger.fatal(f"Configuration '{INPUT_CONFIG}' not found in hardware configuration file at '{CONFIG_FILE}'")
         exit(-1)
     if not(
         isinstance(hw_controllers_paths, list) and 
@@ -112,7 +76,7 @@ def main(args=None):
     # building controllers
     for i, path in enumerate(hw_controllers_paths):
         try:
-            class_obj: Type[ConcreteController] = import_class(path)
+            class_obj: Type[ConcreteController] = pld.import_class(path)
         except RuntimeError as e:
             logger.warning(f"[{i+1}/{total}] Failed to load hw controller at '{path}' -> {e}")
             continue

@@ -206,13 +206,13 @@ class Databus:
             if topic not in self._writer_topics:
                 raise DatabusTopologyError(f'Topic "{topic.name}" has no writer')
     
-    def finalize(self):
+    def finalize(self) -> None:
         """
         Finalize the databus topology.
 
         After finalization:
         - no new readers/writers may be created
-        - all topics must already own a writer
+        - all topics must already own a writer (if enforce_writers is True)
         """
         self._assert_topics_have_writers()
         self._finalized = True
