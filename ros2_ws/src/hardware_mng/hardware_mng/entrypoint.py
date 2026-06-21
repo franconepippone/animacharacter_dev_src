@@ -27,7 +27,7 @@ def main(args=None):
     # input is given via env variables
     import os
     PLUGIN_DIRS = os.getenv("PLUGIN_DIRS", "/plugins").split(":")
-    CONFIG_FILE = os.getenv("CONFIG_FILE", "/config.yaml")
+    CONFIG_FILE = os.getenv("CONFIG_FILE", "/plugins/config.yaml")
     INPUT_CONFIG = os.getenv("INPUT_CONFIG", "")
     STRICT_MODE = os.getenv("STRICT_MODE", "true").lower() == "true" #wheter to stop if any of the controllers fail to load
 

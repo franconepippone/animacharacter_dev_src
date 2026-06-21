@@ -1,19 +1,11 @@
-
-Rosdep commands
----
-# this installs all dependencies listed in the package.xml files, ignore-src make it so we can define dependencies on local packages
-rosdep install --from-paths ros2_ws/src --ignore-src
-
-
-
 Docker Commands
 ---
 
-# to build the image
-docker build -f animacharacter_server/Dockerfile -t ac-engine:latest .
+# to build the image (shared ctx must be injected)
+docker build --build-context shared=../shared_libs -t ac-engine:latest .
 
-# run the image in dev mode (mount local workspace)
-docker run -it --rm   --net=host  -v $(pwd):/app   ac-engine:latest
+# run the image in deploy mode
+docker run -it --rm --network host ac-engine:latest
 
-# run the image in deploy mode (files are local to image)
-docker run -it --rm   --net=host     ac-engine:latest
+# run the image and start the engine immediately
+docker run -it --rm --network host ac-engine:latest start

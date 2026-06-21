@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir --break-system-packages fastapi uvicorn
 # ---------------------------------------------------------
 # ROS2 workspace
 # ---------------------------------------------------------
-ENV ROS_WS=/opt/ros2_ws
+ENV ROS_WS=/app/ros2_ws
 WORKDIR ${ROS_WS}
 
 COPY ros2_ws/src ./src
@@ -62,15 +62,25 @@ RUN rosdep update && \
 RUN source /opt/ros/jazzy/setup.bash && \
     colcon build --symlink-install
 
+
+# Adding engine start shortcut command
+COPY start.sh /usr/local/bin/start
+RUN chmod +x /usr/local/bin/start
+
 # ---------------------------------------------------------
 # Runtime environment
 # ---------------------------------------------------------
-ENV PLUGIN_DIRS=/plugins:/app/plugins_builtin
-ENV CONFIG_FILE=/config/config.yaml
+ENV BUILTIN_PLUGINS_DIR=/app/ros2_ws/src/hardware_mng/hardware_mng/builtin_plugins
+
+ENV PLUGIN_DIRS=/plugins:${BUILTIN_PLUGINS_DIR}
+# ^^ register both builtin plugins dir and folder reserved to user plugins (can be mounted)
+ENV CONFIG_FILE=${BUILTIN_PLUGINS_DIR}/hw_configurations.yaml 
+# ^^ Point to the default configuration file, path must be changed for custom user configurations
 ENV INPUT_CONFIG=""
 ENV STRICT_MODE="true"
 
-RUN mkdir -p /app/plugins_builtin /plugins /config
+# Users who want to add plugins can mount this directory and place them there directly
+RUN mkdir -p /plugins
 
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
     echo "source ${ROS_WS}/install/setup.bash" >> /etc/bash.bashrc
