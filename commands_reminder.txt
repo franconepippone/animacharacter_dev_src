@@ -10,10 +10,10 @@ Docker Commands
 ---
 
 # to build the image
-docker build -t ros2-jazzy-dev .
+docker build -f animacharacter_server/Dockerfile -t ac-engine:latest .
 
 # run the image in dev mode (mount local workspace)
-docker run -it --rm   --net=host  -v $(pwd):/app   ros2-jazzy-dev
+docker run -it --rm   --net=host  -v $(pwd):/app   ac-engine:latest
 
 # run the image in deploy mode (files are local to image)
-docker run -it --rm   --net=host     ros2-jazzy-dev
+docker run -it --rm   --net=host     ac-engine:latest

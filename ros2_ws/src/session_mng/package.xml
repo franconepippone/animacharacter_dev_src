@@ -8,8 +8,7 @@
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
-  <depend>python3-uvicorn</depend>
-  <depend>python3-fastapi</depend>
+  <depend>diagnostic_updater</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
