@@ -9,3 +9,6 @@ docker run -it --rm --network host ac-engine:latest
 
 # run the image and start the engine immediately
 docker run -it --rm --network host ac-engine:latest start
+
+# run image and mount a custom plugins folder
+docker run -it --rm --network host -v ./custom_plugins:/app/plugins ac-engine:latest

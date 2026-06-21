@@ -72,15 +72,15 @@ RUN chmod +x /usr/local/bin/start
 # ---------------------------------------------------------
 ENV BUILTIN_PLUGINS_DIR=/app/ros2_ws/src/hardware_mng/hardware_mng/builtin_plugins
 
-ENV PLUGIN_DIRS=/plugins:${BUILTIN_PLUGINS_DIR}
+ENV PLUGIN_DIRS=/app/plugins:${BUILTIN_PLUGINS_DIR}
 # ^^ register both builtin plugins dir and folder reserved to user plugins (can be mounted)
 ENV CONFIG_FILE=${BUILTIN_PLUGINS_DIR}/hw_configurations.yaml 
-# ^^ Point to the default configuration file, path must be changed for custom user configurations
+# ^^ Point to the default configuration file, file must be changed for custom user configurations or path changed to point at a different file
 ENV INPUT_CONFIG=""
 ENV STRICT_MODE="true"
 
 # Users who want to add plugins can mount this directory and place them there directly
-RUN mkdir -p /plugins
+RUN mkdir -p /app/plugins
 
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
     echo "source ${ROS_WS}/install/setup.bash" >> /etc/bash.bashrc

@@ -6,10 +6,10 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="session_mng",
-            executable="manager"
+            executable="session_mng"
         ),
         Node(
             package="session_mng",
-            executable="listener"
+            executable="connection_listener"
         )
     ])

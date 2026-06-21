@@ -25,7 +25,7 @@ def generate_launch_description():
     
     hardware_mng = Node(
         package='hardware_mng',
-        executable='main',
+        executable='hardware_mng',
         output="screen"
     )
 
