@@ -1,0 +1,14 @@
+project_name: animacharacter_dev_src
+exclude:
+    - .git/
+    - .venv/
+    - venv/
+    - __pycache__/
+    - '**/*.pyc'
+    - .pytest_cache/
+    - .mypy_cache/
+repositories:
+    animacharacter_dev_src:
+        url: https://github.com/franconepippone/animacharacter_dev_src.git
+        config:
+            mode: upsert
