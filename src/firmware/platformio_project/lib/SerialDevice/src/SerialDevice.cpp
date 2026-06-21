@@ -2,7 +2,7 @@
 #include "SerialDevice.h"
 #include "build_info.h"
 #include <Hashtable.h>
-#include <timer/Timer.h>
+#include <timer.h>
 
 // for some reasons on these architectures min and max are renamed _min and _max, so we just redefine them here
 #if defined(ESP8266) || defined(ESP32)
@@ -18,11 +18,6 @@
   #define LED_OFF LOW
 #endif
 
-// This is only defined on esp8266
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2
-#endif
-
 
 #ifndef IGNORE_SERIAL_DEVICE_DEBUG_CODE
 
@@ -31,11 +26,39 @@ if all the functionalities of the devices are working properly.
 
 To ignore this code, define IGNORE_SERIAL_DEVICE_DEBUG_CODE either in this file
 or in the platformio.ini file (add "build_flags = -D IGNORE_SERIAL_DEVICE_DEBUG_CODE" to your environment).
-This will produce a slightly lighter binary (might be needed for arduino nano).
+This will produce a slightly lighter binary.
 
+NOTE: removing this could break some of the python CLI functionalities (test*, trigger*, and similar).
 */
 
+// __heap_start and __brkval only exposed in AVR boards
+#if defined(__AVR__)
+
+int freeRamAmount() {
+    extern int __heap_start, *__brkval;
+    int v;
+    return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+}
+
+#else
+
+int freeRamAmount() {
+    return -1; // unsupported platform
+}
+
+#endif
+
+
+bool _debug_onFreeRamAmount(SerialDevice* dev) {
+    _debug_blink_builtin(10, 50);
+    uint32_t val = freeRamAmount();
+    dev->sendPacket(val, 1);
+    return false;
+}
+
 void _debug_blink_builtin(int times, int period) {
+    // only if the led_builtin is defined
+    #ifdef LED_BUILTIN
     pinMode(LED_BUILTIN, OUTPUT);
     for (int i = 0; i < times; i++) {
         digitalWrite(LED_BUILTIN, LED_ON);
@@ -44,6 +67,7 @@ void _debug_blink_builtin(int times, int period) {
         delay(period);
     }
     digitalWrite(LED_BUILTIN, LED_OFF);
+    #endif
 }
 
 bool _debug_triggerIdent(SerialDevice* dev) {
@@ -95,10 +119,31 @@ bool _handlePing(SerialDevice* dev) {
 }
 
 bool _handleInfoRqst(SerialDevice* dev) {
-    // NOTE that this may cause stack overflow
-    static char jsonInfoBuff[sizeof(BUILD_INFO_JSON)];
-    getBuildInfoJson(jsonInfoBuff, sizeof(BUILD_INFO_JSON));
-    dev->sendLarge((byte*)jsonInfoBuff, sizeof(jsonInfoBuff), PACKID_DEV_INFO_RESP);
+    StreamOpOutcome result = dev->streamBegin(sizeof(BUILD_INFO_JSON), 500);
+    if (result != StreamOpOutcome::OK) {
+        //_debug_blink_builtin(5, 250);
+        return false;
+    }
+
+    const uint32_t TargetChunkSize = 10;
+    uint32_t offset = 0;
+    const auto TOT_SIZE = sizeof(BUILD_INFO_JSON);
+    while (offset < TOT_SIZE) {
+        static char tempBuff[TargetChunkSize];
+        uint32_t chunkSize = min(TOT_SIZE - offset, TargetChunkSize); // bounds chunksize
+        getBuildInfoJson(tempBuff, chunkSize, offset); // copies chunkSize bytes with offset from progmem to tempBuff
+        
+        result = dev->streamChunk((byte*)tempBuff, chunkSize, offset, 500);
+        if (result != StreamOpOutcome::OK) {
+            //_debug_blink_builtin(5, 250);
+            return false;
+        }
+        //_debug_blink_builtin(3, 10);
+        offset += chunkSize;
+    }
+
+    result = dev->streamEnd(PACKID_DEV_INFO_RESP);
+    if (result != StreamOpOutcome::OK) _debug_blink_builtin(10, 100);
     return false;
 }
 
@@ -217,6 +262,7 @@ SerialDevice::SerialDevice(HardwareSerial& serial, const char* name)
     // assign debug triggers callbacks
     on(PACKID_DEBUG_TRIGGER_IDENT_RQST, _debug_triggerIdent);
     on(PACKID_DEBUG_TRIGGER_LARGE_TX, _debug_triggerLargeTx);
+    on(PACKID_DEBUG_FREERAM, _debug_onFreeRamAmount);
     // assign debug large rx handler (this is ment to be overwritten by user)
     onLargeRecv(_debug_onLargeRx);
     #endif
@@ -249,7 +295,7 @@ uint8_t SerialDevice::poll() {
     uint8_t amount = available();
     if (amount) {
         const uint8_t latestPackId = txf.currentPacketID();
-        PacketHandler *hndlr = handlersTable.get(latestPackId);
+        const PacketHandler* hndlr = handlersTable.get(latestPackId);
         if (hndlr) {
             (*hndlr)(this);
             return 0;
@@ -337,7 +383,7 @@ uint8_t SerialDevice::sendBytes(const byte *buffer, size_t size, uint8_t packId)
     memcpy(txf.packet.txBuff, buffer, size);
     return txf.sendData(size, packId);
 }
-
+/*
 template <size_t N>
 uint8_t SerialDevice::sendPacket(char (&str)[N], uint8_t packId) {
     size_t len = strnlen(str, N);
@@ -349,58 +395,90 @@ uint8_t SerialDevice::sendPacket(const T& obj, uint8_t packId) {
     uint16_t size = txf.txObj(obj);
     return txf.sendData(size, packId);
 }
-
+*/
 uint8_t SerialDevice::sendPacket(const char* str, uint8_t packId) {
     uint16_t size = strnlen(str, 254);
     return sendBytes((byte*)str, size, packId);
 }
 
 // ======================= LARGE TRANSFER =======================
- 
+
+
+StreamOpOutcome SerialDevice::streamBegin(uint32_t buffSize, uint32_t timeoutMs) {
+    // removed guard, because we want stream begin to always restart state
+    //if (streamCtx.initiated) return StreamOpOutcome::ALREADY_INITIATED; // guard
+    sendPacket(buffSize, PACKID_LARGETX_BEGIN);
+    streamCtx.buffSize = buffSize;
+
+    auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
+    if (!rmning) return StreamOpOutcome::TIMED_OUT;
+
+    bool transfOk;
+    recvPacket(transfOk);
+
+    streamCtx.initiated = transfOk;
+    return transfOk ? StreamOpOutcome::OK : StreamOpOutcome::REFUSED;
+}
+
+StreamOpOutcome SerialDevice::streamChunk(byte *buffer, uint32_t size, uint32_t offset, uint32_t timeoutMs) {
+    if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED; // guard if stream was not accepted
+    
+    if (offset + size > streamCtx.buffSize) return StreamOpOutcome::CHUNK_OUT_OF_BOUNDS;
+    //auto actualChunkSize = min(streamCtx.buffSize, size - offset);
+    clearTxBuff(); // make sure tx buffer is clear
+
+    uint64_t rmning = 0;
+    for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
+        // fills the tx buffer
+        txObj(offset);
+        txBytes(buffer, size);
+        send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
+
+        rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
+        if (rmning) break;
+    }
+    if (!rmning) {
+        streamCtx.initiated = false; // resets flag
+        return StreamOpOutcome::TIMED_OUT;  // if remaining is zero (timeout expired), transfer failed.
+    }    
+    return StreamOpOutcome::OK;
+}
+
+StreamOpOutcome SerialDevice::streamEnd(uint8_t packId) {
+    if (!streamCtx.initiated) return StreamOpOutcome::NOT_INITIATED;
+    sendPacket(packId, PACKID_LARGETX_END);
+    streamCtx.initiated = false;
+    return StreamOpOutcome::OK;
+}
 
 uint32_t SerialDevice::sendLarge(byte *buffer, uint32_t size, uint8_t packId, uint32_t timeoutMs, uint8_t chunkSize) 
 {
-    sendPacket(size, PACKID_LARGETX_BEGIN);
-    //sendBytes((byte*)&size, sizeof(size), PACKID_LARGETX_BEGIN);
-
-    auto rmning = waitPacketOfId(PACKID_LARGETX_BEGIN_RESP, timeoutMs);
-    if (!rmning) return 0;  // if response times out
-
-    bool transfOk; // if peer has agreed to the transfer 
-    recvPacket(transfOk);
-    if (!transfOk) return 0;
+    if (streamBegin(size, timeoutMs) != StreamOpOutcome::OK) {
+        return 0;
+    }
 
     uint32_t offset = 0;
-    uint32_t actualChunkSize = 0;
-    while (offset < size)
-    {
-        actualChunkSize = min((uint32_t)chunkSize, size - offset);
-        clearTxBuff(); // make sure tx buffer is clear
-
-        for (int i = 0; i < LARGE_TRANSFER_SEND_RETRY_AMOUNT; i++) {
-            // fills the tx buffer
-            txObj(offset);
-            txBytes(buffer + offset, actualChunkSize);
-            send(PACKID_LARGETX_CHUNK); // sends all data in tx buff
-
-            rmning = waitPacketOfId(PACKID_LARGETX_ACK, timeoutMs);
-            if (rmning) break;
+    while (offset < size) {
+        uint32_t actualChunkSize = min((uint32_t)chunkSize, size - offset);
+        StreamOpOutcome result = streamChunk(buffer + offset, actualChunkSize, offset, timeoutMs);
+        if (result != StreamOpOutcome::OK) {
+            return 0;
         }
-        if (!rmning) return 0;  // if remaining is zero (timeout expired), transfer failed.
         offset += actualChunkSize;
     }
 
-    sendPacket(packId, PACKID_LARGETX_END);
-    return offset + actualChunkSize;
+    // send end packet, preserve original behavior by not failing the return value on end error
+    streamEnd(packId);
+    return offset;
 }
 
 
 // ======================= RECEIVE API =======================
-
+/*
 template <typename T>
 size_t SerialDevice::recvPacket(T& obj) {
     return txf.rxObj(obj);
-}
+}*/
 
 size_t SerialDevice::recvBytes(byte* dst, size_t cap) {
     size_t n = min(cap, (size_t)txf.bytesRead);
@@ -419,6 +497,7 @@ size_t SerialDevice::recvPacket(char* dst, size_t cap) {
     return n;
 }
 
+/*
 template <size_t N>
 size_t SerialDevice::recvPacket(char (&dst)[N]) {
     size_t n = strnlen((char*)txf.packet.rxBuff, txf.bytesRead);
@@ -427,7 +506,7 @@ size_t SerialDevice::recvPacket(char (&dst)[N]) {
     memcpy(dst, txf.packet.rxBuff, n);
     dst[n] = '\0';
     return n;
-}
+}*/
 
 // ======================= RESET =======================
 

@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../../../../python/pySerialDevice"
+		},
+		{
+			"path": "../../../../ac_server_win/libs/mcuDrivers"
 		}
 	],
 	"settings": {}

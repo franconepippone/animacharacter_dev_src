@@ -109,12 +109,15 @@ static const char BUILD_INFO_JSON[] BI_STORAGE =
  * Optional: raw pointer accessor
  * Copies to buffer you provide (size must be >= sizeof(BUILD_INFO_JSON))
  * ========================================================= */
-inline void getBuildInfoJson(char* outBuffer, size_t bufferSize) {
-    if (bufferSize < sizeof(BUILD_INFO_JSON)) return;
+inline void getBuildInfoJson(char* outBuffer, size_t bufferSize, size_t offset = 0) {
+    if (!outBuffer) return;
+    if (offset >= sizeof(BUILD_INFO_JSON)) return;
+    if (offset + bufferSize > sizeof(BUILD_INFO_JSON)) return;
+
 #if defined(ARDUINO_ARCH_AVR)
     // progmem is not memory mapped on AVR, we need to copy
-    memcpy_P(outBuffer, BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON));
+    memcpy_P(outBuffer, BUILD_INFO_JSON + offset, bufferSize);
 #else
-    memcpy(outBuffer, BUILD_INFO_JSON, sizeof(BUILD_INFO_JSON));
+    memcpy(outBuffer, BUILD_INFO_JSON + offset, bufferSize);
 #endif
 }
