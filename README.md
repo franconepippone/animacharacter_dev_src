@@ -1,5 +1,7 @@
 # Animacharacter Platform
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/franconepippone/animacharacter_dev_src)
+
 Animacharacter Platform is a framework for remotely controlling hardware systems composed of many controllable elements.
 
 The primary goal of the project is to provide a standard architecture that separates application logic from hardware-specific implementation details.
