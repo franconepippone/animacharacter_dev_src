@@ -14,6 +14,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Customservice.srv"
   "srv/CreateSession.srv"
   "msg/MotionframeArray.msg"
+  "msg/SystemStatus.msg"
+  "msg/SystemEvent.msg"
 )
 
 if(BUILD_TESTING)

@@ -1,3 +1,15 @@
+"""
+The supervisor node acts at the top level orchestrator for the entire ros2 system.
+
+Supervisor subscribes to /system_events and /diagnostics; it's also the only node that owns
+control over /system_status, which is used to publish global status updates.
+An onboard display panel node (or some other signaling tool) can subscribe to /system_status to notify updates.
+
+/system_events mainly catches process crashes/restarts, while /diagnostics catches higher level diagnostic data that
+every node publishes. Depending on type and severity, the supervisor may or may not decide to update /system_status to reflect these. 
+
+"""
+
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
@@ -6,10 +18,10 @@ from lifecycle_msgs.srv import ChangeState, GetState
 from lifecycle_msgs.msg import Transition, State
 
 
-class LifecycleSupervisor(Node):
+class Supervisor(Node):
 
     def __init__(self, timeout_sec=5.0):
-        super().__init__("lifecycle_supervisor")
+        super().__init__("supervisor")
 
         self.declare_parameter("target_node", "")
         self.target = self.get_parameter("target_node").value
@@ -86,7 +98,7 @@ class LifecycleSupervisor(Node):
 
 def main():
     rclpy.init()
-    node = LifecycleSupervisor(timeout_sec=5.0)
+    node = Supervisor(timeout_sec=5.0)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

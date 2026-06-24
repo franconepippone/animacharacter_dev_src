@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'orchestrator'
+package_name = 'orchestration'
 
 setup(
     name=package_name,
@@ -32,7 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'lifecycle_supervisor = orchestrator.lifecycle_supervisor:main'
+            'supervisor_node = orchestration.supervisor_node:main'
         ],
     },
 )
