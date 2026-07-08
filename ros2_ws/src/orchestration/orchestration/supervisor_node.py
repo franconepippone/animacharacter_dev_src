@@ -17,6 +17,7 @@ from rclpy.duration import Duration
 from lifecycle_msgs.srv import ChangeState, GetState
 from lifecycle_msgs.msg import Transition, State
 
+from diagnostic_updater import Heartbeat
 
 class Supervisor(Node):
 

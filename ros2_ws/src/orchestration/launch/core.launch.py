@@ -6,8 +6,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
-from orchestration.launch_utils import publish_system_event, SysEventType
-from orchestration.proc_names import SESSION_MANAGER
+from orchestration.launch_utils import on_process_exit, on_process_start, SysEventType
+from orchestration.proc_names import HARDWARE_MANAGER
 
 """
 Here we handle the launch of the 'core' subsystem of the ros2 system. Crash of any of these processes
@@ -31,8 +31,8 @@ As a reminder: this is done so that the supervisor node can react to system-wide
 
 def generate_launch_description():
     
-    # session manager process (process events callbacks already bound)
-    session_manager = IncludeLaunchDescription(
+    # session manager process (process system events callbacks already bound)
+    session_manager_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare("session_mng"),
@@ -49,46 +49,10 @@ def generate_launch_description():
         output="screen" # TODO what is this?
     )
 
-
-
-    # Notification of hardware_manager exit to /system_events
-    hw_die_handler = RegisterEventHandler(
-        OnProcessExit(
-            target_action=hardware_manager,
-            on_exit=lambda event, _context: [
-                LogInfo(msg=f"Process {event.action.name} exited with code: {event.returncode}"),
-
-                # notify on /system_events
-                publish_system_event(
-                    proc_name=HARDWARE_MANAGER, 
-                    event_type=SysEventType.EXIT, 
-                    exit_code=event.returncode,
-                )
-            ]
-        )
-    )
-
-    # Notification of hardware_manager start to /system_events
-    hw_start_handler = RegisterEventHandler(
-        OnProcessStart(
-            target_action=hardware_manager,
-            on_start=lambda event, _context: [
-            LogInfo(msg=f"Process started: {event.action.name} (PID: {event.pid})"),
-            
-            # notify on /system_events
-            publish_system_event(
-                proc_name=HARDWARE_MANAGER,
-                event_type=SysEventType.START,
-                exit_code=0 # redundant
-            )
-        ]
-        )
-    )
-
     return LaunchDescription([
         hardware_manager,
-        hw_die_handler,
-        hw_start_handler,
-        
-        session_manager
+        RegisterEventHandler(on_process_start(hardware_manager, HARDWARE_MANAGER)),
+        RegisterEventHandler(on_process_exit(hardware_manager, HARDWARE_MANAGER)),
+
+        session_manager_launch
     ])
