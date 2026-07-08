@@ -37,3 +37,32 @@ Per mantenere il sistema estensibile tramite plugin:
 1.  I driver pubblicano errori su `/diagnostics` con un codice locale (0-99).
 2.  Il Supervisor è l'unico componente a conoscere la topologia totale e ad assegnare gli ID driver per il pannello.
 3.  Non è richiesto alcun coordinamento tra sviluppatori di driver diversi per evitare sovrapposizioni di codici, poiché il "dominio" è garantito dal prefisso `y.` assegnato dal Supervisor.
+
+
+Alternativamente, il supervisor (o hardware manger in se per se), può essere dotato di una tabella di remapping. Questa tabella è unica
+per ciascuna configurazione di avvio, e permette di associare errori dal dominio dei driver y.xx a un dominio standard (principalmente, Exx). Esempio:
+
+config A:
+    - controller1
+    - controller2
+    - controller3
+    - controller4
+    errcode_mapping: "path/to/.py:funcname"
+
+
+dentro "path/to/.py":
+```python
+    def convert_errcode(controller_name: str, err: int) -> str:
+        match controller_name:
+            case "head":
+                if err == 0:
+                    return 'E20'
+                elif err == 1:
+                    return 'E22'
+                elif err == 2:
+                    return 'S40'
+            
+            case "body":
+                pass
+
+```
