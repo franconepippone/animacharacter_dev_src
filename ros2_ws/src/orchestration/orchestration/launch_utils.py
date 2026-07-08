@@ -16,7 +16,7 @@ def publish_system_event(proc_name: str, event_type: SysEventType, exit_code: in
     This is mainly used in launch.py files to bind start/exit/crash callbacks to the node's processes.
     """
     
-    msg = f"{{node_name: {proc_name}, event_type: {event_type}, exit_code: {exit_code}}}"
+    msg = f"{{proc_name: {proc_name}, event_type: {event_type}, exit_code: {exit_code}}}"
     return ExecuteProcess(
         cmd=['ros2', 'topic', 'pub', '--once', '/system_events', 'interfaces/msg/SystemEvent', msg],
         shell=True

@@ -77,6 +77,7 @@ def auth(req: AuthRequest, rqst: Request):
 
 def main():
     t = spin_threaded() # this launches the ros node in another thread
+    # XXX Is this safe? interacting directly with the node from different threads
     uvicorn.run(
         "session_mng.session_listener.server:app",       # module:variable
         host="0.0.0.0",

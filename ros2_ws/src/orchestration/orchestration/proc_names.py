@@ -2,6 +2,21 @@
 # those are the unique string ids that identify processes in a /system_event message
 # they are contained here since they are shared between launch files and supervisor_node.py
 
-HARDWARE_MANAGER = 'hardware_manager'
-SESSION_MANAGER = 'session_manager'
-SESSION_CONNECTION_SERVER = 'session_connection_server'
+# domains for names
+CORE_DOM = 'core'
+MONITOR_DOM = 'monitor'
+
+HARDWARE_MANAGER = f'{CORE_DOM}:hardware_manager'
+SESSION_MANAGER = f'{CORE_DOM}:session_manager'
+SESSION_CONNECTION_SERVER = f'{CORE_DOM}:session_connection_server'
+
+
+def get_domain_from_proc_name(name: str) -> str | None:
+    words = name.split(':')
+    if len(words) == 2:
+        return words[0]
+    
+
+### NOTE: right now we are *experimentally* encoding the process "domain" inside its name. This way nodes (mainly, the supervisor node) receiving /system_events can 
+# have logic that reacts to entire domains without checking for every single process name. Ideally, we should add a "domain" fields to the SystemEvents interface,
+# but this can work fine if it remains this simple.

@@ -1,0 +1,98 @@
+# lifecycle_supervisor.py
+from typing import Optional
+
+import rclpy
+from lifecycle_msgs.msg import Transition, State
+from lifecycle_msgs.srv import ChangeState, GetState
+from rclpy.node import Node
+
+
+class LifecycleNodeSupervisor:
+    """Simple remote API for interacting with a lifecycle-managed node. Ment to
+    be instantiated by Supervisory nodes, passing 'self' as first argument."""
+
+    def __init__(self, host_node: Node, target_node_name: str) -> None:
+        self.host_node: Node = host_node
+        self.target_node_name: str = target_node_name
+
+        self._change_state_client = host_node.create_client(
+            ChangeState, f"{self.target_node_name}/change_state"
+        )
+        self._get_state_client = host_node.create_client(
+            GetState, f"{self.target_node_name}/get_state"
+        )
+
+    def wait_for_services(self, timeout_each: float) -> None:
+        """Block until both lifecycle services are available."""
+        self._change_state_client.wait_for_service(timeout_sec=timeout_each)
+        self._get_state_client.wait_for_service(timeout_sec=timeout_each)
+
+    def is_ready(self) -> bool:
+        """Return True when both lifecycle services are ready."""
+        return (
+            self._change_state_client.service_is_ready()
+            and self._get_state_client.service_is_ready()
+        )
+
+    def get_state(self) -> Optional[int]:
+        """Return the target node's current state id, or None if unavailable."""
+        if not self._get_state_client.service_is_ready():
+            self.host_node.get_logger().warn("get_state service not ready yet")
+            return None
+
+        request = GetState.Request()
+        future = self._get_state_client.call_async(request)
+        rclpy.spin_until_future_complete(self.host_node, future)
+
+        result = future.result()
+        if result is None:
+            return None
+
+        return result.current_state.id
+
+    def change_state(self, transition_id: int) -> bool:
+        """Request a lifecycle transition and return whether it succeeded."""
+        if not self._change_state_client.service_is_ready():
+            self.host_node.get_logger().warn("change_state service not ready yet")
+            return False
+
+        request = ChangeState.Request()
+        request.transition.id = transition_id
+        future = self._change_state_client.call_async(request)
+        rclpy.spin_until_future_complete(self.host_node, future)
+
+        result = future.result()
+        return bool(result.success) if result is not None else False
+
+    def configure(self) -> bool:
+        """Request the CONFIGURE transition."""
+        return self.change_state(Transition.TRANSITION_CONFIGURE)
+
+    def activate(self) -> bool:
+        """Request the ACTIVATE transition."""
+        return self.change_state(Transition.TRANSITION_ACTIVATE)
+
+    def cleanup(self) -> bool:
+        """Request the CLEANUP transition."""
+        return self.change_state(Transition.TRANSITION_CLEANUP)
+
+    def shutdown(self) -> bool:
+        """Request the appropriate SHUTDOWN transition for the current state."""
+        state = self.get_state()
+
+        if state is None:
+            return False
+
+        if state == State.PRIMARY_STATE_UNCONFIGURED:
+            transition = Transition.TRANSITION_UNCONFIGURED_SHUTDOWN
+        elif state == State.PRIMARY_STATE_INACTIVE:
+            transition = Transition.TRANSITION_INACTIVE_SHUTDOWN
+        elif state == State.PRIMARY_STATE_ACTIVE:
+            transition = Transition.TRANSITION_ACTIVE_SHUTDOWN
+        else:
+            self.host_node.get_logger().warn(
+                f"Cannot shutdown from lifecycle state {state}"
+            )
+            return False
+
+        return self.change_state(transition)
