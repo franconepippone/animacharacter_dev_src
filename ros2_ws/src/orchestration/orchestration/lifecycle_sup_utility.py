@@ -1,4 +1,3 @@
-# lifecycle_supervisor.py
 from typing import Optional, TypeVar, Protocol, Callable, cast
 
 import rclpy
@@ -40,7 +39,7 @@ class LifecycleNodeSupervisor:
     """Simple remote API for interacting with a lifecycle-managed node. Ment to
     be instantiated by Supervisory nodes, passing 'self' as first argument."""
 
-    def __init__(self, host_node: Node, target_node_name: str, default_timeout: float = 5) -> None:
+    def __init__(self, host_node: Node, target_node_name: str, default_timeout: float = 5.0) -> None:
         self.host_node: Node = host_node
         self.target_node_name: str = target_node_name
         self.timeout = default_timeout
@@ -67,7 +66,7 @@ class LifecycleNodeSupervisor:
     def get_state(self) -> Optional[int]:
         """Return the target node's current state id, or None if unavailable."""
         if not self._get_state_client.service_is_ready():
-            self.host_node.get_logger().warn("get_state service not ready yet")
+            self.host_node.get_logger().warn(f"get_state service not ready yet for {self.target_node_name}")
             return None
 
         request = GetState.Request()
@@ -83,7 +82,7 @@ class LifecycleNodeSupervisor:
     def change_state(self, transition_id: int) -> bool:
         """Request a lifecycle transition and return whether it succeeded."""
         if not self._change_state_client.service_is_ready():
-            self.host_node.get_logger().warn("change_state service not ready yet")
+            self.host_node.get_logger().warn(f"change_state service not ready yet for {self.target_node_name}")
             return False
 
         request = ChangeState.Request()
@@ -98,7 +97,7 @@ class LifecycleNodeSupervisor:
         """Request a lifecycle transition asynchronously and return the ROS future."""
 
         if not self._change_state_client.service_is_ready():
-            self.host_node.get_logger().warn("change_state service not ready yet")
+            self.host_node.get_logger().warn(f"change_state service not ready yet for {self.target_node_name}")
             return _make_failed_future()
 
         request = ChangeState.Request()

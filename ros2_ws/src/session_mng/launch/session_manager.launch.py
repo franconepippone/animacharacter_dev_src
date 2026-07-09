@@ -6,8 +6,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
-from orchestration.orchestration.launch_utils import on_process_exit, on_process_start, SysEventType
-from orchestration.orchestration.proc_names import (
+from orchestration.launch_utils import on_process_exit, on_process_start, SysEventType
+from orchestration.proc_names import (
     SESSION_CONNECTION_SERVER, 
     SESSION_MANAGER
 )

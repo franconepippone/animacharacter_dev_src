@@ -3,12 +3,12 @@
 # they are contained here since they are shared between launch files and supervisor_node.py
 
 # domains for names
-CORE_DOM = 'core'
-MONITOR_DOM = 'monitor'
+DOMAIN_CORE = 'core'
+DOMAIN_MONITOR = 'monitor'
 
-HARDWARE_MANAGER = f'{CORE_DOM}:hardware_manager'
-SESSION_MANAGER = f'{CORE_DOM}:session_manager'
-SESSION_CONNECTION_SERVER = f'{CORE_DOM}:session_connection_server'
+HARDWARE_MANAGER = f'{DOMAIN_CORE}:hardware_manager'
+SESSION_MANAGER = f'{DOMAIN_CORE}:session_manager'
+SESSION_CONNECTION_SERVER = f'{DOMAIN_CORE}:session_connection_server'
 
 
 def get_domain_from_proc_name(name: str) -> str | None:

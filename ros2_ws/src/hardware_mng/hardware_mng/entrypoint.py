@@ -25,6 +25,9 @@ logger = RcutilsLogger('HW-mng starter')
 
 def main(args=None):
     # input is given via env variables
+    import time
+
+
     import os
     PLUGIN_DIRS = os.getenv("PLUGIN_DIRS", "/plugins").split(":")
     CONFIG_FILE = os.getenv("CONFIG_FILE", "/plugins/config.yaml")
@@ -37,6 +40,7 @@ def main(args=None):
     logger.debug(f"Configuration file source: {CONFIG_FILE}, current input config: {INPUT_CONFIG}")
 
     logger.info(f"Beginning hardare manager system initialization. CWD: {os.getcwd()}")
+    time.sleep(5)
 
     # loading configs
     try:

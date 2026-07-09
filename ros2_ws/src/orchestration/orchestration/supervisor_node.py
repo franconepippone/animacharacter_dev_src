@@ -15,6 +15,8 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.task import Future
 
+import time
+
 from lifecycle_msgs.srv import ChangeState, GetState
 from lifecycle_msgs.msg import Transition, State
 
@@ -22,8 +24,10 @@ from interfaces.msg import SystemEvent, SystemStatus
 
 from diagnostic_updater import Heartbeat
 
-from lifecycle_sup_utility import LifecycleNodeSupervisor, TypedFuture
+from .lifecycle_sup_utility import LifecycleNodeSupervisor, TypedFuture
 
+from .launch_utils import SysEventType
+from . import proc_names as pn
 
 SYSTEM_EVENTS_TOPIC = "/system_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -80,26 +84,45 @@ class Supervisor(Node):
         - shutdown this node (exits the application) -> launch system emits Shutdown()
         """
 
+        self.get_logger().warning('System shutdown initiated.')
+
         f1 = self.hwmng_sup.shutdown_async()
         f2 = self.ssmng_sup.shutdown_async()
         
         ok = all([bool(res.success if res else False) for res in (
-            self.hwmng_sup.wait_for_future(f1),
-            self.ssmng_sup.wait_for_future(f2),
+            self.hwmng_sup.wait_for_future(f1, 1.0),
+            self.ssmng_sup.wait_for_future(f2, 1.0),
             )
         ])
+
+
+        self.get_logger().warning(f'Lifecycle nodes shutdown: {ok}.')
 
         msg = SystemStatus()
         msg.status_code = -10 
         msg.note = "some note"
         self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
 
+        time.sleep(1)
         # should wait a bit here
 
+        self.get_logger().warning(f'Finalizing shutdown.')
         self.context.destroy() # this should kill this node, stop the executor and exit the process
 
     def on_system_event(self, event: SystemEvent):
-        event.proc_name
+        # this is sketch code, needs testing
+
+        evt_type = SysEventType(event.event_type)
+
+        if pn.get_domain_from_proc_name(event.proc_name) == pn.DOMAIN_CORE:
+            
+            if evt_type in (SysEventType.EXIT, SysEventType.CRASH) :
+                
+                self.get_logger().error(f"A core process has exited: {event.proc_name}")
+                
+                self.shutdown_system()
+                return
+                
 
 
 def main():
