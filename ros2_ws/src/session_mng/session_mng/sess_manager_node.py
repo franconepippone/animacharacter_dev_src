@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import rclpy
-from rclpy.node import Node
-from lifecycle_msgs.msg import Transition, State
+from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from lifecycle_msgs.msg import Transition
 from lifecycle_msgs.srv import GetState, ChangeState
 
 from std_msgs.msg import String
@@ -23,9 +23,12 @@ MOTIONFRAME_TOPIC = 'input_motionframes'
 
 HARDWARE_MANAGER_NODE = "/hardware_manager"
 
-class SessManagerNode(Node):
+class SessManagerNode(LifecycleNode):
     def __init__(self) -> None:
         super().__init__("session_manager")
+        self._is_active: bool = False
+
+        # TODO eventually move this to configure. Make use of create_lifecycle_publisher for automatic gating when activated
 
         self.get_state_cli = self.create_client(
             GetState,
@@ -94,6 +97,12 @@ class SessManagerNode(Node):
 
     # handler for session creation service
     def create_session_srv_cb(self, request: CreateSessionRequest, response: CreateSessionResponse) -> CreateSessionResponse:
+        if not self._is_active:
+            response.success = False
+            response.msg = "Session manager is not active"
+            self.get_logger().warning("Create session rejected because the node is not active.")
+            return response
+
         self.get_logger().info(f"Received session creation request from {request.client_ip}.")
 
         create_args = ACSessionCreationArguments(

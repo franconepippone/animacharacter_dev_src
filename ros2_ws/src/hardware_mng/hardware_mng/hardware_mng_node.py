@@ -210,6 +210,7 @@ class HardwareManagerNode(LifecycleNode):
         self.reconciler.set_goal_all(
             ControllerState.UNINITIALIZED
         )
+        # TODO this should reconcile until all controllers have been deactivated
         self.reconciler.reconcile()
         self._is_active = False        
         return TransitionCallbackReturn.SUCCESS
