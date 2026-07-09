@@ -4,7 +4,7 @@
 
 Animacharacter Platform is a framework for remotely controlling hardware systems composed of many controllable elements.
 
-The primary goal of the project is to provide a standard architecture that separates application logic from hardware-specific implementation details.
+The primary goal of the project is to provide a standard architecture that separates actuator coordination logic from hardware-specific implementation details.
 
 The main target use case is animatronics, where a platform may consist of dozens of motors, LEDs, sensors, and microcontrollers. However, the framework can be used in any system where a single process needs to coordinate a large number of distributed devices.
 
@@ -71,7 +71,7 @@ Engine
 Hardware
 ```
 
-The Engine is typically deployed on an onboard computer such as a Raspberry Pi.
+The Engine is typically deployed on an onboard computer such as a Raspberry Pi, in direct connection with the hardware devices. Clients connect to the server remotely, via ip protocols.
 
 ## Extensibility
 
