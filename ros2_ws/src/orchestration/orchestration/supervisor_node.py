@@ -56,7 +56,7 @@ class Supervisor(Node):
         def imalive(): 
             self.get_logger().info("imalive")
 
-        self.create_timer(.5, imalive)
+        #self.create_timer(.5, imalive)
 
         self.get_logger().info('Master supervisor instantiated.')
     
@@ -125,7 +125,7 @@ class Supervisor(Node):
         msg.note = "some note"
         self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
 
-        self.get_logger().warning(f'Finalizing shutdown.')
+        self.get_logger().warning(f'Finalizing shutdown, about to exit process.')
 
         await sleep(self, 5.0)
 

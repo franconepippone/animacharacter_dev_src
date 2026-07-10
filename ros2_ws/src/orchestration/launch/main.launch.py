@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler, EmitEvent, ExecuteProcess, TimerAction
+from launch.actions import IncludeLaunchDescription, RegisterEventHandler, EmitEvent, ExecuteProcess, TimerAction, LogInfo
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch_ros.actions import Node
@@ -45,17 +45,19 @@ def generate_launch_description():
         name='supervisor'
     )
 
+    SHUTDOWN_GUARD_TIME = 3.0 
     # Supervisor watchdog: when supervisor crashes or exits, we shutdown everything
-    #   other than being a fail-safe, this is also the way normal system shutdown works. Supervisor death can
-    #   is the way supervisor tells 
+    #   other than being a fail-safe, this is also the way normal system shutdown works. Supervisor death is
+    #   the only signal from which we shutdown the system. Supervisor can exit volountarily, to trigger a system shutdown
     supervisor_die_handler = RegisterEventHandler(
         OnProcessExit(
             target_action=supervisor_node,
             on_exit=[
                 # Pubblicazione diretta di emergenza
                 #publish_system_status(0, "hello"), NOT NEEDED?
+                LogInfo(msg=f"Supervisor process exited, issuing a global shutdown in {SHUTDOWN_GUARD_TIME} seconds"),
                 TimerAction(
-                    period=3.0, # TODO wait 5 seconds?
+                    period=SHUTDOWN_GUARD_TIME, # TODO wait 5 seconds?
                     actions=[EmitEvent(event=Shutdown(reason='Supervisor exited'))]
                 ),
                 

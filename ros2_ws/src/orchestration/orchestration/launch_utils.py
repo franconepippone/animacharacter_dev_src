@@ -1,6 +1,7 @@
 from launch.actions import ExecuteProcess, LogInfo
 from enum import Enum
 from launch.event_handlers import OnProcessExit, OnProcessStart
+from launch.some_entities_type import SomeEntitiesType
 
 class SysEventType(Enum):
     # these must be of type uint8
@@ -77,3 +78,8 @@ def on_process_exit(target_action, proc_name: str) -> OnProcessExit:
                 )
             ]
         )
+
+
+def run_on_proc_exit(target, action: SomeEntitiesType | None):
+    """ Generalization for every handler of a proc exit event"""
+    raise NotImplemented()

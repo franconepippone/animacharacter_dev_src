@@ -16,23 +16,20 @@ T = TypeVar("T")
 cb_group = ReentrantCallbackGroup()
 
 async def sleep(node: Node, seconds: float) -> None:
-    """
-    Cooperative sleep using a ROS timer.
-    Does not block the executor.
-    """
     future = Future()
-
-    timer = None
+    timer: Timer | None = None
 
     def wakeup():
         if not future.done():
             future.set_result(None)
-        assert isinstance(timer, Timer)
-        node.destroy_timer(timer)
 
     timer = node.create_timer(seconds, wakeup, callback_group=cb_group)
-    await future
 
+    try:
+        await future
+    finally:
+        if timer is not None:
+            node.destroy_timer(timer)
 
 async def gather(executor: Executor, *coroutines: Awaitable[T]) -> tuple[T]:
     """
