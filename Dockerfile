@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM ros:jazzy-ros-base
+FROM ros:kilted-ros-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -17,13 +17,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
-# Initialize rosdep (correct + idempotent)
+# Initialize rosdep
 # ---------------------------------------------------------
 RUN rosdep init 2>/dev/null || true && \
     rosdep update
 
 # ---------------------------------------------------------
-# Python libs (monorepo internal)
+# Python dependencies setup (global)
 # ---------------------------------------------------------
 WORKDIR /app
 
@@ -31,12 +31,15 @@ WORKDIR /app
 COPY --from=shared . /tmp/libs/ 
 COPY libs/ /tmp/libs/
 
+# install all internal packages
 RUN find /tmp/libs -mindepth 1 -maxdepth 1 -type d \
     -exec pip install --no-cache-dir --break-system-packages {} \; && \
     rm -rf /tmp/libs
 
-# external python deps (pip-only ecosystem)
-RUN pip install --no-cache-dir --break-system-packages fastapi uvicorn
+# external python deps
+RUN pip install --no-cache-dir --break-system-packages --ignore-installed \
+    fastapi==0.128.0 \
+    uvicorn==0.40.0
 
 # ---------------------------------------------------------
 # ROS2 workspace
@@ -49,7 +52,7 @@ COPY ros2_ws/src ./src
 SHELL ["/bin/bash", "-c"]
 
 # IMPORTANT: source ROS before rosdep
-RUN source /opt/ros/jazzy/setup.bash 
+RUN source /opt/ros/kilted/setup.bash 
 RUN apt-get update
 RUN rosdep update && \ 
     rosdep install \
@@ -59,7 +62,7 @@ RUN rosdep update && \
         -r -y
 
 # build
-RUN source /opt/ros/jazzy/setup.bash && \
+RUN source /opt/ros/kilted/setup.bash && \
     colcon build --symlink-install
 
 
@@ -84,7 +87,7 @@ ENV STRICT_MODE="true"
 # Users who want to add plugins can mount this directory and place them there directly
 RUN mkdir -p /app/plugins
 
-RUN echo "source /opt/ros/jazzy/setup.bash" >> /etc/bash.bashrc && \
+RUN echo "source /opt/ros/kilted/setup.bash" >> /etc/bash.bashrc && \
     echo "source ${ROS_WS}/install/setup.bash" >> /etc/bash.bashrc
 
 CMD ["bash"]

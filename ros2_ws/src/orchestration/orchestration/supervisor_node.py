@@ -9,25 +9,17 @@ An onboard display panel node (or some other signaling tool) can subscribe to /s
 every node publishes. Depending on type and severity, the supervisor may or may not decide to update /system_status to reflect these. 
 
 """
+import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.duration import Duration
-from rclpy.task import Future
-
-import time
-
-from lifecycle_msgs.srv import ChangeState, GetState
-from lifecycle_msgs.msg import Transition, State
-
 from interfaces.msg import SystemEvent, SystemStatus
 
-from diagnostic_updater import Heartbeat
-
-from .lifecycle_sup_utility import LifecycleNodeSupervisor, TypedFuture
-
+from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
+
+
 
 SYSTEM_EVENTS_TOPIC = "/system_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -83,6 +75,7 @@ class Supervisor(Node):
         - notify /system_status of result
         - shutdown this node (exits the application) -> launch system emits Shutdown()
         """
+        
 
         self.get_logger().warning('System shutdown initiated.')
 
@@ -95,7 +88,6 @@ class Supervisor(Node):
             )
         ])
 
-
         self.get_logger().warning(f'Lifecycle nodes shutdown: {ok}.')
 
         msg = SystemStatus()
@@ -103,11 +95,11 @@ class Supervisor(Node):
         msg.note = "some note"
         self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
 
-        time.sleep(1)
+        #time.sleep(1)
         # should wait a bit here
 
         self.get_logger().warning(f'Finalizing shutdown.')
-        self.context.destroy() # this should kill this node, stop the executor and exit the process
+        #raise SystemExit # exit the process, launch will react
 
     def on_system_event(self, event: SystemEvent):
         # this is sketch code, needs testing
@@ -120,7 +112,7 @@ class Supervisor(Node):
                 
                 self.get_logger().error(f"A core process has exited: {event.proc_name}")
                 
-                self.shutdown_system()
+                self.create_timer(5.0, self.shutdown_system)
                 return
                 
 

@@ -1,4 +1,5 @@
 from typing import Optional, TypeVar, Protocol, Callable, cast
+import time
 
 import rclpy
 from rclpy.task import Future
@@ -14,25 +15,15 @@ def gather_future_results(node: Node, *futures: Future):
     return tuple([f.result() for f in futures])
 
 
+ResultT = TypeVar("ResultT")
 
 
-
-ResultT = TypeVar("ResultT", covariant=True)
-
-
-class TypedFuture(Protocol[ResultT]):
-    """A typed view over a ROS Future. Purely static typing."""
-    def result(self) -> Optional[ResultT]: ...
-    def add_done_callback(self, fn: Callable[[Future], None]) -> None: ...
-    def done(self) -> bool: ...
-
-
-def _make_failed_future() -> TypedFuture[ChangeState.Response]:
-    fut = Future()
+def _make_failed_future() -> Future[ChangeState.Response]:
+    fut: Future[ChangeState.Response] = Future()
     response = ChangeState.Response()
     response.success = False
     fut.set_result(response)
-    return cast(TypedFuture[ChangeState.Response], fut)
+    return fut
 
 
 class LifecycleNodeSupervisor:
@@ -93,7 +84,7 @@ class LifecycleNodeSupervisor:
         result = cast(Optional[ChangeState.Response], future.result())
         return bool(result.success) if result is not None else False
 
-    def change_state_async(self, transition_id: int) -> TypedFuture[ChangeState.Response]:
+    def change_state_async(self, transition_id: int) -> Future[ChangeState.Response]:
         """Request a lifecycle transition asynchronously and return the ROS future."""
 
         if not self._change_state_client.service_is_ready():
@@ -106,21 +97,24 @@ class LifecycleNodeSupervisor:
         # This is already a future-like object compatible with spin_until_future_complete
         future = self._change_state_client.call_async(request)
 
-        return cast(TypedFuture[ChangeState.Response], future)
+        return future
 
     def wait_for_future(
         self,
-        future: TypedFuture[ResultT],
+        future: Future[ResultT],
         timeout_sec: Optional[float] = None,
     ) -> Optional[ResultT]:
         if timeout_sec is None:
             timeout_sec = self.timeout
-        rclpy.spin_until_future_complete(
-            self.host_node,
-            cast(Future, future),
-            timeout_sec=timeout_sec,
-        )
-        return cast(Optional[ResultT], future.result())
+
+        deadline = time.monotonic() + timeout_sec
+
+        while not future.done():
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.01)
+
+        return future.result()
 
 
     def configure(self) -> bool:

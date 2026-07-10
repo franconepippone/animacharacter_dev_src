@@ -2,6 +2,7 @@ Docker Commands
 ---
 
 # to build the image (shared ctx must be injected)
+# run inside src/animacharacter_server/
 docker build --build-context shared=../shared_libs -t ac-engine:latest .
 
 # run the image in deploy mode

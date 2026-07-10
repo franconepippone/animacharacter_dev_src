@@ -53,7 +53,7 @@ def generate_launch_description():
                 # Pubblicazione diretta di emergenza
                 publish_system_status(0, "hello"),
                 TimerAction(
-                    period=2.0, # TODO wait 5 seconds?
+                    period=5.0, # TODO wait 5 seconds?
                     actions=[EmitEvent(event=Shutdown(reason='Supervisor Fatal Crash'))]
                 ),
                 
