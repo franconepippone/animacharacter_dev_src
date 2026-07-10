@@ -40,8 +40,8 @@ class SessManagerNode(LifecycleNode):
             f"{HARDWARE_MANAGER_NODE}/change_state"
         )
 
-        self.get_state_cli.wait_for_service()
-        self.change_state_cli.wait_for_service()
+        #self.get_state_cli.wait_for_service()
+        #self.change_state_cli.wait_for_service()
 
         self.srv = self.create_service(
             CreateSession,

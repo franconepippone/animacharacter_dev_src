@@ -9,17 +9,20 @@ An onboard display panel node (or some other signaling tool) can subscribe to /s
 every node publishes. Depending on type and severity, the supervisor may or may not decide to update /system_status to reflect these. 
 
 """
+from typing import Callable, Any, cast
 import time
 
 import rclpy
+from rclpy.timer import Timer, TimerInfo
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from interfaces.msg import SystemEvent, SystemStatus
 
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
-
-
+from .ros_async_utils import sleep, gather
 
 SYSTEM_EVENTS_TOPIC = "/system_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -27,6 +30,9 @@ SYSTEM_STATUS_TOPIC = "/system_status"
 class Supervisor(Node):
     def __init__(self):
         super().__init__("supervisor")
+
+        self.rcbg = ReentrantCallbackGroup()
+        self.one_shot_cbg = MutuallyExclusiveCallbackGroup() # constraints one-shot-timers callbacks to be mutually-exclusive (makes shutdown m-e)
 
         # hook for all system-level events produced by the launch systems (process start / exit / crash)
         self.sysevents_sub = self.create_subscription(
@@ -47,29 +53,53 @@ class Supervisor(Node):
         self.hwmng_sup = LifecycleNodeSupervisor(self, '/hardware_manager')
         self.ssmng_sup = LifecycleNodeSupervisor(self, '/session_manager')
 
-        self.get_logger().info('Master supervisor started')
+        def imalive(): 
+            self.get_logger().info("imalive")
 
-    def spinup_system(self):
+        self.create_timer(.5, imalive)
+
+        self.get_logger().info('Master supervisor instantiated.')
+    
+    def create_one_shot_timer(
+        self,
+        delay: float,
+        callback: Callable[[], Any],
+    ) -> Timer:
+        timer: Timer
+
+        async def wrapped_callback():
+            self.destroy_timer(timer)
+            await callback()
+
+        # NOTE this is unfortunately needed because the stubs/api annotations 
+        # in rclpy raise typing errors when passing coros as callbacks
+        type_forced_cb = cast(
+            Callable[..., Any],
+            wrapped_callback
+        )
+
+        timer = self.create_timer(delay, type_forced_cb, self.one_shot_cbg)
+
+        return timer
+
+    async def spinup_system(self):
         """Attempts to bring the whole system up"""
 
         self.hwmng_sup.timeout = 3
         if not self.hwmng_sup.configure():
             # activation of hwmng is done by sessmng node
             self.get_logger().warning("Could not configure hardware manager node, aborting spinup.")
-            self.shutdown_system()
-            return
+            return await self.shutdown_system()
         
         if not self.ssmng_sup.configure():
             self.get_logger().warning("Could not configure session manager node, aborting spinup.")
-            self.shutdown_system()
-            return
+            return await self.shutdown_system()
 
         if not self.ssmng_sup.activate():
             self.get_logger().warning("Could not activate session manager node, aborting spinup.")
-            self.shutdown_system()
-            return
+            return await self.shutdown_system()
 
-    def shutdown_system(self):
+    async def shutdown_system(self):
         """Attempts to shut down the whole system:
         - shutdown all lifecycle nodes
         - notify /system_status of result
@@ -79,26 +109,27 @@ class Supervisor(Node):
 
         self.get_logger().warning('System shutdown initiated.')
 
-        f1 = self.hwmng_sup.shutdown_async()
-        f2 = self.ssmng_sup.shutdown_async()
-        
-        ok = all([bool(res.success if res else False) for res in (
-            self.hwmng_sup.wait_for_future(f1, 1.0),
-            self.ssmng_sup.wait_for_future(f2, 1.0),
-            )
-        ])
+        exc = self.executor if self.executor else rclpy.get_global_executor()
+        results = await gather(
+                    exc, 
+                    self.hwmng_sup.shutdown(),
+                    self.ssmng_sup.shutdown()
+                )
 
-        self.get_logger().warning(f'Lifecycle nodes shutdown: {ok}.')
+        ok = all(results)
+
+        self.get_logger().warning(f'Lifecycle nodes all shutdown: {ok}.')
 
         msg = SystemStatus()
-        msg.status_code = -10 
+        msg.status_code = 10
         msg.note = "some note"
         self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
 
-        #time.sleep(1)
-        # should wait a bit here
-
         self.get_logger().warning(f'Finalizing shutdown.')
+
+        await sleep(self, 5.0)
+
+        rclpy.shutdown()
         #raise SystemExit # exit the process, launch will react
 
     def on_system_event(self, event: SystemEvent):
@@ -112,14 +143,24 @@ class Supervisor(Node):
                 
                 self.get_logger().error(f"A core process has exited: {event.proc_name}")
                 
-                self.create_timer(5.0, self.shutdown_system)
+
+                self.create_one_shot_timer(1.0, self.shutdown_system)
                 return
-                
 
 
-def main():
-    rclpy.init()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
     node = Supervisor()
-    rclpy.spin(node)
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+
+    executor.spin()
+
     node.destroy_node()
-    rclpy.shutdown()
+    if rclpy.ok():
+        rclpy.shutdown()
+    
+    exit(0) # if we reach this point, then this shutdown was intentional

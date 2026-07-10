@@ -45,16 +45,18 @@ def generate_launch_description():
         name='supervisor'
     )
 
-    # Supervisor watchdog: if supervisor crashes, we shutdown everything 
+    # Supervisor watchdog: when supervisor crashes or exits, we shutdown everything
+    #   other than being a fail-safe, this is also the way normal system shutdown works. Supervisor death can
+    #   is the way supervisor tells 
     supervisor_die_handler = RegisterEventHandler(
         OnProcessExit(
             target_action=supervisor_node,
             on_exit=[
                 # Pubblicazione diretta di emergenza
-                publish_system_status(0, "hello"),
+                #publish_system_status(0, "hello"), NOT NEEDED?
                 TimerAction(
-                    period=5.0, # TODO wait 5 seconds?
-                    actions=[EmitEvent(event=Shutdown(reason='Supervisor Fatal Crash'))]
+                    period=3.0, # TODO wait 5 seconds?
+                    actions=[EmitEvent(event=Shutdown(reason='Supervisor exited'))]
                 ),
                 
             ]

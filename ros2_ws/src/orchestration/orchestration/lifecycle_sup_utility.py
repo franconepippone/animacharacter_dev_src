@@ -6,23 +6,20 @@ from rclpy.task import Future
 from lifecycle_msgs.msg import Transition, State
 from lifecycle_msgs.srv import ChangeState, GetState
 from rclpy.node import Node
-
-
-def gather_future_results(node: Node, *futures: Future):
-    for f in futures:
-        rclpy.spin_until_future_complete(node, f)
-    
-    return tuple([f.result() for f in futures])
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 
 ResultT = TypeVar("ResultT")
 
 
-def _make_failed_future() -> Future[ChangeState.Response]:
-    fut: Future[ChangeState.Response] = Future()
+def _make_failed_response() -> ChangeState.Response:
     response = ChangeState.Response()
     response.success = False
-    fut.set_result(response)
+    return response
+
+def _make_failed_future() -> Future[ChangeState.Response]:
+    fut: Future[ChangeState.Response] = Future()
+    fut.set_result(_make_failed_response())
     return fut
 
 
@@ -35,11 +32,14 @@ class LifecycleNodeSupervisor:
         self.target_node_name: str = target_node_name
         self.timeout = default_timeout
 
+        group = ReentrantCallbackGroup()
         self._change_state_client = host_node.create_client(
-            ChangeState, f"{self.target_node_name}/change_state"
+            ChangeState, f"{self.target_node_name}/change_state",
+            callback_group=group
         )
         self._get_state_client = host_node.create_client(
-            GetState, f"{self.target_node_name}/get_state"
+            GetState, f"{self.target_node_name}/get_state",
+            callback_group=group
         )
 
     def wait_for_services(self, timeout_each: float) -> None:
@@ -54,123 +54,59 @@ class LifecycleNodeSupervisor:
             and self._get_state_client.service_is_ready()
         )
 
-    def get_state(self) -> Optional[int]:
+    async def get_state(self) -> Optional[int]:
         """Return the target node's current state id, or None if unavailable."""
+
         if not self._get_state_client.service_is_ready():
             self.host_node.get_logger().warn(f"get_state service not ready yet for {self.target_node_name}")
             return None
 
         request = GetState.Request()
-        future = self._get_state_client.call_async(request)
-        rclpy.spin_until_future_complete(self.host_node, future)
+        resp = cast(
+            GetState.Response,
+            await self._get_state_client.call_async(request)
+        ) 
 
-        result = cast(Optional[GetState.Response], future.result())
-        if result is None:
-            return None
+        return resp.current_state.id
 
-        return result.current_state.id
-
-    def change_state(self, transition_id: int) -> bool:
-        """Request a lifecycle transition and return whether it succeeded."""
-        if not self._change_state_client.service_is_ready():
-            self.host_node.get_logger().warn(f"change_state service not ready yet for {self.target_node_name}")
-            return False
-
-        request = ChangeState.Request()
-        request.transition.id = transition_id
-        future = self._change_state_client.call_async(request)
-        rclpy.spin_until_future_complete(self.host_node, future, timeout_sec=self.timeout)
-
-        result = cast(Optional[ChangeState.Response], future.result())
-        return bool(result.success) if result is not None else False
-
-    def change_state_async(self, transition_id: int) -> Future[ChangeState.Response]:
+    async def change_state(self, transition_id: int) -> ChangeState.Response:
         """Request a lifecycle transition asynchronously and return the ROS future."""
 
         if not self._change_state_client.service_is_ready():
             self.host_node.get_logger().warn(f"change_state service not ready yet for {self.target_node_name}")
-            return _make_failed_future()
+            return _make_failed_response()
 
         request = ChangeState.Request()
         request.transition.id = transition_id
 
-        # This is already a future-like object compatible with spin_until_future_complete
-        future = self._change_state_client.call_async(request)
+        resp = cast(
+            ChangeState.Response,
+            await self._change_state_client.call_async(request)
+        ) 
 
-        return future
+        return resp
 
-    def wait_for_future(
-        self,
-        future: Future[ResultT],
-        timeout_sec: Optional[float] = None,
-    ) -> Optional[ResultT]:
-        if timeout_sec is None:
-            timeout_sec = self.timeout
-
-        deadline = time.monotonic() + timeout_sec
-
-        while not future.done():
-            if time.monotonic() >= deadline:
-                return None
-            time.sleep(0.01)
-
-        return future.result()
-
-
-    def configure(self) -> bool:
+    async def configure(self):
         """Request the CONFIGURE transition."""
-        return self.change_state(Transition.TRANSITION_CONFIGURE)
+        resp = await self.change_state(Transition.TRANSITION_CONFIGURE)
+        return bool(resp.success)
 
-    def activate(self) -> bool:
+    async def activate(self):
         """Request the ACTIVATE transition."""
-        return self.change_state(Transition.TRANSITION_ACTIVATE)
-
-    def cleanup(self) -> bool:
-        """Request the CLEANUP transition."""
-        return self.change_state(Transition.TRANSITION_CLEANUP)
-
-    def shutdown(self) -> bool:
-        """Request the appropriate SHUTDOWN transition for the current state."""
-        state = self.get_state()
-
-        if state is None:
-            return False
-
-        if state == State.PRIMARY_STATE_UNCONFIGURED:
-            transition = Transition.TRANSITION_UNCONFIGURED_SHUTDOWN
-        elif state == State.PRIMARY_STATE_INACTIVE:
-            transition = Transition.TRANSITION_INACTIVE_SHUTDOWN
-        elif state == State.PRIMARY_STATE_ACTIVE:
-            transition = Transition.TRANSITION_ACTIVE_SHUTDOWN
-        else:
-            self.host_node.get_logger().warn(
-                f"Cannot shutdown from lifecycle state {state}"
-            )
-            return False
-
-        return self.change_state(transition)
+        resp = await self.change_state(Transition.TRANSITION_ACTIVATE)
+        return bool(resp.success)
     
-
-    # ASYNC API
-
-    def configure_async(self):
-        """Request CONFIGURE transition asynchronously."""
-        return self.change_state_async(Transition.TRANSITION_CONFIGURE)
-
-    def activate_async(self):
-        """Request ACTIVATE transition asynchronously."""
-        return self.change_state_async(Transition.TRANSITION_ACTIVATE)
-
-    def cleanup_async(self):
-        """Request CLEANUP transition asynchronously."""
-        return self.change_state_async(Transition.TRANSITION_CLEANUP)
-
-    def shutdown_async(self):
-        """Request SHUTDOWN transition asynchronously."""
-        state = self.get_state()
+    async def cleanup(self):
+        """Request the CLEANUP transition."""
+        resp = await self.change_state(Transition.TRANSITION_CLEANUP)
+        return bool(resp.success)
+    
+    async def shutdown(self):
+        """Request the appropriate SHUTDOWN transition for the current state."""
+        state = await self.get_state()
 
         if state is None:
-            return _make_failed_future()
+            return False
 
         if state == State.PRIMARY_STATE_UNCONFIGURED:
             transition = Transition.TRANSITION_UNCONFIGURED_SHUTDOWN
@@ -182,6 +118,7 @@ class LifecycleNodeSupervisor:
             self.host_node.get_logger().warn(
                 f"Cannot shutdown from lifecycle state {state}"
             )
-            return _make_failed_future()
-
-        return self.change_state_async(transition)
+            return False
+        
+        resp = await self.change_state(transition)
+        return bool(resp.success)
