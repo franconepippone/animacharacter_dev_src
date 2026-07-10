@@ -27,6 +27,9 @@ from .ros_async_utils import sleep, gather
 SYSTEM_EVENTS_TOPIC = "/system_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
 
+
+SHUTDOWN_POSTPONE_TIME = 1.0 #seconds
+
 class Supervisor(Node):
     def __init__(self):
         super().__init__("supervisor")
@@ -119,15 +122,15 @@ class Supervisor(Node):
         ok = all(results)
 
         self.get_logger().warning(f'Lifecycle nodes all shutdown: {ok}.')
-
+    
         msg = SystemStatus()
         msg.status_code = 10
         msg.note = "some note"
         self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
 
-        self.get_logger().warning(f'Finalizing shutdown, about to exit process.')
+        self.get_logger().warning(f'Finalizing shutdown, exiting process.')
 
-        await sleep(self, 5.0)
+        await sleep(self, 1.0)
 
         rclpy.shutdown()
         #raise SystemExit # exit the process, launch will react
@@ -137,15 +140,32 @@ class Supervisor(Node):
 
         evt_type = SysEventType(event.event_type)
 
+        """
+        IN here we check for all possible system events (process crashes / exits / start) and we emit
+        descriptive /system_status updates that summarize and reflect these changes
+
+        another callback for /diagnositcs must YET be implemented, but it does the exact thing. 
+        
+        /system_status has to be treated as the unique and centralized current status reading for the system: everything important that happens
+        needs to be published here, and anything that is not published here remains internal to the system.
+        
+        Nodes subscribing to /system_status can then route the status update to monitoring components (physical display panel,
+        web dashboard, specialized logging utility etc.)
+        
+        """
+
+
         if pn.get_domain_from_proc_name(event.proc_name) == pn.DOMAIN_CORE:
             
             if evt_type in (SysEventType.EXIT, SysEventType.CRASH) :
-                
-                self.get_logger().error(f"A core process has exited: {event.proc_name}")
-                
-
-                self.create_one_shot_timer(1.0, self.shutdown_system)
+                action = 'crashed' if evt_type == SysEventType.CRASH else 'exited'
+                self.get_logger().error(f"The core process \"{event.proc_name}\" has {action} with code: {event.exit_code}, "
+                                        f"scheduling system shutdown in {SHUTDOWN_POSTPONE_TIME} seconds.")
+                self.create_one_shot_timer(SHUTDOWN_POSTPONE_TIME, self.shutdown_system)
                 return
+            
+
+
 
 
 
