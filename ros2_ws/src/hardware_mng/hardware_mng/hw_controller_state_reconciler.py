@@ -1,12 +1,16 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List
+from typing import List, Callable, Any
 
 from rclpy.logging import RcutilsLogger
 
-from .abstract_hw_controller import BaseHardwareController
-from .looper import LoopDescriptor, LoopSupervisor
-
+from .abstract_hw_controller import BaseHardwareController, ControllerError, ControllerFatal, ControllerWarning
+from .looper import LoopDescriptor, LoopSupervisor, Signal
+from .signals_definitions import (
+    SIG_CONTOLLER_WARNING,
+    SIG_CONTROLLER_ERROR,
+    SIG_CONTROLLER_FATAL
+)
 
 class ControllerState(Enum):
     """
@@ -32,7 +36,12 @@ class HWControllerStateReconciler:
     Desired-state reconciler for hardware controllers and loops.
     """
 
-    def __init__(self, looper: LoopSupervisor, logger: RcutilsLogger):
+    def __init__(self,
+            signal_handler: Callable[[BaseHardwareController, LoopDescriptor, Signal], Any],
+            looper: LoopSupervisor, 
+            logger: RcutilsLogger
+        ):
+        self.signal_handler = signal_handler
         self.looper = looper
         self.logger = logger
         self.controllers: List[ManagedController] = []
@@ -104,10 +113,44 @@ class HWControllerStateReconciler:
                 elif goal == ControllerState.UNINITIALIZED:
                     self._step_to_uninitialized(mc, actual)
 
+
+            # NOTE: here we are kind of abusing the signal_handler cb, as it should only be used for looper signal callback; 
+            # this means that the source of the error (reconciler / looper) is hidden away.
+            # 'Signal' is a looper object, so using it here is not ideal - but very convenient.
+            # What follows is almost duplicate code of what we can find in abstract_hw_controller.py, fine for now,
+            # but feels like a stretch.. but reconciler is already highly coupled to hwmng, so who cares
+
+            except ControllerWarning as e:
+                self.logger.warning(f"Controller warning in controller '{mc.controller.name}': {e}")
+                self.signal_handler(mc.controller, mc.loop, Signal(
+                    SIG_CONTOLLER_WARNING, 
+                    code=e.code, 
+                    note=e.description
+                ))
+            
+            except ControllerError as e:
+                self.logger.error(f"Hardware crash in controller '{mc.controller.name}': {e}")
+                self.signal_handler(mc.controller, mc.loop, Signal(
+                    SIG_CONTROLLER_ERROR, 
+                    code=e.code, 
+                    note=e.description
+                ))
+            
+            except ControllerFatal as e:
+                self.logger.fatal(f"Controller fatal exception '{mc.controller.name}': {e}")
+                self.signal_handler(mc.controller, mc.loop, Signal(
+                    SIG_CONTROLLER_FATAL, 
+                    code=e.code, 
+                    note=e.description
+                ))
+
             except Exception as e:
-                self.logger.error(
-                    f"Reconciliation error for '{mc.controller.name}': {e}"
-                )
+                self.logger.error(f"Reconciliation error for '{mc.controller.name}': {e}")
+                self.signal_handler(mc.controller, mc.loop, Signal(
+                    SIG_CONTROLLER_FATAL, 
+                    code=100, 
+                    note=str(e)
+                ))
 
     # Transition steps (State Machine Logic)
 

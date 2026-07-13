@@ -7,6 +7,13 @@ from queue import Queue, Empty
 from .looper import LoopRequest, LoopAction, Signal
 from .databus import Databus, DataReader, DataWriter
 
+from .signals_definitions import (
+    SIG_CONTOLLER_WARNING,
+    SIG_CONTROLLER_ERROR,
+    SIG_CONTROLLER_FATAL,
+    SIG_CONTROLLER_GENERIC_EXCEPTION
+)
+
 SPECIAL_PATH_CHARS = {'@'}
 
 # ensures format of config path is correct
@@ -224,23 +231,39 @@ class BaseHardwareController(ABC):
             except ControllerWarning as e:
                 self.logger.warning(f"Controller warning in controller '{self.name}': {e}")
                 # TODO publish to diagnostics somehow
-                return LoopRequest(signal=Signal('controller_warning'))
+                return LoopRequest(signal=Signal(
+                    SIG_CONTOLLER_WARNING, 
+                    code=e.code, 
+                    note=e.description
+                ))
             
             except ControllerError as e:
                 self.logger.error(f"Hardware crash in controller '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopRequest(LoopAction.STOP)
+                return LoopRequest(LoopAction.STOP, signal=Signal(
+                    SIG_CONTROLLER_ERROR, 
+                    code=e.code, 
+                    note=e.description
+                ))
             
             except ControllerFatal as e:
                 self.logger.fatal(f"Controller fatal exception '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopRequest(LoopAction.STOP, signal=Signal('global_shutdown', code=0))
+                return LoopRequest(LoopAction.STOP, signal=Signal(
+                    SIG_CONTROLLER_FATAL, 
+                    code=e.code, 
+                    note=e.description
+                ))
 
             except Exception as e:
                 # we interpret an exception as a ControllerError level exception
                 self.logger.error(f"Unexpected exception in controller '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopRequest(LoopAction.STOP)
+                return LoopRequest(LoopAction.STOP, signal=Signal(
+                    SIG_CONTROLLER_GENERIC_EXCEPTION, 
+                    code=101, 
+                    note=str(e)
+                ))
 
     def _setup_wrappers(self):
         # explicitly applying "decorators" to init/denit methods to keep track of init status.

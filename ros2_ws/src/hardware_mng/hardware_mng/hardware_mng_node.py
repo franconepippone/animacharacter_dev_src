@@ -18,6 +18,12 @@ from .hw_controller_state_reconciler import (
 )
 from .utils import flatten_for_diagnostics
 from system_commons import exit_codes as xc
+from .signals_definitions import (
+    SIG_CONTOLLER_WARNING,
+    SIG_CONTROLLER_ERROR,
+    SIG_CONTROLLER_FATAL,
+    SIG_CONTROLLER_GENERIC_EXCEPTION
+)
 
 
 
@@ -48,13 +54,14 @@ class HardwareManagerNode(LifecycleNode):
         # setting up reconciler for background state reconciliation of controller state
         # (if a controller fails to update its state during a lifecycle transistion, this will try to recoincile in the background)
         self.reconciler = HWControllerStateReconciler(
+            self.handle_loop_signal, # NOTE abuse of this cb method...
             looper=self.looper,
-            logger=self.get_logger()
+            logger=self.get_logger().get_child('reconciler'),
         )
 
         for loop, ctrl in loop_controllers_pairs:
             self.reconciler.add_controller(loop, ctrl)
-            loop.signal_handler = lambda s: self.handle_loop_signal(loop, s)
+            loop.signal_handler = lambda s: self.handle_loop_signal(ctrl, loop, s)
 
         self.reconcile_timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
         
@@ -101,33 +108,46 @@ class HardwareManagerNode(LifecycleNode):
             5
         )
 
-
         self.get_logger().info("Initialized!")
 
     # ---------------------------
     # Main callbacks
     # --------------------------
 
-    def handle_loop_signal(self, loop: LoopDescriptor, signal: Signal):
-        self.get_logger().info(f"Received signal {signal} from loop {loop}")
+    def handle_loop_signal(self, ctrl: BaseHardwareController, loop: LoopDescriptor, signal: Signal):
+        self.get_logger().info(f"Received signal {signal} from loop: {loop.name} [controller {ctrl.name}].")
 
-        if signal.name != "global_shutdown":
+        if signal.name == SIG_CONTROLLER_FATAL:
+            if self._shutdown_requested:
+                return
+
+            self._shutdown_requested = True
+            self.get_logger().warning(f"Received global shutdown signal from for controller: {ctrl.name}")
+            self._is_active = False
+
+            self.looper.stop_all(block=True, timeout=1.0)
+            self.reconciler.set_goal_all(ControllerState.UNINITIALIZED)
+            self.reconciler.reconcile()
+
+            # immediate system exit
+            raise SystemExit(xc.HWMNG_CONTROLLER_FATAL)
+
+        elif signal.name == SIG_CONTROLLER_ERROR:
+            # Publish to diagnostics
+            pass
+
+        elif signal.name == SIG_CONTOLLER_WARNING:
+            # publish to diagnostics
+            pass
+
+        elif signal.name == SIG_CONTROLLER_GENERIC_EXCEPTION:
+            pass
+        
+        else:
             self.get_logger().info(f"Unhandled loop signal: {signal}")
             return
 
-        if self._shutdown_requested:
-            return
-
-        self._shutdown_requested = True
-        self.get_logger().warning(f"Received global shutdown signal from {loop}")
-        self._is_active = False
-
-        self.looper.stop_all(block=True, timeout=1.0)
-        self.reconciler.set_goal_all(ControllerState.UNINITIALIZED)
-        self.reconciler.reconcile()
-
-        # immediate system exit
-        raise SystemExit(xc.HWMNG_CONTROLLER_FATAL)
+        
 
     def update_config_callback(self, msg: String):
         # WE MIGHT REMOVE THIS, CONFIGS ARE ALREADY QUEUED AUTOMATICALLY
