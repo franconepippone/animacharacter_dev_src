@@ -1,11 +1,11 @@
 """
 The supervisor node acts at the top level orchestrator for the entire ros2 system.
 
-Supervisor subscribes to /system_events and /diagnostics; it's also the only node that owns
+Supervisor subscribes to /process_events and /diagnostics; it's also the only node that owns
 control over /system_status, which is used to publish global status updates.
 An onboard display panel node (or some other signaling tool) can subscribe to /system_status to notify updates.
 
-/system_events mainly catches process crashes/restarts, while /diagnostics catches higher level diagnostic data that
+/process_events mainly catches process crashes/restarts, while /diagnostics catches higher level diagnostic data that
 every node publishes. Depending on type and severity, the supervisor may or may not decide to update /system_status to reflect these. 
 
 """
@@ -17,14 +17,14 @@ from rclpy.timer import Timer
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
-from interfaces.msg import SystemEvent, SystemStatus
+from interfaces.msg import ProcessEvent, SystemStatus
 
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
 from .ros_async_utils import sleep, gather
 
-SYSTEM_EVENTS_TOPIC = "/system_events"
+PROCESS_EVENTS_TOPIC = "/process_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
 
 
@@ -39,9 +39,9 @@ class Supervisor(Node):
 
         # hook for all system-level events produced by the launch systems (process start / exit / crash)
         self.sysevents_sub = self.create_subscription(
-            SystemEvent,
-            SYSTEM_EVENTS_TOPIC,
-            self.on_system_event,
+            ProcessEvent,
+            PROCESS_EVENTS_TOPIC,
+            self.on_process_event,
             5
         )
 
@@ -135,15 +135,15 @@ class Supervisor(Node):
         rclpy.shutdown()
         #raise SystemExit # exit the process, launch will react
 
-    def on_system_event(self, event: SystemEvent):
+    def on_process_event(self, event: ProcessEvent):
         # this is sketch code, needs testing
 
         evt_type = SysEventType(event.event_type)
 
-        self.get_logger().info(f"Got system event: {event}")
+        self.get_logger().info(f"Got process event: {event}")
 
         """
-        IN here we check for all possible system events (process crashes / exits / start) and we emit
+        IN here we check for all possible os process events (process crashes / exits / start) and we emit
         descriptive /system_status updates that summarize and reflect these changes
 
         another callback for /diagnositcs must YET be implemented, but it does the exact thing. 

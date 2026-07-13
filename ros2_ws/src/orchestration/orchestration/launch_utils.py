@@ -10,16 +10,16 @@ class SysEventType(Enum):
     CRASH = 2
 
 
-def publish_system_event(proc_name: str, event_type: SysEventType, exit_code: int):
+def publish_process_event(proc_name: str, event_type: SysEventType, exit_code: int):
     """
-    Creates action to publish a one-shot system event. 
+    Creates action to publish a one-shot process event. 
 
     This is mainly used in launch.py files to bind start/exit/crash callbacks to the node's processes.
     """
     
     msg = f'\"{{proc_name: {proc_name}, event_type: {event_type.value}, exit_code: {exit_code}}}\"'
     return ExecuteProcess(
-        cmd=['ros2', 'topic', 'pub', '--once', '/system_events', 'interfaces/msg/SystemEvent', msg],
+        cmd=['ros2', 'topic', 'pub', '--once', '/process_events', 'interfaces/msg/ProcessEvent', msg],
         shell=True,
         log_cmd=True,
         name=f'sysevt-{event_type.name.lower()} pub'
@@ -44,15 +44,15 @@ def publish_system_status(status_code: int, note: str) -> ExecuteProcess:
 
 def on_process_start(target_action, proc_name: str) -> OnProcessStart:
     """
-    Event handler that publishes notification of /system_events topic on process START event.
+    Event handler that publishes notification of /process_events topic on process START event.
     """
     return OnProcessStart(
             target_action=target_action,
             on_start=lambda event, _context: [
                 LogInfo(msg=f"Launch-supervised process started: {event.action.name} (PID: {event.pid})"),
                 
-                # notify on /system_events
-                publish_system_event(
+                # notify on /process_events
+                publish_process_event(
                     proc_name=proc_name,
                     event_type=SysEventType.START,
                     exit_code=0 # redundant
@@ -63,15 +63,15 @@ def on_process_start(target_action, proc_name: str) -> OnProcessStart:
 
 def on_process_exit(target_action, proc_name: str) -> OnProcessExit:
     """
-    Event handler that publishes notification of /system_events topic on process EXIT event (including errcode).
+    Event handler that publishes notification of /process_events topic on process EXIT event (including errcode).
     """
     return OnProcessExit(
             target_action=target_action,
             on_exit=lambda event, _context: [
                 LogInfo(msg=f"Launch-supervised process '{event.action.name}' exited with code: {event.returncode}"),
 
-                # notify on /system_events
-                publish_system_event(
+                # notify on /process_events
+                publish_process_event(
                     proc_name=proc_name, 
                     event_type=SysEventType.EXIT, 
                     exit_code=event.returncode,

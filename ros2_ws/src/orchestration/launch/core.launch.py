@@ -21,17 +21,17 @@ Here the following entities are launched:
         |   |-- manager (Node)
         |   |-- connection server (Node + fastapi)
 
-In this file, we also bind /system_event one-shot publishers to the hwmng process enter/exit events;
+In this file, we also bind /process_events one-shot publishers to the hwmng process enter/exit events;
 The same is done for session manager in its own launch file.
 
-As a reminder: this is done so that the supervisor node can react to system-wide system_events such as crashes
+As a reminder: this is done so that the supervisor node can react to system-wide process_events such as crashes
 (which are fatal for processes launched in CORE), and coordinate a global graceful shutdown if possible.
 """
 
 
 def generate_launch_description():
     
-    # session manager process (process system events callbacks already bound)
+    # session manager process (process events callbacks already bound)
     session_manager_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
