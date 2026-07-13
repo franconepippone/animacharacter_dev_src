@@ -87,17 +87,30 @@ Interfaccia custom per /system_events che includa: node_name, event_type (START/
     - supervisor ordina lo shutdown generale
 
 
+### catena di eventi
+
+tutti i processi potrebbero essere avviati simulaneamente, ma questo potrebbe causare race conditions per la pubblicazione dei topic (un crash immediato potrebbe non arrivare al supervisor). Per questa ragione, l'ordine potrebbe essere:
+- supervisor spawn
+- wait
+- spawn tutti gli altri nodi
+
+2 vantaggi:
+- se il supervisor crasha subito, nessun altro nodo è stato ancora avviato
+- non ci sono race conditions (il supervisor è pronto a ricevere topic).
+
 ## Gestione di shutdown generale
 
-Quando il supervisor ordina uno shutdown, ci suono due strade:
-- utilizzare shutdown coordinato (con chiamate a servizi, lifecyle node)
-- spegnere brutalmente i processi (event=shutdown)
+Quando il supervisor ordina uno shutdown vengono eseguite due azioni:
+- shutdown applicativo coordinato (con chiamate a servizi, lifecyle node shutdown())
+- supervisor exit(0), chiusura del processo senza errori
+- chiusura dei processi (event=shutdown), gestita dal launch
 
-Per quanto c'è ancora da ragionare su questo, l'approccio migliore potrebbe essere gestire tutti i nodi lifecycle, metterli in *finalized*. Dopodiché, dopo aver atteso, forzare l'arresto di tutti gli altri processi, fino a chiudere l'intero launch.  
+prima vengono gestiti tutti i nodi lifecycle, mettendoli in *finalized*. Dopodiché, dopo aver atteso un po, forzare l'arresto di tutti gli altri processi, fino a chiudere l'intero launch. Il launch system è configurato per emettere uno Shutdown dopo che il processo supervisor si chiuda; la chiusura controllata del supervisor è usata come trigger per lo shutdown. 
 In questo modo, garantiamo sia la chiusura pulita dei processi che supportano lifecycle management, sia la chiusura "sporca" dei processi che non la supportano.
 
-il supervisor ha una lista di nodi lifecycle in uno yaml, su cui itera
+## Watchdogs 
 
+Invece di solo eventi passivi, il Supervisor dovrebbe inviare un segnale "I'M ALIVE" al pannello locale. Se il pannello (che ha un suo piccolo timer interno) non riceve nulla per X ms, mostra autonomamente un errore di "Supervisor Timeout". Questa è la vera soluzione meccatronica per i sistemi robotici. "I'M ALIVE" può essere pubblicato direttamente su /system_status come "supervisor online"
 
-Watchdog Attivo: Invece di solo eventi passivi, il Supervisor dovrebbe inviare un segnale "I'M ALIVE" al pannello locale. Se il pannello (che ha un suo piccolo timer interno) non riceve nulla per X ms, mostra autonomamente un errore di "Supervisor Timeout". Questa è la vera soluzione meccatronica per i sistemi robotici. "I'M ALIVE" può essere pubblicato direttamente su /system_status come "supervisor online"
+In generale, per nodi critici, invece di monitorare solo /system_events per un eventuale CRASH o chiusura, si dovrebbe monitorare anche un **harthbeat**, per validare l'effettiva funzionalità applicativa del processo.
 
