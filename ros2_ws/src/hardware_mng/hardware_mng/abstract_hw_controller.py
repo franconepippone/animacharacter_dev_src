@@ -233,6 +233,7 @@ class BaseHardwareController(ABC):
             except ControllerFatal as e:
                 self.logger.fatal(f"Controller fatal exception '{self.name}': {e}")
                 self._set_initialized(False)
+                return LoopActionRequest(LoopAction.STOP, signal="global_shutdown")
 
             except Exception as e:
                 # we interpret an exception as a ControllerError level exception

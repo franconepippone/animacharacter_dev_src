@@ -1,4 +1,5 @@
 import json
+import rclpy
 from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 from interfaces.msg import MotionframeArray
 from std_msgs.msg import String
@@ -34,6 +35,7 @@ class HardwareManagerNode(LifecycleNode):
         self.loop_controllers_pairs = loop_controllers_pairs # loop and controller are always kept together in a tuple
         self.loaded_hw_controllers = [t[1] for t in loop_controllers_pairs]
         self._is_active = False
+        self._shutdown_requested = False
         self._controller_databus = databus # we dont really need it, but we keep track of it just in case.
 
         # ------------------------
@@ -49,6 +51,7 @@ class HardwareManagerNode(LifecycleNode):
 
         for loop, ctrl in loop_controllers_pairs:
             self.reconciler.add_controller(loop, ctrl)
+            loop.signal_handler = self.handle_loop_signal
 
         self.reconcile_timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
         
@@ -60,6 +63,8 @@ class HardwareManagerNode(LifecycleNode):
 
         self.updater = Updater(self)
         self.updater.setHardwareID("hardware_manager")
+
+        self.looper.stop_all()
 
         # Register a diagnostic checks
         for mc in self.reconciler.controllers:
@@ -99,6 +104,30 @@ class HardwareManagerNode(LifecycleNode):
     # ---------------------------
     # Main callbacks
     # --------------------------
+
+    def handle_loop_signal(self, signal):
+        if signal != "global_shutdown":
+            self.get_logger().info(f"Unhandled loop signal: {signal}")
+            return
+
+        if self._shutdown_requested:
+            return
+
+        self._shutdown_requested = True
+        self.get_logger().warning("Received global shutdown signal from a loop job")
+        self._is_active = False
+
+        self.looper.stop_all(block=False)
+        self.reconciler.set_goal_all(ControllerState.UNINITIALIZED)
+        self.reconciler.reconcile()
+
+        try:
+            self.destroy_node()
+        except Exception:
+            pass
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
     def update_config_callback(self, msg: String):
         # WE MIGHT REMOVE THIS, CONFIGS ARE ALREADY QUEUED AUTOMATICALLY

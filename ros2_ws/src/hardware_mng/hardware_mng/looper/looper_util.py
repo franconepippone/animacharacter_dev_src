@@ -21,6 +21,9 @@ from enum import Enum, auto
 from rclpy.logging import RcutilsLogger
 
 
+SignalHandler = Callable[[Any], None]
+
+
 class LoopAction(Enum):
     """Pass a value of this enum to the constructor of LoopActionRequest"""
     PAUSE = auto()
@@ -28,8 +31,9 @@ class LoopAction(Enum):
 
 @dataclass
 class LoopActionRequest:
-    """Return this inside a lop job function to perform either PAUSE/STOP a loop from the inside."""
+    """Return this inside a loop job function to perform either PAUSE/STOP and optionally emit a signal."""
     action: LoopAction
+    signal: Any = None
 
 def _loop(
     descriptor: LoopDescriptor,
@@ -56,6 +60,11 @@ def _loop(
                     # this should match what _request_loop_stop does below
                     descriptor._run.clear()
                     descriptor._wait.set()
+
+                if result.signal is not None and descriptor.signal_handler is not None:
+                    descriptor.signal_handler(result.signal)
+
+                if result.action == LoopAction.STOP:
                     return # not necessary
 
         except Exception as e:
@@ -109,6 +118,7 @@ class LoopDescriptor:
     job: LoopJob
     _thread: th.Thread | None = None
     exception_cb: Callable[[Exception], Any] | None = None
+    signal_handler: SignalHandler | None = None
 
     @property
     def is_running(self) -> bool:
@@ -309,7 +319,8 @@ class LoopSupervisor:
         job: LoopJob,
         start_now: bool = False,
         context_manager: ContextManager | None = None,
-        exception_handler: Callable[[Exception], Any] | None = None
+        exception_handler: Callable[[Exception], Any] | None = None,
+        signal_handler: SignalHandler | None = None
     ) -> LoopDescriptor:
         """Register a new loop task.
         
@@ -347,7 +358,8 @@ class LoopSupervisor:
             freq=freq,
             job=job,
             _thread=None,
-            exception_cb=exception_handler
+            exception_cb=exception_handler,
+            signal_handler=signal_handler
         )
 
         self._add_loop_to_pool(descriptor)
