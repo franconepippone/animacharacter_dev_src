@@ -32,7 +32,7 @@ flowchart TD
         B
     end
 
-    ML[main.launch] -->|/system_events| SUP
+    ML[main.launch] -->|/process_events| SUP
     A(Session Manager) -->|control topics| B
     A -->|/diagnostics| SUP
     B(Hardware Manager) -->|/diagnostics| SUP
@@ -41,12 +41,12 @@ flowchart TD
 ```
 
 ### Topics
-- **/system_events**: pubblicati dal sistema launch tramite comandi one-shot, notifica degli EXIT, START dei vari processi.
+- **/process_events**: pubblicati dal sistema launch tramite comandi one-shot, notifica degli EXIT, START dei vari processi.
 - **/diagnostics**: sistema standard in ros2 per la pubblicazione di log diagnostici. Potenzialmente, utilizzabile insieme a un diagnostic_aggregator.
 - **/system_status**: in base agli eventi di diagnostica e di sistema ricevuti, imposta lo stato del sistema; lo status panel riflette lo stato corrente visivamente.
 **NB**: in caso eccezionale, system status può essere anche pubblicato direttamente da main.launch (crash del supervisor)
 
-Interfaccia custom per /system_events che includa: node_name, event_type (START/EXIT/CRASH), exit_code e is_critical.
+Interfaccia custom per /process_events che includa: node_name, event_type (START/EXIT/CRASH), exit_code e is_critical.
 
 ### Flowchart tipiche
 
@@ -69,7 +69,7 @@ Interfaccia custom per /system_events che includa: node_name, event_type (START/
 - Avvio supervisor
 - Supervisor OK
 - Avvio core, core crash! X
-- /system_events notifica supervisor 
+- /process_events notifica supervisor 
 - supervisor pubblica /system_status
 - supervisor ordina lo shutdown generale
 
@@ -79,8 +79,8 @@ Interfaccia custom per /system_events che includa: node_name, event_type (START/
 - Avvio core
 - Avvio monitor
 - ... running ...
-- *ProcessoX* crash! -> /system_events
-- /system_events -> supervisor pubblica warning su /system_status
+- *ProcessoX* crash! -> /process_events
+- /process_events -> supervisor pubblica warning su /system_status
 - launch system gestisce respawn in background
 - se *ProcessoX* offline da troppo tempo:
     - supervisor pubblica errore su /system_status
@@ -112,5 +112,5 @@ In questo modo, garantiamo sia la chiusura pulita dei processi che supportano li
 
 Invece di solo eventi passivi, il Supervisor dovrebbe inviare un segnale "I'M ALIVE" al pannello locale. Se il pannello (che ha un suo piccolo timer interno) non riceve nulla per X ms, mostra autonomamente un errore di "Supervisor Timeout". Questa è la vera soluzione meccatronica per i sistemi robotici. "I'M ALIVE" può essere pubblicato direttamente su /system_status come "supervisor online"
 
-In generale, per nodi critici, invece di monitorare solo /system_events per un eventuale CRASH o chiusura, si dovrebbe monitorare anche un **harthbeat**, per validare l'effettiva funzionalità applicativa del processo.
+In generale, per nodi critici, invece di monitorare solo /process_events per un eventuale CRASH o chiusura, si dovrebbe monitorare anche un **harthbeat**, per validare l'effettiva funzionalità applicativa del processo.
 
