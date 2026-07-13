@@ -125,7 +125,7 @@ class ACSessResourceMng(SessionResourceManager[ACSessionContext]):
 from rclpy.publisher import Publisher
 
 
-@dataclass
+@dataclass(slots=True)
 class MetricsTracker:
     rec_tcp: int = 0
     rec_udp: int = 0
