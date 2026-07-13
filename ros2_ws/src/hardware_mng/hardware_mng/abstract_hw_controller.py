@@ -98,9 +98,9 @@ class BaseHardwareController(ABC):
     state).
 
     Controllers can communicate between each other thanks to a shared :class:`Databus`. Use `create_databus_writer` and
-    `create_databus_reader` methods to create databus reader/writer objects.  
+    `create_databus_reader` methods to create databus reader/writer objects.
     Using the databus allows to implement closed control loops that span over multiple controllers (i.e. robot head stabilization based on
-    robot torso orientation). In addition, distrubuted architectures where there are dedicated "*driver* controller" (interface hardware) and "*logical* controllers"
+    robot torso orientation). In addition, distrubuted architectures where there are dedicated "*driver* controllers" (interface hardware) and "*logical* controllers"
     (run control algorithms) can be used for more composable and flexible systems. 
 
     Controller may intentionally raise three kinds of exceptions, derived from the `ControllerException` class:
