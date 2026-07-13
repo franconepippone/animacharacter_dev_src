@@ -34,12 +34,39 @@ def _fetch_dict_deep(d: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[bool, An
 
     return True, current
 
-class HardwareCrash(Exception):
+
+
+class ControllerException(Exception):
+    """Base class for all exceptions a controller can volountarily raise."""
+    def __init__(self, code: int, *args: object) -> None:
+        self.code = code
+        super().__init__(*args)
+
+class ControllerWarning(ControllerException):
     """
+    Publish a warning with given code and description, alerting the system of something. If a status panel is
+    present, this warning will also be redirected there.
+
+    Raising this does not stop nor reset the controller, just alerts the system. 
+    """
+
+class ControllerError(ControllerException):
+    """
+    Trigger a controller reset. The controller will be put in a deinitialized state, allowing the 
+    Hardware Manager to try to re-initialize it automatically.
+    
     Raise this in `read` or `control` if the hardware becomes unresponsive and you want to trigger a reset.
-    This internally will reset the controller to an uninitialized state and will allow the Hardware Manager to try to re-initialize it automatically.
     """
-    pass
+
+class ControllerFatal(ControllerException):
+    """
+    Triggers a global system shutdown. All controllers, running processes, current session with client will attempt to be gracefully 
+    interrupted and deinitialied. System will enter a CRASHED state, and will require a manual reboot.
+
+    Raise this if something catastrophical is happening (there's a fire? Robot is destroying itself? Person to close detected?)
+    """
+
+
 
 # a "motion frame" is a set of motion commands
 class MotionCommand(NamedTuple):
@@ -52,7 +79,7 @@ T = TypeVar('T')
 
 class BaseHardwareController(ABC):
     """
-    A Hardware Controller or Module is responsible for the execution of motion commands. Hardware controller
+    A Hardware Controller or *Hardware Module* is responsible for the execution of motion commands. Hardware controller
     are highly coupled to hardware and might differ from robot to robot. A single robot might use multiple hardware controllers.
     A Hardware Controller "subscribes" to a set of motion command ids (command_group set, passed in __init__ or via `subscribe_to_command_group`). All the recevied commands witch matching ids will be
     passed to the `control` method of the subscribed hardware controllers at a frequency specified by flush_frequency. The control method handles updating the
@@ -69,6 +96,17 @@ class BaseHardwareController(ABC):
 
     Note that `control`, `read` and all the config handlers are always called from the same thread, meaning that they are naturally thread safe (they can interact with shared
     state).
+
+    Controllers can communicate between each other thanks to a shared :class:`Databus`. Use `create_databus_writer` and
+    `create_databus_reader` methods to create databus reader/writer objects.  
+    Using the databus allows to implement closed control loops that span over multiple controllers (i.e. robot head stabilization based on
+    robot torso orientation). In addition, distrubuted architectures where there are dedicated "*driver* controller" (interface hardware) and "*logical* controllers"
+    (run control algorithms) can be used for more composable and flexible systems. 
+
+    Controller may intentionally raise three kinds of exceptions, derived from the `ControllerException` class:
+    - :class:`ControllerWarning` : globally alert the system of something controller-related;
+    - :class:`ControllerError` : alert system and causes a controller reset;
+    - :class:`ControllerFatal` : trigger a global system shutdown (all processes of the engine are interrupted).
 
     Hardware controllers are dynamically loaded as a plugins by the hardware manager system. A Hardware Configuration is a set of hardware controllers that are loaded and used
     by the hardware manager system. A Configuration can be registered in the `hw_configurations.yaml` file, and then used by passing it as an argument when launching
@@ -165,9 +203,10 @@ class BaseHardwareController(ABC):
 
     # this is used as the "job" of the looper
     def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopActionRequest]:
-            if not self.is_initialized(): self.logger.warning(f"'_flush' was called but controller is marked as initialized (this should never happen)")
-            if not self.is_initialized(): return # prevent flush if not initialized
-
+            if not self.is_initialized(): 
+                self.logger.warning(f"'_flush' was called but controller is marked as initialized (this should never happen)")
+                return
+            
             commands = []
             # use for and not while, so we only process a finite set of commands (avoid infinite loop if commands are received faster than consumed)
             for _ in range(incoming_commands.qsize()):
@@ -181,13 +220,22 @@ class BaseHardwareController(ABC):
                 self.read() # first check for any data
                 self.control(commands) # then write command instructions
             
-            except HardwareCrash as e:
+            except ControllerWarning as e:
+                self.logger.warning(f"Controller warning in controller '{self.name}': {e}")
+                # TODO publish to diagnostics somehow
+                return
+            
+            except ControllerError as e:
                 self.logger.error(f"Hardware crash in controller '{self.name}': {e}")
                 self._set_initialized(False)
                 return LoopActionRequest(LoopAction.STOP)
             
+            except ControllerFatal as e:
+                self.logger.fatal(f"Controller fatal exception '{self.name}': {e}")
+                self._set_initialized(False)
+
             except Exception as e:
-                # we interpret an exception as an hardware failure and reset the state to uninitialized
+                # we interpret an exception as a ControllerError level exception
                 self.logger.error(f"Unexpected exception in controller '{self.name}': {e}")
                 self._set_initialized(False)
                 return LoopActionRequest(LoopAction.STOP)
