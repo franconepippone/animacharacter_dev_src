@@ -18,7 +18,7 @@ class A_Controller(BaseHardwareController):
             0.0
         )
 
-    def initialize_hw(self) -> bool: raise ControllerFatal(10, "testing fatal error")
+    def initialize_hw(self) -> bool: return True
     def deinitialize_hw(self) -> bool: return True
     def control(self, commands: list[MotionCommand]):
         self.writer.write(choice(messages)) 

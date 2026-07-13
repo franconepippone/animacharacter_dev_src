@@ -1,4 +1,6 @@
 import json
+import time
+
 import rclpy
 from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
 from interfaces.msg import MotionframeArray
@@ -128,6 +130,8 @@ class HardwareManagerNode(LifecycleNode):
             self.looper.stop_all(block=True, timeout=1.0)
             self.reconciler.set_goal_all(ControllerState.UNINITIALIZED)
             self.reconciler.reconcile()
+
+            time.sleep(.5)
 
             # immediate system exit
             raise SystemExit(xc.HWMNG_CONTROLLER_FATAL)
