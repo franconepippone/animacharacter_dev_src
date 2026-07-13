@@ -20,20 +20,31 @@ from enum import Enum, auto
 
 from rclpy.logging import RcutilsLogger
 
+@dataclass(init=False, frozen=True, slots=True)
+class Signal:
+    """Represents a signal emitted by a looper"""
+    name: str
+    kwargs: dict
 
-SignalHandler = Callable[[Any], None]
+    def __init__(self, name: str, **kwargs) -> None:
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "kwargs", kwargs)
+
+
+SignalHandler = Callable[[Signal], None]
 
 
 class LoopAction(Enum):
-    """Pass a value of this enum to the constructor of LoopActionRequest"""
+    """Pass a value of this enum to the constructor of LoopRequest"""
     PAUSE = auto()
     STOP = auto()
+    CONTINUE = auto()
 
-@dataclass
-class LoopActionRequest:
+@dataclass(frozen=True, slots=True)
+class LoopRequest:
     """Return this inside a loop job function to perform either PAUSE/STOP and optionally emit a signal."""
-    action: LoopAction
-    signal: Any = None
+    action: LoopAction = LoopAction.CONTINUE
+    signal: Optional[Signal] = None
 
 def _loop(
     descriptor: LoopDescriptor,
@@ -50,10 +61,10 @@ def _loop(
         descriptor._wait.wait()
         try:
             with descriptor.context:
-                result: Optional[LoopActionRequest] = descriptor.job(descriptor.input_queue, descriptor.output_queue)
+                result: Optional[LoopRequest] = descriptor.job(descriptor.input_queue, descriptor.output_queue)
 
             # job can optionally return a request to perform an action
-            if isinstance(result, LoopActionRequest):
+            if isinstance(result, LoopRequest):
                 if result.action == LoopAction.PAUSE:
                     descriptor._wait.clear() # pauses on next iteration
                 elif result.action == LoopAction.STOP:
@@ -86,7 +97,7 @@ class EmptyContextManager:
         return False
 
 
-type LoopJob = Callable[[Queue, Queue], None | LoopActionRequest]
+type LoopJob = Callable[[Queue, Queue], None | LoopRequest]
 
 @dataclass
 class LoopDescriptor:
@@ -100,8 +111,8 @@ class LoopDescriptor:
         freq (float): Loop frequency in Hz.
         period (float): Loop period in seconds.
         is_running (bool): True if thread exists and is running.
-        job (Callable[[Queue, Queue], None | LoopActionRequest]): Callback function executed each iteration. Receives input and output queues as arguments, which can be used for inter-thread communication.
-            Can optionally return a LoopActionRequest object to either PAUSE/STOP the loop internally.
+        job (Callable[[Queue, Queue], None | LoopRequest]): Callback function executed each iteration. Receives input and output queues as arguments, which can be used for inter-thread communication.
+            Can optionally return a LoopRequest object to either PAUSE/STOP the loop internally.
         exception_cb (Callable[[Exception], Any]): If present, when job raises an exception this will be called with that exception as argument.
         _wait (threading.Event): PRIVATE - Event for pause control (cleared to pause, set to resume).
         _run (threading.Event): PRIVATE - Event that controls if loop continues (cleared to stop).

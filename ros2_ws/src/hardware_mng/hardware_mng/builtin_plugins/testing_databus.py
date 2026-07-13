@@ -1,6 +1,6 @@
 from typing import Dict, Callable, Any
 from collections.abc import Iterable, Sized
-from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, HardwareCrash
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, ControllerError, ControllerFatal
 
 from random import random, choice
 
@@ -18,7 +18,7 @@ class A_Controller(BaseHardwareController):
             0.0
         )
 
-    def initialize_hw(self) -> bool: return True
+    def initialize_hw(self) -> bool: raise ControllerFatal(10, "testing fatal error")
     def deinitialize_hw(self) -> bool: return True
     def control(self, commands: list[MotionCommand]):
         self.writer.write(choice(messages)) 

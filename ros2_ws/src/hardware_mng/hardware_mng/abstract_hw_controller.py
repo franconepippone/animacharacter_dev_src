@@ -4,7 +4,7 @@ from typing import NamedTuple, Optional, Tuple, Dict, Any, TypeVar, Type
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
-from .looper import LoopActionRequest, LoopAction
+from .looper import LoopRequest, LoopAction, Signal
 from .databus import Databus, DataReader, DataWriter
 
 SPECIAL_PATH_CHARS = {'@'}
@@ -38,8 +38,9 @@ def _fetch_dict_deep(d: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[bool, An
 
 class ControllerException(Exception):
     """Base class for all exceptions a controller can volountarily raise."""
-    def __init__(self, code: int, *args: object) -> None:
+    def __init__(self, code: int, description: str, *args: object) -> None:
         self.code = code
+        self.description = description
         super().__init__(*args)
 
 class ControllerWarning(ControllerException):
@@ -135,7 +136,7 @@ class BaseHardwareController(ABC):
         posted by a writer. Writers enforce a unique writable data type, which must be immutable. 
         An initial value is required to initialize the bus with.
         
-        This can only be done at controller initialization. Writers cannot be created at runtime.
+        This can only be done at controller instatiation. Writers cannot be created at runtime.
         """
         if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
@@ -147,7 +148,7 @@ class BaseHardwareController(ABC):
         """Create a reader of the shared databus across all controllers. Use a reader to read
         data posted by other controllers. Data type must match that specified by the topic writer
         
-        This can only be done at controller initialization. Readers cannot be created at runtime.
+        This can only be done at controller instatiation. Readers cannot be created at runtime.
         """
         if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
@@ -202,7 +203,7 @@ class BaseHardwareController(ABC):
                     #raise HardwareCrash from e
 
     # this is used as the "job" of the looper
-    def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopActionRequest]:
+    def _flush(self, incoming_commands: Queue[MotionCommand], _outgoing_commands: Queue[MotionCommand]) -> Optional[LoopRequest]:
             if not self.is_initialized(): 
                 self.logger.warning(f"'_flush' was called but controller is marked as initialized (this should never happen)")
                 return
@@ -223,23 +224,23 @@ class BaseHardwareController(ABC):
             except ControllerWarning as e:
                 self.logger.warning(f"Controller warning in controller '{self.name}': {e}")
                 # TODO publish to diagnostics somehow
-                return
+                return LoopRequest(signal=Signal('controller_warning'))
             
             except ControllerError as e:
                 self.logger.error(f"Hardware crash in controller '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopActionRequest(LoopAction.STOP)
+                return LoopRequest(LoopAction.STOP)
             
             except ControllerFatal as e:
                 self.logger.fatal(f"Controller fatal exception '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopActionRequest(LoopAction.STOP, signal="global_shutdown")
+                return LoopRequest(LoopAction.STOP, signal=Signal('global_shutdown', code=0))
 
             except Exception as e:
                 # we interpret an exception as a ControllerError level exception
                 self.logger.error(f"Unexpected exception in controller '{self.name}': {e}")
                 self._set_initialized(False)
-                return LoopActionRequest(LoopAction.STOP)
+                return LoopRequest(LoopAction.STOP)
 
     def _setup_wrappers(self):
         # explicitly applying "decorators" to init/denit methods to keep track of init status.

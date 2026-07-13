@@ -10,4 +10,4 @@ HWMNG_DATABUS_FIN_ERROR = 30
 HWMNG_FAILED_TO_LOAD_CONTROLLERS = 31
 
 # yet to implement
-HWMNG_CONTROLLER_REQUESTED_EXIT = 40 # when a controller raises a fatal error
+HWMNG_CONTROLLER_FATAL = 40 # when a controller raises a fatal error

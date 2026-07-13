@@ -8,7 +8,7 @@ from diagnostic_updater import Updater
 from diagnostic_updater import DiagnosticStatusWrapper, DiagnosticStatus
 
 from .dispatcher import Dispatcher
-from .looper import LoopSupervisor, display_status_from_json, LoopDescriptor 
+from .looper import LoopSupervisor, display_status_from_json, LoopDescriptor, Signal
 from .abstract_hw_controller import MotionCommand, BaseHardwareController
 from .databus import Databus
 from .hw_controller_state_reconciler import (
@@ -17,6 +17,9 @@ from .hw_controller_state_reconciler import (
     ManagedController
 )
 from .utils import flatten_for_diagnostics
+from system_commons import exit_codes as xc
+
+
 
 # of type MotionframeArray
 INPUT_TOPIC = 'input_motionframes'
@@ -51,7 +54,7 @@ class HardwareManagerNode(LifecycleNode):
 
         for loop, ctrl in loop_controllers_pairs:
             self.reconciler.add_controller(loop, ctrl)
-            loop.signal_handler = self.handle_loop_signal
+            loop.signal_handler = lambda s: self.handle_loop_signal(loop, s)
 
         self.reconcile_timer = self.create_timer(3, self.reconciler.reconcile, autostart=True)
         
@@ -105,8 +108,10 @@ class HardwareManagerNode(LifecycleNode):
     # Main callbacks
     # --------------------------
 
-    def handle_loop_signal(self, signal):
-        if signal != "global_shutdown":
+    def handle_loop_signal(self, loop: LoopDescriptor, signal: Signal):
+        self.get_logger().info(f"Received signal {signal} from loop {loop}")
+
+        if signal.name != "global_shutdown":
             self.get_logger().info(f"Unhandled loop signal: {signal}")
             return
 
@@ -114,20 +119,15 @@ class HardwareManagerNode(LifecycleNode):
             return
 
         self._shutdown_requested = True
-        self.get_logger().warning("Received global shutdown signal from a loop job")
+        self.get_logger().warning(f"Received global shutdown signal from {loop}")
         self._is_active = False
 
-        self.looper.stop_all(block=False)
+        self.looper.stop_all(block=True, timeout=1.0)
         self.reconciler.set_goal_all(ControllerState.UNINITIALIZED)
         self.reconciler.reconcile()
 
-        try:
-            self.destroy_node()
-        except Exception:
-            pass
-
-        if rclpy.ok():
-            rclpy.shutdown()
+        # immediate system exit
+        raise SystemExit(xc.HWMNG_CONTROLLER_FATAL)
 
     def update_config_callback(self, msg: String):
         # WE MIGHT REMOVE THIS, CONFIGS ARE ALREADY QUEUED AUTOMATICALLY

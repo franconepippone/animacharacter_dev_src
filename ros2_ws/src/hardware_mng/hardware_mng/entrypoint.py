@@ -42,7 +42,7 @@ def main(args=None):
     logger.debug(f"Configuration file source: {CONFIG_FILE}, current input config: {INPUT_CONFIG}")
 
     logger.info(f"Beginning hardare manager system initialization. CWD: {os.getcwd()}")
-    time.sleep(5)
+    time.sleep(.5)
 
     # loading configs
     try:
@@ -118,6 +118,9 @@ def main(args=None):
     ok = len(controllers)
     if ok == total:
         logger.info(f"Succesfully loaded {ok}/{ok} hw controllers from configuration '{INPUT_CONFIG}'")
+    elif ok == 0:
+        logger.fatal(f"No hw controllers from configuration '{INPUT_CONFIG}' could be loaded.")
+        exit(xc.HWMNG_FAILED_TO_LOAD_CONTROLLERS)
     elif not STRICT_MODE:
         logger.warning(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded. Hardware may not work completely.")
     else:
@@ -151,8 +154,16 @@ def main(args=None):
     # spin ros2 node in this thread 
     rclpy.init(args=args)
     node = HardwareManagerNode(dispatcher, looper, loop_ctrl_pairs, databus)
-    rclpy.spin(node)
-    node.destroy_node()
-    if rclpy.ok():
-        rclpy.shutdown()
-    exit(0)
+    try:
+        rclpy.spin(node)
+    except BaseException:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+        raise
+    else:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+        exit(0)
+

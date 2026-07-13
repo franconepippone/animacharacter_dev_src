@@ -140,6 +140,8 @@ class Supervisor(Node):
 
         evt_type = SysEventType(event.event_type)
 
+        self.get_logger().info(f"Got system event: {event}")
+
         """
         IN here we check for all possible system events (process crashes / exits / start) and we emit
         descriptive /system_status updates that summarize and reflect these changes
