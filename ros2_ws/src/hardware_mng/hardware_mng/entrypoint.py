@@ -13,6 +13,8 @@ from .looper import LoopSupervisor, LoopDescriptor
 from .databus import Databus, DatabusError
 from . import plugins_loader as pld
 
+from system_commons import exit_codes as xc
+
 import inspect
 
 def is_type_of_base(obj, BaseClass):
@@ -47,13 +49,13 @@ def main(args=None):
         config_data: dict[str, list[str] | str] = pld.load_yaml_file(CONFIG_FILE)
     except RuntimeError as e:
         logger.fatal(f"Failed to load Hardware Configuration file -> {e}")
-        exit(-1)
+        exit(xc.HWMNG_NO_CONFIG_FILE)
 
     if INPUT_CONFIG == '':
         default_config = config_data.get('default_config')
         if default_config is None or not isinstance(default_config, str):
             logger.fatal('No hardware configuration specified.')
-            exit(-1)
+            exit(xc.HWMNG_NO_CONFIG_SPECIFIED)
         INPUT_CONFIG = default_config
     
     logger.info(f"Using configuration: '{INPUT_CONFIG}'")
@@ -61,13 +63,13 @@ def main(args=None):
     hw_controllers_paths: list[str] | str | None = config_data.get(INPUT_CONFIG)
     if hw_controllers_paths is None:
         logger.fatal(f"Configuration '{INPUT_CONFIG}' not found in hardware configuration file at '{CONFIG_FILE}'")
-        exit(-1)
+        exit(xc.HWMNG_UNKNOWN_CONFIG_SPECIFIED)
     if not(
         isinstance(hw_controllers_paths, list) and 
         all(isinstance(path, str) for path in hw_controllers_paths)
     ):
         logger.fatal(f"Invalid configuration '{INPUT_CONFIG}' (is not a list of paths (strings))")
-        exit(-1)
+        exit(xc.HWMNG_INVALID_CONFIG_FORMAT)
 
     total = len(hw_controllers_paths)
 
@@ -109,7 +111,7 @@ def main(args=None):
     except DatabusError as e:
         logger.error(f"Databus finalization error -> {e}")
         logger.fatal(f"shutting down.")
-        exit(-1)
+        exit(xc.HWMNG_DATABUS_FIN_ERROR)
     finally:
         logger.info(f"Databus finalized.")
     
@@ -120,7 +122,7 @@ def main(args=None):
         logger.warning(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded. Hardware may not work completely.")
     else:
         logger.fatal(f"Only {ok}/{total} hw controllers from configuration '{INPUT_CONFIG}' could be loaded, shutting down.")
-        exit(-1)
+        exit(xc.HWMNG_FAILED_TO_LOAD_CONTROLLERS)
 
     # configure the dispatcher and looper
     looper = LoopSupervisor()
@@ -151,4 +153,6 @@ def main(args=None):
     node = HardwareManagerNode(dispatcher, looper, loop_ctrl_pairs, databus)
     rclpy.spin(node)
     node.destroy_node()
-    rclpy.shutdown()
+    if rclpy.ok():
+        rclpy.shutdown()
+    exit(0)

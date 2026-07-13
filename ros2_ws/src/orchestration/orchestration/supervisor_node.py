@@ -13,7 +13,7 @@ from typing import Callable, Any, cast
 import time
 
 import rclpy
-from rclpy.timer import Timer, TimerInfo
+from rclpy.timer import Timer
 from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
@@ -154,6 +154,9 @@ class Supervisor(Node):
         
         """
 
+        # TODO
+        # differentiate exit codes of processes (i.e. hwmng) to log a more descriptive exit cause
+
 
         if pn.get_domain_from_proc_name(event.proc_name) == pn.DOMAIN_CORE:
             
@@ -161,8 +164,17 @@ class Supervisor(Node):
                 action = 'crashed' if evt_type == SysEventType.CRASH else 'exited'
                 self.get_logger().error(f"The core process \"{event.proc_name}\" has {action} with code: {event.exit_code}, "
                                         f"scheduling system shutdown in {SHUTDOWN_POSTPONE_TIME} seconds.")
-                self.create_one_shot_timer(SHUTDOWN_POSTPONE_TIME, self.shutdown_system)
+                self.create_one_shot_timer(
+                    SHUTDOWN_POSTPONE_TIME, 
+                    self.shutdown_system
+                )
                 return
+
+        # non critical event
+        else:
+            if evt_type == SysEventType.START:
+                pass
+                # implement restart counter
             
 
 
