@@ -145,8 +145,8 @@ intf.push_alert(level, code, brief, description, source_override="mybehavior")
 # altri messaggi
 
 Un meno di accesso e configurazione dovrebbe essere disponibile attraverso LCD. Fa vedere:
-- ip rete
-- credenziali ssh
+- ip rete e credenziali ssh
+- dati del client attuale (session)
 - opzione per fare un reboot software
 ... possibili altre opzioni
 
