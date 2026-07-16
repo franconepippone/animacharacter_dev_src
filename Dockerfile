@@ -73,19 +73,19 @@ RUN chmod +x /usr/local/bin/start
 # ---------------------------------------------------------
 # Runtime environment
 # ---------------------------------------------------------
-ENV BUILTIN_PLUGINS_DIR=/app/ros2_ws/src/hardware_mng/hardware_mng/builtin_plugins
+ENV CONTROLLER_BUILTIN_PLUGINS_DIR=/app/ros2_ws/src/hardware_mng/hardware_mng/builtin_plugins
 
 # register both builtin plugins dir and folder reserved to user plugins (can be mounted)
 # Other user specified folders where hardware plugins will be searcehd can be added here
-ENV PLUGIN_DIRS=/app/plugins:${BUILTIN_PLUGINS_DIR}
+ENV CONTROLLERS_PLUGIN_DIRS=/app/plugins/hardware_controllers:${CONTROLLER_BUILTIN_PLUGINS_DIR}
 
-# Point to the default configuration file, file must be changed for custom user configurations or path changed to point at a different file
-ENV CONFIG_FILE=${BUILTIN_PLUGINS_DIR}/hw_configurations.yaml 
-ENV INPUT_CONFIG=""
-ENV STRICT_MODE="true"
+# List of possible configuration files. The last one found in the list will be used.
+ENV CONTROLLERS_CONFIG_FILES=${BUILTIN_PLUGINS_DIR}/hw_configs.yaml:/app/plugins/hardware_controllers/hw_configs.yaml
+ENV HWM_INPUT_CONFIG=""
+ENV HWM_STRICT_MODE="true"
 
 # Users who want to add plugins can mount this directory and place them there directly
-RUN mkdir -p /app/plugins
+RUN mkdir -p /app/plugins/hardware_controllers
 
 RUN echo "source /opt/ros/kilted/setup.bash" >> /etc/bash.bashrc && \
     echo "source ${ROS_WS}/install/setup.bash" >> /etc/bash.bashrc

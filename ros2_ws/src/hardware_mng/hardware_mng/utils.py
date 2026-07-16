@@ -1,3 +1,33 @@
+
+import inspect
+from typing import get_type_hints
+
+
+def get_first_argument_type(func):
+    """
+    Return the type annotation of the first argument after `self` (if present).
+    Considers both positional and keyword-only arguments.
+    """
+    sig = inspect.signature(func)
+    hints = get_type_hints(func)
+
+    params = list(sig.parameters.values())
+
+    # Skip self / cls if present
+    if params and params[0].name in ("self", "cls"):
+        params = params[1:]
+
+    for param in params:
+        if param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            return hints.get(param.name)
+
+    return None
+
+
 def flatten_dict(data, parent_key="", sep="/"):
     flat = {}
 

@@ -1,11 +1,16 @@
 from collections.abc import Iterable, Callable
 from typing import NamedTuple, Optional, Tuple, Dict, Any, TypeVar, Type
+import functools
 
 from rclpy.logging import RcutilsLogger
 from abc import ABC, abstractmethod
 from queue import Queue, Empty
+from pydantic import TypeAdapter
+
 from .looper import LoopRequest, LoopAction, Signal
 from .databus import Databus, DataReader, DataWriter
+from .utils import get_first_argument_type
+
 
 from .signals_definitions import (
     SIG_CONTOLLER_WARNING,
@@ -143,7 +148,7 @@ class BaseHardwareController(ABC):
         posted by a writer. Writers enforce a unique writable data type, which must be immutable. 
         An initial value is required to initialize the bus with.
         
-        This can only be done at controller instatiation. Writers cannot be created at runtime.
+        This can only be done at controller instantiation. Writers cannot be created at runtime.
         """
         if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
@@ -155,7 +160,7 @@ class BaseHardwareController(ABC):
         """Create a reader of the shared databus across all controllers. Use a reader to read
         data posted by other controllers. Data type must match that specified by the topic writer
         
-        This can only be done at controller instatiation. Readers cannot be created at runtime.
+        This can only be done at controller instantiation. Readers cannot be created at runtime.
         """
         if not isinstance(self._databus, Databus):
             raise ValueError('Hardware controller has no bound databus (something went wrong on initialization?)')
@@ -170,14 +175,32 @@ class BaseHardwareController(ABC):
     
     # handling configuration
 
-    def subscribe_to_config_path(self, path: str, handler: Callable[[dict], Any]):
+    def subscribe_to_config_path(self, path: str, handler: Callable[[Any], Any], enforce_type: bool = False):
         """Bind a handler function to a specified path within the configuration tree.
         Upon reception of a configuration tree in which this path exists, this handler will be invoked with the corresponding
         configuration data contained under that path.
+
+        If `enforce_type=True`, the type annotation used in the handler will be runtime-checked; data with wrong format will
+        be rejected. Since data is in json format, usage of a :class:`typing_extensions.TypedDict` annotation is ideal. Runtime type checking is 
+        done with *pydantic* Adapters.
         """
         parts = _cleanup_path(path)
-        if hasattr(self._config_handlers, path):
+        if path in self._config_handlers:
             self.logger.warn(f"Overriding config handler for '{path}'")
+        
+        if enforce_type:
+            arg_type = get_first_argument_type(handler)
+            if arg_type is not None:
+                adapt = TypeAdapter(arg_type)
+
+                original_handler = handler
+
+                @functools.wraps(handler)
+                def wrapper(cfg, *args, **kw):
+                    return original_handler(adapt.validate_python(cfg), *args, **kw)
+                
+                handler = wrapper
+
         self._config_handlers[parts] = handler
 
     def _queue_config_update(self, config: dict):
@@ -205,6 +228,7 @@ class BaseHardwareController(ABC):
             if succ:
                 try:
                     handler(subconfig)
+                # we also catch beartype exceptions here
                 except Exception as e:
                     self.logger.error(f"Configuration handler '{handler.__name__}' subscribed to '{'/'.join(path_parts)}' failed -> {e}")
                     #raise HardwareCrash from e

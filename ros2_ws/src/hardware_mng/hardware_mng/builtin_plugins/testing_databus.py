@@ -1,4 +1,4 @@
-from typing import Dict, Callable, Any
+from typing import Dict, Callable, Any, TypedDict
 from collections.abc import Iterable, Sized
 from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, ControllerError, ControllerFatal
 
@@ -28,13 +28,25 @@ class A_Controller(BaseHardwareController):
         val = 2.2 # read from hardware
         self.writer_state.write(val)
 
+
+class ConfigType(TypedDict):
+    field1: list[int]
+    flag: bool
+    more: dict | None
+
 class B_Controller(BaseHardwareController):
     def __init__(self):
         super().__init__("B", flush_freq=1.0)
         self.subscribe_to_command_group([4,5,6])
 
+        self.subscribe_to_config_path('hello/there', self.callback_test, enforce_type=True)
+
         self.writer = self.create_databus_writer('topic/B', float, 0.0)
         self.reader = self.create_databus_reader('topic/A', str)
+    
+
+    def callback_test(self, obj: ConfigType):
+        self.logger.info(f"recevied {obj}")
     
     def initialize_hw(self) -> bool: return True
     def deinitialize_hw(self) -> bool: return True

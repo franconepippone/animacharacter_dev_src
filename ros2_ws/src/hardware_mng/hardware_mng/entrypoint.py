@@ -28,13 +28,17 @@ logger = RcutilsLogger('HW-mng starter')
 def main(args=None):
     # input is given via env variables
     import time
-
-
     import os
-    PLUGIN_DIRS = os.getenv("PLUGIN_DIRS", "/plugins").split(":")
-    CONFIG_FILE = os.getenv("CONFIG_FILE", "/plugins/config.yaml")
+    PLUGIN_DIRS = os.getenv("CONTROLLERS_PLUGIN_DIRS", "").split(":")
+    CONFIG_FILES = os.getenv("CONTROLLERS_CONFIG_FILES", "").split(':')
     INPUT_CONFIG = os.getenv("INPUT_CONFIG", "")
     STRICT_MODE = os.getenv("STRICT_MODE", "true").lower() == "true" #wheter to stop if any of the controllers fail to load
+
+    # look for config file
+    CONFIG_FILE = pld.last_existing_path(CONFIG_FILES)
+    if CONFIG_FILE == '':
+        logger.fatal(f"No Hardware Configuration file was specified (empty 'CONTROLLERS_CONFIG_FILES' env variable)")
+        exit(xc.HWMNG_NO_CONFIG_FILES_SPECIFIED)
 
     pld.register_plugin_dirs(PLUGIN_DIRS) # now we can import them
 
@@ -49,7 +53,7 @@ def main(args=None):
         config_data: dict[str, list[str] | str] = pld.load_yaml_file(CONFIG_FILE)
     except RuntimeError as e:
         logger.fatal(f"Failed to load Hardware Configuration file -> {e}")
-        exit(xc.HWMNG_NO_CONFIG_FILE)
+        exit(xc.HWMNG_CONFIG_LOAD_FAILED)
 
     if INPUT_CONFIG == '':
         default_config = config_data.get('default_config')

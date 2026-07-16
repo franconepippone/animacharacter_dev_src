@@ -9,6 +9,17 @@ from types import ModuleType
 import importlib
 import sys
 import yaml
+import os
+
+def last_existing_path(paths):
+    """
+    Returns the last existing file path from the given list.
+    If none exist, returns an empty string.
+    """
+    for path in reversed(paths):
+        if os.path.exists(path):
+            return path
+    return ""
 
 def register_plugin_dirs(plugin_dirs: list[str]) -> None:
     """ Adds list of directories to sys.path so python can imports the modules contained in them """
