@@ -1,0 +1,31 @@
+# testing file for behavior configuration file handling
+# there is only one file at a time loaded and used, specified by an ENV VAR
+# - all plugins loaded are available in the config file
+# - for group definitions inside other file, we can import them and use them (composition)
+# - programmmers should attach groups to plugins at definition time via appropriate decorator
+# - consider adding a preprocessor to allow for simple macros for paths
+
+
+groups:
+  anastasio:
+    - include: [vendorX_bundleY]  # vendor specific convention to avoid name overlaps (this group is defined at plg def level)
+    - vendorX_pluginZ # all plugins are globally available
+    - bh_eyes
+    - bh_utils
+
+  peppe:
+    - include: [../rel/path/to/other/config.yaml@group1]
+    - mybehavior2
+    - yourbehavior3
+
+  someothergroup:
+    - include: [ac_builtins-base, ac_builtins-extra] # various levels of configurations
+
+  ciccio:
+    # builtins group is assigned to behaviors at definition time @behavior(name="ac_builtin_axis_remapper", groups=["ac_builtins"])
+    - include: [ac_builtins, /absolute/path/to/config.yaml@group2, anastasio]
+    - mydevice1
+    - mydevice2
+
+
+launch_group: ciccio

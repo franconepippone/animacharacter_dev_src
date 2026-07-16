@@ -34,15 +34,18 @@ flowchart TD
 
     ML[main.launch] -->|/process_events| SUP
     A(Session Manager) -->|control topics| B
-    A -->|/diagnostics| SUP
-    B(Hardware Manager) -->|/diagnostics| SUP
+    A -->|/system_alerts| SUP
+    B(Hardware Manager) -->|/system_alerts| SUP
     ML[main.launch] -.->|/system_status| M
     SUP(Supervisor) -->|/system_status| M(Status Panel)
 ```
 
 ### Topics
+> NOTA: /process_events si confonde con l'idea di "processare un evento", andrebbe ricambiato... 
 - **/process_events**: pubblicati dal sistema launch tramite comandi one-shot, notifica degli EXIT, START dei vari processi.
-- **/diagnostics**: sistema standard in ros2 per la pubblicazione di log diagnostici. Potenzialmente, utilizzabile insieme a un diagnostic_aggregator.
+- **/system_alerts**: utilizzato per:
+    - notificare supervisor di controller WRN, ERR e FATAL (in caso di crash)
+    - 
 - **/system_status**: in base agli eventi di diagnostica e di sistema ricevuti, imposta lo stato del sistema; lo status panel riflette lo stato corrente visivamente.
 **NB**: in caso eccezionale, system status può essere anche pubblicato direttamente da main.launch (crash del supervisor)
 
