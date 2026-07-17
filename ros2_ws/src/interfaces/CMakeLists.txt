@@ -16,6 +16,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotionframeArray.msg"
   "msg/SystemStatus.msg"
   "msg/ProcessEvent.msg"
+  "msg/Alert.msg"
+  "msg/AlertAction.msg"
 )
 
 if(BUILD_TESTING)
