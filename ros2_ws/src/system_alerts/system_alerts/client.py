@@ -4,10 +4,10 @@ import math
 from typing import Callable
 
 from rclpy.node import Node
-from interfaces.msg import Alert as MsgAlert
 from interfaces.msg import AlertAction
 
 from system_alerts.alert import Alert, AlertActionType, Level
+from system_alerts.transport import decode_action_message, build_message
 
 
 class SysAlertsClient:
@@ -28,7 +28,8 @@ class SysAlertsClient:
         self._request_topic = request_topic
         self._change_topic = change_topic
         self._active_alerts: dict[int, Alert] = {}
-        self._callbacks: list[Callable[[AlertActionType, Alert], None]] = []
+        self._change_callback: Callable[[AlertActionType, Alert], None] | None = None
+        
 
         self._publisher = self.node.create_publisher(AlertAction, request_topic, 10)
         self._subscription = self.node.create_subscription(
@@ -70,49 +71,17 @@ class SysAlertsClient:
 
     def on_alert_change(self, callback: Callable[[AlertActionType, Alert], None]) -> None:
         """Register a callback invoked for every server-published alert change."""
-        self._callbacks.append(callback)
+        self._change_callback = callback
 
     def _publish_action(self, action: AlertActionType, alert: Alert) -> None:
-        self._publisher.publish(self._build_message(action, alert))
+        self._publisher.publish(build_message(action, alert))
 
     def _handle_change(self, message: AlertAction) -> None:
-        action, alert = self._decode_change_message(message)
+        action, alert = decode_action_message(message)
         if action is AlertActionType.RAISE:
             self._active_alerts[alert.code] = alert
         elif action is AlertActionType.CLEAR:
             self._active_alerts.pop(alert.code, None)
 
-        for callback in list(self._callbacks):
-            callback(action, alert)
-
-    def _build_message(self, action: AlertActionType, alert: Alert) -> AlertAction:
-        message = AlertAction()
-        message.action = action.value
-        message.alert = self._to_ros_alert(alert)
-        return message
-
-    def _decode_change_message(self, message: AlertAction) -> tuple[AlertActionType, Alert]:
-        action = AlertActionType(message.action)
-        return action, self._from_ros_alert(message.alert)
-
-    def _to_ros_alert(self, alert: Alert) -> MsgAlert:
-        ros_alert = MsgAlert()
-        ros_alert.level = int(alert.level)
-        ros_alert.src = str(alert.src)
-        ros_alert.code = int(alert.code)
-        ros_alert.ttl = float(alert.ttl)
-        ros_alert.subcode = int(alert.subcode)
-        ros_alert.brief = str(alert.brief)
-        ros_alert.description = str(alert.description)
-        return ros_alert
-
-    def _from_ros_alert(self, message: MsgAlert) -> Alert:
-        return Alert(
-            level=int(message.level),
-            src=str(message.src),
-            code=int(message.code),
-            ttl=float(message.ttl),
-            subcode=int(message.subcode),
-            brief=str(message.brief),
-            description=str(message.description),
-        )
+        if self._change_callback:
+            self._change_callback(action, alert)
