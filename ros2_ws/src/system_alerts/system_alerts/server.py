@@ -93,7 +93,7 @@ class SysAlertsServer:
             code
             for code, alert in self._active_alerts.items()
             if alert.ttl != math.inf
-            and self._alert_started_at.get(code) is not None
+            and code in self._alert_started_at
             and now - self._alert_started_at[code] >= alert.ttl
         ]
 

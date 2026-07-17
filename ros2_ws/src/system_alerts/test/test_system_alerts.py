@@ -42,12 +42,12 @@ class FakeNode:
         self._publishers = {}
         self._timers = []
 
-    def create_publisher(self, msg_type, topic, qos):
+    def create_publisher(self, msg_type, topic, qos, callback_group=None):
         publisher = FakePublisher(self, topic)
         self._publishers[topic] = publisher
         return publisher
 
-    def create_subscription(self, msg_type, topic, callback, qos):
+    def create_subscription(self, msg_type, topic, callback, qos, callback_group=None):
         subscription = FakeSubscription(topic, callback)
         self._subscriptions.setdefault(topic, []).append(subscription)
         return subscription
