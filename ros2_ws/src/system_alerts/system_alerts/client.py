@@ -4,6 +4,7 @@ import math
 from typing import Callable
 
 from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from interfaces.msg import AlertAction
 
 from system_alerts.alert import Alert, AlertActionType, Level
@@ -29,14 +30,17 @@ class SysAlertsClient:
         self._change_topic = change_topic
         self._active_alerts: dict[int, Alert] = {}
         self._change_callback: Callable[[AlertActionType, Alert], None] | None = None
-        
 
-        self._publisher = self.node.create_publisher(AlertAction, request_topic, 10)
+        # prevents race between change and requests
+        cbg = MutuallyExclusiveCallbackGroup()
+        
+        self._publisher = self.node.create_publisher(AlertAction, request_topic, 10, callback_group=cbg)
         self._subscription = self.node.create_subscription(
             AlertAction,
             change_topic,
             self._handle_change,
             10,
+            callback_group=cbg
         )
 
     def raise_alert(

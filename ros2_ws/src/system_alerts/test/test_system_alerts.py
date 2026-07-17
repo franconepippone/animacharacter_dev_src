@@ -19,6 +19,14 @@ class FakeSubscription:
         self.callback = callback
 
 
+class FakeTimer:
+    def __init__(self, callback):
+        self._callback = callback
+
+    def destroy(self):
+        return None
+
+
 class FakePublisher:
     def __init__(self, node, topic):
         self._node = node
@@ -32,6 +40,7 @@ class FakeNode:
     def __init__(self):
         self._subscriptions = {}
         self._publishers = {}
+        self._timers = []
 
     def create_publisher(self, msg_type, topic, qos):
         publisher = FakePublisher(self, topic)
@@ -42,6 +51,11 @@ class FakeNode:
         subscription = FakeSubscription(topic, callback)
         self._subscriptions.setdefault(topic, []).append(subscription)
         return subscription
+
+    def create_timer(self, period, callback):
+        timer = FakeTimer(callback)
+        self._timers.append(timer)
+        return timer
 
     def _deliver(self, topic, message):
         for subscription in self._subscriptions.get(topic, []):
@@ -225,3 +239,22 @@ def test_ros2_nodes_handle_repeated_raise_updates():
     finally:
         if rclpy.ok():
             rclpy.shutdown()
+
+
+def test_server_auto_expires_alerts_when_ttl_is_reached():
+    """An alert with an elapsed TTL should be cleared automatically by the server."""
+    node = cast(Node, FakeNode())
+    client = SysAlertsClient(node)
+    server = SysAlertsServer(node, expiry_interval=0.01)
+
+    client.raise_alert(Level.WARN, "motor", 321, ttl=0.01, brief="short")
+
+    deadline = time.time() + 0.5
+    while time.time() < deadline:
+        server._expire_alerts()
+        if 321 not in server.get_active_alerts():
+            break
+        time.sleep(0.01)
+
+    assert 321 not in server.get_active_alerts()
+    assert 321 not in client.get_active_alerts()
