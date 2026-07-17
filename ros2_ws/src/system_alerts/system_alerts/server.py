@@ -6,11 +6,13 @@ from typing import Callable
 
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.task import Future
 from interfaces.msg import AlertAction
 
 from system_alerts.alert import Alert, AlertActionType, Level
 from system_alerts.transport import build_message, decode_action_message
 
+from .async_utils import wait_for
 
 class SysAlertsServer:
     """Authoritative server that owns the active alert table.
@@ -34,17 +36,18 @@ class SysAlertsServer:
         self._active_alerts: dict[int, Alert] = {}
         self._alert_started_at: dict[int, float] = {}
         self._change_callback: Callable[[AlertActionType, Alert], None] | None = None
+        self._change_waiters: list[Future] = []
 
         # prevents race between change and requests
-        cbg = MutuallyExclusiveCallbackGroup()
+        self.cbg = MutuallyExclusiveCallbackGroup()
 
-        self._publisher = self.node.create_publisher(AlertAction, change_topic, 10, callback_group=cbg)
+        self._publisher = self.node.create_publisher(AlertAction, change_topic, 10, callback_group=self.cbg)
         self._subscription = self.node.create_subscription(
             AlertAction,
             request_topic,
             self._handle_request,
             10,
-            callback_group=cbg
+            callback_group=self.cbg
         )
 
         self._expiry_timer = self.node.create_timer(self._expiry_interval, self._expire_alerts)
@@ -64,18 +67,60 @@ class SysAlertsServer:
     def on_alert_change(self, callback: Callable[[AlertActionType, Alert], None]) -> None:
         """Register a callback invoked for every server-published alert change."""
         self._change_callback = callback
+    
+    def get_alerts_from_level(self, starting_level: int) -> tuple[Alert, ...]:
+        """Returns all the active alerts of level above or equal to the one specified"""
+        return tuple([alert for alert in self._active_alerts.values() 
+                      if alert.level >= starting_level])
 
-    def _handle_request(self, message: AlertAction) -> None:
-        action, alert = decode_action_message(message)
-        self._apply_change(action, alert)
+    async def wait_alert_change(
+        self,
+        timeout: float,
+    ) -> tuple[AlertActionType, Alert] | tuple[None, None]:
+        future: Future[tuple[AlertActionType, Alert]] = Future()
+        self._change_waiters.append(future)
 
-    def _apply_change(self, action: AlertActionType, alert: Alert) -> None:
+        try:
+            result = await wait_for(
+                self.node,
+                future,
+                timeout,
+                self.cbg,
+            )
+
+            if result is None:
+                return (None, None)
+
+            return result
+
+        finally:
+            self._change_waiters.remove(future)
+
+
+    def _apply_change(self, action: AlertActionType, alert: Alert) -> bool:
+        """Apply an alert state change.
+
+        Returns:
+            True if a change was published.
+        """
         if action is AlertActionType.RAISE:
+            current = self._active_alerts.get(alert.code)
+
+            # Always refresh the lifetime.
             self._active_alerts[alert.code] = alert
             self._alert_started_at[alert.code] = time.monotonic()
+
+            # Don't republish if nothing except the expiry changed.
+            if current == alert:
+                return False
+
         elif action is AlertActionType.CLEAR:
-            self._active_alerts.pop(alert.code, None)
+            if alert.code not in self._active_alerts:
+                return False
+
+            self._active_alerts.pop(alert.code)
             self._alert_started_at.pop(alert.code, None)
+
         else:
             raise ValueError(f"Unsupported alert action: {action}")
 
@@ -83,6 +128,17 @@ class SysAlertsServer:
 
         if self._change_callback:
             self._change_callback(action, alert)
+
+        # Notify all pending waiters.
+        for future in self._change_waiters[:]:
+            if not future.done():
+                future.set_result((action, alert))
+
+        return True
+                
+    def _handle_request(self, message: AlertAction) -> None:
+        action, alert = decode_action_message(message)
+        self._apply_change(action, alert)
 
     def _publish_change(self, action: AlertActionType, alert: Alert) -> None:
         self._publisher.publish(build_message(action, alert))
@@ -98,15 +154,7 @@ class SysAlertsServer:
         ]
 
         for code in expired_codes:
-            self._clear_expired_alert(code)
-
-    def _clear_expired_alert(self, code: int) -> None:
-        if code not in self._active_alerts:
-            return
-
-        self._active_alerts.pop(code, None)
-        self._alert_started_at.pop(code, None)
-        self._publish_change(AlertActionType.CLEAR, Alert(level=Level.INFO, src="", code=code))
-
-        if self._change_callback:
-            self._change_callback(AlertActionType.CLEAR, Alert(level=Level.INFO, src="", code=code))
+            self._apply_change(
+                AlertActionType.CLEAR,
+                Alert(level=Level.INFO, src="", code=code),
+            )

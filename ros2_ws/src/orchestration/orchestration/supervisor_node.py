@@ -19,10 +19,13 @@ from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from interfaces.msg import ProcessEvent, SystemStatus
 
+from system_alerts.system_alerts import SysAlertsServer, Level, Alert, AlertActionType
+
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
 from .ros_async_utils import sleep, gather
+from .state_machine.system_fsm import SystemFSM, SystemState
 
 PROCESS_EVENTS_TOPIC = "/process_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -56,13 +59,41 @@ class Supervisor(Node):
         self.hwmng_sup = LifecycleNodeSupervisor(self, '/hardware_manager')
         self.ssmng_sup = LifecycleNodeSupervisor(self, '/session_manager')
 
+        # -----------------
+        # Host Alert server
+        self.alert_server = SysAlertsServer(self)
+        self.alert_server.on_alert_change(self.on_alert_change_cb) # drives the system status
+
+
+        # -----------------
+        # System State machine rapresentation
+        self.fsm = SystemFSM() # MISSING SYSTEM_STATUS automatic publisher
+
         def imalive(): 
             self.get_logger().info("imalive")
 
         #self.create_timer(.5, imalive)
 
+        self.create_one_shot_timer(0.0, self.startup_routine)
+
         self.get_logger().info('Master supervisor instantiated.')
     
+    async def startup_routine(self):
+        """Routine executed as soon as the node enters the executor loop"""
+
+        self.get_logger().info('Master supervisor entered executor.')
+
+        ok = await self.spinup_system()
+        if not ok:
+            # move fsm to fault
+            await self.shutdown_system()
+            # 
+
+
+          #  <--- CINTINUE FRO MHERE
+
+          # eventaully move fsm to STDBY
+
     def create_one_shot_timer(
         self,
         delay: float,
@@ -85,22 +116,51 @@ class Supervisor(Node):
 
         return timer
 
-    async def spinup_system(self):
+    async def spinup_system(self) -> bool:
         """Attempts to bring the whole system up"""
 
         self.hwmng_sup.timeout = 3
         if not self.hwmng_sup.configure():
             # activation of hwmng is done by sessmng node
             self.get_logger().warning("Could not configure hardware manager node, aborting spinup.")
-            return await self.shutdown_system()
+            return False
         
         if not self.ssmng_sup.configure():
             self.get_logger().warning("Could not configure session manager node, aborting spinup.")
-            return await self.shutdown_system()
+            return False
 
         if not self.ssmng_sup.activate():
             self.get_logger().warning("Could not activate session manager node, aborting spinup.")
-            return await self.shutdown_system()
+            return False
+        
+        waiting_for = {"hardware_manager", "session_manager"}
+
+        def is_ready(alert: Alert) -> bool:
+            return (
+                alert.level == Level.INFO
+                and alert.brief.upper() == "READY"
+                and alert.src.lstrip("/") in waiting_for
+            )
+
+        for alert in self.alert_server.get_active_alerts().values():
+            if is_ready(alert):
+                waiting_for.discard(alert.src.lstrip("/"))
+
+        deadline = time.monotonic() + 10.0
+        while waiting_for:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self.get_logger().warning(
+                    f"Timed out waiting for READY from: {', '.join(sorted(waiting_for))}."
+                )
+                return False
+
+            action, alert = await self.alert_server.wait_alert_change(remaining)
+            if action is AlertActionType.RAISE and alert is not None and is_ready(alert):
+                waiting_for.discard(alert.src.lstrip("/"))
+            
+
+        return True
 
     async def shutdown_system(self):
         """Attempts to shut down the whole system:
@@ -135,6 +195,29 @@ class Supervisor(Node):
         rclpy.shutdown()
         #raise SystemExit # exit the process, launch will react
 
+
+    def on_alert_change_cb(self, action: AlertActionType, alert: Alert):
+
+        # Handling of degraded flag
+        if action == AlertActionType.RAISE and alert.level >= Level.WARN:
+            self.fsm.set_degraded()
+        elif action == AlertActionType.CLEAR:
+                active = self.alert_server.get_alerts_from_level(Level.WARN)
+                if len(active) == 0:
+                    self.fsm.set_nominal() # no remaining >WRN alert
+        
+        if action == AlertActionType.RAISE and alert.level >= Level.FATAL:
+
+            self.fsm.change_state(SystemState.FAULT)
+
+            self.create_one_shot_timer(
+                0.5, 
+                self.shutdown_system
+            )
+        
+
+    
+
     def on_process_event(self, event: ProcessEvent):
         # this is sketch code, needs testing
 
@@ -143,17 +226,8 @@ class Supervisor(Node):
         self.get_logger().info(f"Got process event: {event}")
 
         """
-        IN here we check for all possible os process events (process crashes / exits / start) and we emit
-        descriptive /system_status updates that summarize and reflect these changes
-
-        another callback for /diagnositcs must YET be implemented, but it does the exact thing. 
-        
-        /system_status has to be treated as the unique and centralized current status reading for the system: everything important that happens
-        needs to be published here, and anything that is not published here remains internal to the system.
-        
-        Nodes subscribing to /system_status can then route the status update to monitoring components (physical display panel,
-        web dashboard, specialized logging utility etc.)
-        
+        IN here we check for all possible os process events (process crashes / exits / start). The goal is
+        to possibily redirect these changes to alarms, and let the alarm logic drive the FSM and /system_state 
         """
 
         # TODO
