@@ -1,0 +1,49 @@
+{
+   "__channels__" : {
+      "custom_var" : true
+   },
+   "head": {
+      "ear_left@8": {
+         "exp_decay": 0.5
+      },
+      "mouth@10": {
+         "vel_profile": "TRAPEZOIDAL",
+         "accel": 20,
+         "max_vel": 25
+      },
+      "eyes": {
+         "eyelid_bl@7": {
+            "exp_decay": 0.5,
+            "limit_low": -1,
+            "limit_upper": 1
+         },
+         "eyes_h@1": {
+            "closed": true,
+            "gay": true,
+            "mode": "mamta",
+            "max_wideness": 120
+         }
+      }
+   },
+   "arm_left": {
+      "rotation@23": {
+         "hello": 3
+      }
+   },
+   "arm_right": {
+      "shoulder": {
+         "motorA@14": {
+            "exp_decay": 0.5
+         },
+         "motorB@15": {
+            "exp_decay": 0.5
+         }
+      }
+   },
+   "body": {
+      "turn@25": {
+         "max_vel": 100,
+         "max_accel": 50
+      }
+   }
+}

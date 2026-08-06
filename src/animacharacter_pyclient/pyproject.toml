@@ -1,0 +1,37 @@
+[project]
+name = "animacharacter-pyclient"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "authmsg",
+    "commons",
+    "packetcodec",
+    "pynng>=0.8.1",
+    "requests>=2.32.5",
+]
+
+[tool.uv.sources]
+animacharacter-pyclient = { workspace = true, editable = true }
+authmsg = { path = "../shared_libs/authmsg", editable = true }
+packetcodec = { path = "../shared_libs/packetcodec", editable = true }
+commons = { path = "../shared_libs/commons", editable = true }
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[dependency-groups]
+dev = [
+    "animacharacter-pyclient",
+    "pygame>=2.6.1",
+]
+#"pysafeudp" = { git = "https://github.com/franconepippone/animacharacter_dev_src", subdirectory = "src/shared_libs/pysafeudp" }
