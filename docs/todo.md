@@ -17,11 +17,12 @@
     - webUI (can also be ignored for now)
 
 - architecture:
-  - system topics:
-    - /system_alerts type
-    - /system_status ?
-      - do we redirect all alerts on system status to be shown on display? 
-      system status is behaving more like an alert
+
+  ##########- system topics:
+  ##########  - /system_alerts type
+  ##########  - /system_status ?
+  ##########    - do we redirect all alerts on system status to be shown on display? 
+  ##########    system status is behaving more like an alert
   
   - datapath from server to client:
     - needs to be versatile
