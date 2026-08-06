@@ -1,2 +1,3 @@
-uint16 status_code
-string note
+string state_id
+bool is_degraded
+Alert fault_ref

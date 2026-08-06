@@ -20,6 +20,8 @@ from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallb
 from interfaces.msg import ProcessEvent, SystemStatus
 
 from system_alerts.system_alerts import SysAlertsServer, Level, Alert, AlertActionType
+from system_alerts.system_alerts.alert import empty_alert
+from system_alerts.system_alerts.transport import to_ros_alert, from_ros_alert
 
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
@@ -66,8 +68,17 @@ class Supervisor(Node):
 
 
         # -----------------
+        def publish_status_cb(state_id: SystemState, is_degraded: bool, fault_alert: Alert | None):
+            """Callback used by the FSM to publish system status message"""
+            msg = SystemStatus()
+            msg.state_id = state_id.value
+            msg.is_degraded = is_degraded
+            msg.fault_ref = to_ros_alert(fault_alert if fault_alert is not None else empty_alert()) 
+
+            self.sys_status_pub.publish(msg)
+
         # System State machine rapresentation
-        self.fsm = SystemFSM() # MISSING SYSTEM_STATUS automatic publisher
+        self.fsm = SystemFSM(publish_status_cb) 
 
         def imalive(): 
             self.get_logger().info("imalive")
@@ -87,7 +98,6 @@ class Supervisor(Node):
         if not ok:
             # move fsm to fault
             await self.shutdown_system()
-            # 
 
 
           #  <--- CINTINUE FRO MHERE
@@ -132,6 +142,10 @@ class Supervisor(Node):
         if not self.ssmng_sup.activate():
             self.get_logger().warning("Could not activate session manager node, aborting spinup.")
             return False
+
+        return True
+    
+        ### READY SYSTEM WIP
         
         waiting_for = {"hardware_manager", "session_manager"}
 
@@ -182,11 +196,8 @@ class Supervisor(Node):
         ok = all(results)
 
         self.get_logger().warning(f'Lifecycle nodes all shutdown: {ok}.')
-    
-        msg = SystemStatus()
-        msg.status_code = 10
-        msg.note = "some note"
-        self.sys_status_pub.publish(msg) # last update before system teardown from the launch system
+
+        self.fsm.force_change_state(SystemState.SHUTDOWN)
 
         self.get_logger().warning(f'Finalizing shutdown, exiting process.')
 
@@ -214,6 +225,8 @@ class Supervisor(Node):
                 0.5, 
                 self.shutdown_system
             )
+        
+        self.fsm.update_state(self.alert_server) # auto updates the state
         
 
     

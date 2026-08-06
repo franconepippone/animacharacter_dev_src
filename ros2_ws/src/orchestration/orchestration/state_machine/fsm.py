@@ -67,6 +67,19 @@ class FSM(Generic[S]):
 
         self._state = new_state
 
+    def force_change_state(self, new_state: S) -> bool:
+        """Forcefully change state independent of the transition rules. Returns True if the
+        transition was legal, False otherwise. 
+        
+        This always transitions."""
+
+        try:
+            self.change_state(new_state)
+            return True
+        except ValueError:
+            self._state = new_state
+            return False    
+
     def _ensure_mutable(self) -> None:
         """Raise an error if the FSM configuration is finalized."""
         if self._finalized:

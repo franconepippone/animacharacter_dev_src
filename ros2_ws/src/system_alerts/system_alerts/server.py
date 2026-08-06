@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import time
-from typing import Callable
+from typing import Callable, Sequence
 
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -60,9 +60,16 @@ class SysAlertsServer:
         """Clear the alert with the given code and publish the change to clients."""
         self._apply_change(AlertActionType.CLEAR, Alert(level=Level.INFO, src="", code=code))
 
-    def get_active_alerts(self) -> dict[int, Alert]:
+    def get_active_alerts_table(self) -> dict[int, Alert]:
         """Return a copy of the server-authoritative active-alert table."""
         return dict(self._active_alerts)
+    
+    def get_active_alerts(self) -> tuple[Alert, ...]:
+        """Returns a tuple of all the currently active alerts"""
+        return tuple(self._active_alerts.values())
+    
+    def is_alert_active(self, alert_id: int):
+        return alert_id in self._active_alerts
 
     def on_alert_change(self, callback: Callable[[AlertActionType, Alert], None]) -> None:
         """Register a callback invoked for every server-published alert change."""

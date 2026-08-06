@@ -80,3 +80,16 @@ class Alert:
             brief=str(payload.get("brief", "")),
             description=str(payload.get("description", "")),
         )
+
+
+def empty_alert() -> Alert:
+    """Return a default empty alert."""
+    return Alert(
+        level=Level.INFO,
+        src="",
+        code=-1,
+        ttl=math.inf,
+        subcode=-1,
+        brief="",
+        description="",
+    )
