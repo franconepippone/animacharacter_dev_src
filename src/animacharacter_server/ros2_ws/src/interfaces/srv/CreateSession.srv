@@ -1,0 +1,8 @@
+string client_ip
+uint16 client_udp_port
+---
+bool success
+string msg
+string session_secret
+uint16 tcp_port
+uint16 udp_port

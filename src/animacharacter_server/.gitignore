@@ -1,0 +1,14 @@
+build/
+install/
+log/
+
+__pycache__
+.pytest_cache/
+
+.venv/
+env/
+venv/
+
+.env
+
+.vscode/

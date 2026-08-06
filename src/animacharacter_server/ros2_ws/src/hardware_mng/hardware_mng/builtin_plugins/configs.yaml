@@ -1,0 +1,5 @@
+
+default_config: "simulator" # default configuration to use
+
+simulator:
+  - "sim_teodore:BaseControllerSim"

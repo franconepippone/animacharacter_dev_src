@@ -1,0 +1,33 @@
+[project]
+name = "behavior-engine"
+version = "0.1.0"
+description = "A lightweight behavior execution engine for generator-based and class-based behaviors, with registry and scheduler support."
+readme = "README.md"
+authors = [
+    { name = "Americo", email = "americo.cherubini2003@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+behavior-engine = "behavior_engine:main"
+
+[build-system]
+requires = ["uv_build>=0.11.1,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[tool.uv.sources]
+behavior-engine = { workspace = true, editable = true }
+
+[dependency-groups]
+dev = [
+    "behavior-engine",
+    "lark>=1.3.1",
+    "pytest>=9.0.3",
+    "pyyaml>=6.0.3",
+]
