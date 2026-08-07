@@ -1,3 +1,0 @@
-[submodule "libs/pySerialDevice"]
-	path = libs/pySerialDevice
-	url = https://github.com/franconepippone/pySerialDevice

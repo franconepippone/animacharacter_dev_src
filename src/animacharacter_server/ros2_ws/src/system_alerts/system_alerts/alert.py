@@ -14,7 +14,7 @@ class Level:
 
 
 class AlertActionType(str, Enum):
-    """Supported actions for alert propagation over the ROS topic transport."""
+    """Either "raise" or "clear" an alert."""
 
     RAISE = "raise"
     CLEAR = "clear"

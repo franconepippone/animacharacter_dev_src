@@ -1,12 +1,12 @@
 """
 The supervisor node acts at the top level orchestrator for the entire ros2 system.
 
-Supervisor subscribes to /process_events and /diagnostics; it's also the only node that owns
+Supervisor subscribes to /process_events and monitors alerts; it's also the only node that owns
 control over /system_status, which is used to publish global status updates.
 An onboard display panel node (or some other signaling tool) can subscribe to /system_status to notify updates.
 
-/process_events mainly catches process crashes/restarts, while /diagnostics catches higher level diagnostic data that
-every node publishes. Depending on type and severity, the supervisor may or may not decide to update /system_status to reflect these. 
+/process_events mainly catches process crashes/restarts, while alerts catches higher level events that
+every node emits. Based on these events, the supervisor updates a local FSM model of the system, and publishes updates to /system_status. 
 
 """
 from typing import Callable, Any, cast
@@ -26,7 +26,7 @@ from system_alerts.system_alerts.transport import to_ros_alert, from_ros_alert
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
-from .ros_async_utils import sleep, gather
+from .ros_async_utils import BetterAsyncNode
 from .state_machine.system_fsm import SystemFSM, SystemState
 
 PROCESS_EVENTS_TOPIC = "/process_events"
@@ -35,7 +35,7 @@ SYSTEM_STATUS_TOPIC = "/system_status"
 
 SHUTDOWN_POSTPONE_TIME = 1.0 #seconds
 
-class Supervisor(Node):
+class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
     def __init__(self):
         super().__init__("supervisor")
 
@@ -46,7 +46,7 @@ class Supervisor(Node):
         self.sysevents_sub = self.create_subscription(
             ProcessEvent,
             PROCESS_EVENTS_TOPIC,
-            self.on_process_event,
+            self.on_process_event_cb,
             5
         )
 
@@ -64,12 +64,12 @@ class Supervisor(Node):
         # -----------------
         # Host Alert server
         self.alert_server = SysAlertsServer(self)
-        self.alert_server.on_alert_change(self.on_alert_change_cb) # drives the system status
+        self.alert_server.on_alert_change(self.on_alert_change_cb)
 
 
         # -----------------
         def publish_status_cb(state_id: SystemState, is_degraded: bool, fault_alert: Alert | None):
-            """Callback used by the FSM to publish system status message"""
+            """Callback provided to the FSM to publish system status message"""
             msg = SystemStatus()
             msg.state_id = state_id.value
             msg.is_degraded = is_degraded
@@ -78,7 +78,7 @@ class Supervisor(Node):
             self.sys_status_pub.publish(msg)
 
         # System State machine rapresentation
-        self.fsm = SystemFSM(publish_status_cb) 
+        self.fsm = SystemFSM(publish_status_cb, self.alert_server) 
 
         def imalive(): 
             self.get_logger().info("imalive")
@@ -88,6 +88,12 @@ class Supervisor(Node):
         self.create_one_shot_timer(0.0, self.startup_routine)
 
         self.get_logger().info('Master supervisor instantiated.')
+
+
+
+    ### ============================
+    ### SYSTEM LIFECYCLE MANAGEMENT
+    ### ============================
     
     async def startup_routine(self):
         """Routine executed as soon as the node enters the executor loop"""
@@ -98,33 +104,16 @@ class Supervisor(Node):
         if not ok:
             # move fsm to fault
             await self.shutdown_system()
+            return
 
+        self.fsm.force_change_state(SystemState.STANDBY)
 
+        
           #  <--- CINTINUE FRO MHERE
 
           # eventaully move fsm to STDBY
 
-    def create_one_shot_timer(
-        self,
-        delay: float,
-        callback: Callable[[], Any],
-    ) -> Timer:
-        timer: Timer
 
-        async def wrapped_callback():
-            self.destroy_timer(timer)
-            await callback()
-
-        # NOTE this is unfortunately needed because the stubs/api annotations 
-        # in rclpy raise typing errors when passing coros as callbacks
-        type_forced_cb = cast(
-            Callable[..., Any],
-            wrapped_callback
-        )
-
-        timer = self.create_timer(delay, type_forced_cb, self.one_shot_cbg)
-
-        return timer
 
     async def spinup_system(self) -> bool:
         """Attempts to bring the whole system up"""
@@ -186,9 +175,7 @@ class Supervisor(Node):
 
         self.get_logger().warning('System shutdown initiated.')
 
-        exc = self.executor if self.executor else rclpy.get_global_executor()
-        results = await gather(
-                    exc, 
+        results = await self.agather(
                     self.hwmng_sup.shutdown(),
                     self.ssmng_sup.shutdown()
                 )
@@ -197,41 +184,40 @@ class Supervisor(Node):
 
         self.get_logger().warning(f'Lifecycle nodes all shutdown: {ok}.')
 
-        self.fsm.force_change_state(SystemState.SHUTDOWN)
+        legal = self.fsm.force_change_state(SystemState.SHUTDOWN)
 
         self.get_logger().warning(f'Finalizing shutdown, exiting process.')
 
-        await sleep(self, 1.0)
+        await self.asleep(1.0)
 
         rclpy.shutdown()
         #raise SystemExit # exit the process, launch will react
 
 
+
+    ### ============================
+    ### CALLBACKS
+    ### ============================
+
     def on_alert_change_cb(self, action: AlertActionType, alert: Alert):
 
+        self.fsm.update_state(action, alert)
+
+
         # Handling of degraded flag
-        if action == AlertActionType.RAISE and alert.level >= Level.WARN:
-            self.fsm.set_degraded()
-        elif action == AlertActionType.CLEAR:
-                active = self.alert_server.get_alerts_from_level(Level.WARN)
-                if len(active) == 0:
-                    self.fsm.set_nominal() # no remaining >WRN alert
         
         if action == AlertActionType.RAISE and alert.level >= Level.FATAL:
 
             self.fsm.change_state(SystemState.FAULT)
 
-            self.create_one_shot_timer(
-                0.5, 
-                self.shutdown_system
-            )
+            self.create_one_shot_timer(0.5, self.shutdown_system)
         
-        self.fsm.update_state(self.alert_server) # auto updates the state
+        
         
 
     
 
-    def on_process_event(self, event: ProcessEvent):
+    def on_process_event_cb(self, event: ProcessEvent):
         # this is sketch code, needs testing
 
         evt_type = SysEventType(event.event_type)
