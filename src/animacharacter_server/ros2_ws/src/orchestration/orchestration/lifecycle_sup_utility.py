@@ -30,6 +30,7 @@ class LifecycleNodeSupervisor:
     def __init__(self, host_node: Node, target_node_name: str) -> None:
         self.host_node: Node = host_node
         self.target_node_name: str = target_node_name
+        self.logger = host_node.get_logger().get_child(f'lfcyclesup__{target_node_name[1:]}')
 
         group = ReentrantCallbackGroup()
         self._change_state_client = host_node.create_client(
@@ -57,7 +58,7 @@ class LifecycleNodeSupervisor:
         """Return the target node's current state id, or None if unavailable."""
 
         if not self._get_state_client.service_is_ready():
-            self.host_node.get_logger().warn(f"get_state service not ready yet for {self.target_node_name}")
+            self.logger.warn(f"get_state service not ready yet for {self.target_node_name}")
             return None
 
         request = GetState.Request()
@@ -72,7 +73,7 @@ class LifecycleNodeSupervisor:
         """Request a lifecycle transition asynchronously and return the ROS future."""
 
         if not self._change_state_client.service_is_ready():
-            self.host_node.get_logger().warn(f"change_state service not ready yet for {self.target_node_name}")
+            self.logger.warn(f"change_state service not ready yet for {self.target_node_name}")
             return _make_failed_response()
 
         request = ChangeState.Request()
@@ -114,7 +115,7 @@ class LifecycleNodeSupervisor:
         elif state == State.PRIMARY_STATE_ACTIVE:
             transition = Transition.TRANSITION_ACTIVE_SHUTDOWN
         else:
-            self.host_node.get_logger().warn(
+            self.logger.warning(
                 f"Cannot shutdown from lifecycle state {state}"
             )
             return False

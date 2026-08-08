@@ -50,7 +50,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        hardware_manager,
+        #hardware_manager,
         RegisterEventHandler(on_process_start(hardware_manager, HARDWARE_MANAGER)),
         RegisterEventHandler(on_process_exit(hardware_manager, HARDWARE_MANAGER)),
 

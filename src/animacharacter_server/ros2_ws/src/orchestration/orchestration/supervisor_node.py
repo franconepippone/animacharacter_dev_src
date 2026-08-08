@@ -29,7 +29,8 @@ from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
 from . import proc_names as pn
 from .ros_async_utils import BetterAsyncNode
-from .state_machine.system_fsm import SystemFSM, SystemState
+from .state_machine.event_mapper import map_alert_to_system_event
+from .state_machine.system_fsm import SystemFSM, SystemState, SystemEvent
 
 PROCESS_EVENTS_TOPIC = "/process_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -70,12 +71,13 @@ class Supervisor(BetterAsyncNode):
         self.alert_server = SysAlertsServer(self)
         self.alert_server.on_alert_change(self.on_alert_change_cb)
 
+        self.fault_ref_alert: Alert | None = None
 
         # -----------------
-        # System State machine rapresentation
-        self.fsm = SystemFSM(self.alert_server) 
+        # System State machine representation
+        self.fsm = SystemFSM()
 
-        def imalive(): 
+        def imalive():
             self.get_logger().info("imalive")
 
         #self.create_timer(.5, imalive)
@@ -88,14 +90,17 @@ class Supervisor(BetterAsyncNode):
     ### UTILITY METHODS
     ### ============================
 
-    def publish_system_status(self, legal: bool = True):
+    def is_system_degraded(self) -> bool:
+        return len(self.alert_server.get_active_alerts()) > 0
+
+    def publish_system_status(self, legal: bool = True, is_degraded: bool | None = None):
         """Grabs current status from FSM and publishes it to /system_status"""
         msg = SystemStatus()
         msg.state_id = self.fsm.state.name
-        msg.is_degraded = self.fsm.degraded
+        msg.is_degraded = self.is_system_degraded() if is_degraded is None else is_degraded
         msg.legal = legal
         msg.timestamp = time.monotonic_ns() // 1_000_000
-        msg.fault_ref = to_ros_alert(self.fsm.fault_ref_alert if self.fsm.fault_ref_alert is not None else empty_alert()) 
+        msg.fault_ref = to_ros_alert(self.fault_ref_alert if self.fault_ref_alert is not None else empty_alert())
 
         self.sys_status_pub.publish(msg)
 
@@ -108,40 +113,43 @@ class Supervisor(BetterAsyncNode):
 
         self.get_logger().info('Supervisor node entered executor.')
 
+        await self.asleep(.5)
+
         self.publish_system_status(legal=True) # at this stage should always be BOOTING
 
         ok = await self.spinup_system()
         if not ok:
             # move fsm to fault
+            res = self.fsm.change_state(SystemState.FAULT)
+            self.publish_system_status(legal=True) # at this stage should always be BOOTING
+            await self.asleep(1) # let nodes process status update to fault
             await self.shutdown_system()
             return
 
-        res = self.fsm.force_change_state(SystemState.STANDBY)
+        res = self.fsm.change_state(SystemState.STANDBY)
         self.publish_system_status(legal=res.legal_transition)
-                
-          #  <--- CINTINUE FRO MHERE
 
-          # eventaully move fsm to STDBY
-
+        self.get_logger().info("Supervisor startup routine completed succesfully.")
 
 
     async def spinup_system(self) -> bool:
         """Attempts to bring the whole system up"""
 
-        self.hwmng_sup.wait_readyness(3)
-        self.ssmng_sup.wait_readyness(3)
+        # worst-case 8 second hang
+        self.hwmng_sup.wait_readyness(2)
+        self.ssmng_sup.wait_readyness(2)
 
         if not await self.hwmng_sup.configure():
             # activation of hwmng is done by sessmng node
-            self.get_logger().warning("Could not configure hardware manager node, aborting spinup.")
+            self.get_logger().error("Could not configure hardware manager node, aborting spinup.")
             return False
         
         if not await self.ssmng_sup.configure():
-            self.get_logger().warning("Could not configure session manager node, aborting spinup.")
+            self.get_logger().error("Could not configure session manager node, aborting spinup.")
             return False
 
         if not await self.ssmng_sup.activate():
-            self.get_logger().warning("Could not activate session manager node, aborting spinup.")
+            self.get_logger().error("Could not activate session manager node, aborting spinup.")
             return False
 
         return True
@@ -214,25 +222,40 @@ class Supervisor(BetterAsyncNode):
     ### ============================
 
     def on_alert_change_cb(self, action: AlertActionType, alert: Alert):
-        """ Main trigger for updating the system state and FSM based on alerts. All system events (i.e. process events) are redirected to some kind
-        of alerts, meaning that this is the one and only entry point for updating the system state machine.
-        """
+        """Main trigger for updating the system state based on semantic alert events."""
 
         self.get_logger().info(f"Got alert {action.name} request for alert: {alert}")
 
-        result = self.fsm.update_state(action, alert)
+        event = map_alert_to_system_event(action, alert)
+        if event is None:
+            return
+
+        if event is SystemEvent.FATAL_FAULT:
+            self.fault_ref_alert = alert
+
+        result = self.fsm.process_event(event)
+        self.publish_system_status(result.legal_transition) # always publish for now
+
         if result.changed:
-            self.publish_system_status(result.legal_transition) # publish on topic
 
             if not result.legal_transition:
-                self.get_logger().warning(f"Illegal state change forced from {result.prev_state.name} to {result.new_state.name}.")
+                self.get_logger().warning(
+                    f"Illegal state change forced from {result.prev_state.name} to {result.new_state.name}."
+                )
             else:
-                self.get_logger().info(f"System state changed from {result.prev_state.name} to {result.new_state.name}.")
+                self.get_logger().info(
+                    f"System state changed from {result.prev_state.name} to {result.new_state.name}."
+                )
 
-            # only if state changed, avoid retriggering
             if self.fsm.state == SystemState.FAULT:
-                self.get_logger().error(f"System transitioned to FAULT state, scheduling shutdown in {SHUTDOWN_POSTPONE_TIME} seconds.")
-                self.create_one_shot_timer(SHUTDOWN_POSTPONE_TIME, self.shutdown_system, callback_group=self.shutdown_cbg)
+                self.get_logger().error(
+                    f"System transitioned to FAULT state, scheduling shutdown in {SHUTDOWN_POSTPONE_TIME} seconds."
+                )
+                self.create_one_shot_timer(
+                    SHUTDOWN_POSTPONE_TIME,
+                    self.shutdown_system,
+                    callback_group=self.shutdown_cbg,
+                )
 
     
 
