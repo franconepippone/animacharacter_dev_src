@@ -10,6 +10,7 @@ from system_alerts import SysAlertsServer, Alert
 from system_alerts.alert import AlertActionType, Level
 from system_commons import alert_codes as acd
 
+from dataclasses import dataclass
 
 class SystemState(Enum):
     """System State of the engine"""
@@ -32,6 +33,14 @@ class StatusPublisher(Protocol):
             fault_alert: Alert,
             ) -> None:
         ...
+
+
+class UnhandledAlertWarning(Exception):
+    """Raised inside an update function when an alert coming from an unexpected source is received"""
+    def __init__(self, action: AlertActionType, alert: Alert, current_state: SystemState, note: str, *args: object):
+        super().__init__(*args)
+        self.note = note
+        self.state = current_state
 
 
 class SystemFSM(FSM[SystemState]):
@@ -97,20 +106,22 @@ class SystemFSM(FSM[SystemState]):
     ### STATE UPDATE LOGIC
     ### ============================
     
-    
-    def _update_booting(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
-        ...
 
     def _update_standby(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         if action == AlertActionType.RAISE:
             if alert.code == acd.INF_SESSION_CREATION_REQUEST:
                 return self.force_change_state(SystemState.CONNECTING)
 
-        # log if we reach here
-        raise 
+        raise UnhandledAlertWarning(action, alert, self.state, "The alert was left unhandled by the fsm update logic")
     
     def _update_connecting(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
-        ...
+        if action == AlertActionType.RAISE:
+            if alert.code == acd.INF_SESSION_CREATION_OK:
+                return self.force_change_state(SystemState.ACTIVE)
+            elif alert.code == acd.ERR_SESSION_CREATION_FAILED:
+                return self.force_change_state(SystemState.STANDBY)
+
+        raise UnhandledAlertWarning(action, alert, self.state, "The alert was left unhandled by the fsm update logic")
 
     def _update_active(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
@@ -127,8 +138,6 @@ class SystemFSM(FSM[SystemState]):
     def update_state(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         """Utility method for updating the state directly from alert changes"""
 
-        prev_state = self.state 
-
         # handle degraded flag
         if len(self.alert_server.get_active_alerts()) > 0:
             self.set_degraded()
@@ -142,20 +151,18 @@ class SystemFSM(FSM[SystemState]):
             return result
 
         if self.state == SystemState.BOOTING:
-            res = self._update_booting(action, alert)
+            raise ValueError("State machine cannot automatically transition away from booting")
         elif self.state == SystemState.STANDBY:
-            res = self._update_standby(action, alert)
+            return self._update_standby(action, alert)
         elif self.state == SystemState.CONNECTING:
-            res = self._update_connecting(action, alert)
+            return self._update_connecting(action, alert)
         elif self.state == SystemState.ACTIVE:
-            res = self._update_active(action, alert)
+            return self._update_active(action, alert)
         elif self.state == SystemState.DISCONNECTING:
-            res = self._update_disconnecting(action, alert)
+            return self._update_disconnecting(action, alert)
         elif self.state == SystemState.FAULT:
-            res = self._update_fault(action, alert)
+            return self._update_fault(action, alert)
         elif self.state == SystemState.SHUTDOWN:
-            res = self._update_shutdown(action, alert)
+            return self._update_shutdown(action, alert)
         else:
             raise ValueError(f"Unknown system state: {self.state}")
-
-        return res
