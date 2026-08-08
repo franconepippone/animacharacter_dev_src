@@ -14,7 +14,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('orchestration')
 
     config_file = os.path.join(pkg_share, 'config', 'diagnostics.yaml')
-
+    return LaunchDescription([])
     return LaunchDescription([
         Node(
             package="diagnostic_aggregator",

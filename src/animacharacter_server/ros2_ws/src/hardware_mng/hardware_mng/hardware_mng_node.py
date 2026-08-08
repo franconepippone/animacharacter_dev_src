@@ -18,8 +18,10 @@ from .hw_controller_state_reconciler import (
     ControllerState,
     ManagedController
 )
+from system_alerts import SysAlertsClient, Level
 from .utils import flatten_for_diagnostics
 from system_commons import exit_codes as xc
+from system_commons import alert_codes as ac
 from .signals_definitions import (
     SIG_CONTOLLER_WARNING,
     SIG_CONTROLLER_ERROR,
@@ -110,6 +112,11 @@ class HardwareManagerNode(LifecycleNode):
             5
         )
 
+        # ----------------------------
+        # set up alert client
+        # ----------------------------
+        self.alert_cli = SysAlertsClient(self)
+
         self.get_logger().info("Initialized!")
 
     # ---------------------------
@@ -122,6 +129,15 @@ class HardwareManagerNode(LifecycleNode):
         if signal.name == SIG_CONTROLLER_FATAL:
             if self._shutdown_requested:
                 return
+
+            self.alert_cli.raise_alert(
+                Level.FATAL,
+                ac.FTL_HW_CONTROLLER_FATAL,
+                self.get_name(),
+                subcode=signal.kwargs.get("code", 0),
+                brief=f"Fatal error in controller '{ctrl.name}'",
+                description=signal.kwargs.get("note", "no further description available")
+            )
 
             self._shutdown_requested = True
             self.get_logger().warning(f"Received global shutdown signal from for controller: {ctrl.name}")

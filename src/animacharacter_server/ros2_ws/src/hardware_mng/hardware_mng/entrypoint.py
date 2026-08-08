@@ -23,7 +23,7 @@ def is_type_of_base(obj, BaseClass):
 class ConcreteController(BaseHardwareController):
     def __init__(self) -> None: ...
 
-logger = RcutilsLogger('HW-mng starter')
+logger = RcutilsLogger('HW_starter')
 
 def main(args=None):
     # input is given via env variables

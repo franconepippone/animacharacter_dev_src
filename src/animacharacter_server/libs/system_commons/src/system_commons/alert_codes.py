@@ -1,5 +1,5 @@
 """
-In this file we define all alerts ids as python constants
+Container module for all alert codes. Each alert code is globally unique.
 
 """
 
@@ -12,7 +12,12 @@ INF_SESSION_CREATION_FAILED = 140
 INF_SESSION_CLOSURE_FAILED = 150
 
 
+# hw controller related
+WRN_HW_CONTROLLER_WARNING = 160
+ERR_HW_CONTROLLER_ERROR = 170
+FTL_HW_CONTROLLER_FATAL = 180
 
-
-# os fatal alerts
+# os alerts
 FTL_CORE_PROC_CRASH = 200
+
+ERR_NONCRITICAL_PROC_CRASH = 210

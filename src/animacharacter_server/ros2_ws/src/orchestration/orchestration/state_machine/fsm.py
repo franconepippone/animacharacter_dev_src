@@ -2,9 +2,24 @@ from __future__ import annotations
 
 from enum import Enum, auto
 from typing import Generic, TypeVar
+from dataclasses import dataclass
+
 
 
 S = TypeVar("S", bound=Enum)
+
+
+@dataclass(slots=True, frozen=True)
+class StateChangeResult(Generic[S]):
+    """Result of a state change in the system FSM."""
+    prev_state: S
+    new_state: S
+    legal_transition: bool
+
+    @property
+    def changed(self) -> bool:
+        """Returns True if the state has changed, False otherwise."""
+        return self.prev_state != self.new_state
 
 
 class FSM(Generic[S]):
@@ -52,8 +67,9 @@ class FSM(Generic[S]):
         self._ensure_mutable()
         self._finalized = True
 
-    def change_state(self, new_state: S) -> None:
-        """Change the current state if the transition is valid.
+    def change_state(self, new_state: S) -> StateChangeResult[S]:
+        """Change the current state if the transition is valid. Returns a state
+        change transition object.
 
         Raises:
             ValueError: If the requested transition is not allowed.
@@ -65,20 +81,22 @@ class FSM(Generic[S]):
                 f"Invalid transition: {self._state.name} -> {new_state.name}"
             )
 
+        prev_state = self._state
         self._state = new_state
+        return StateChangeResult(prev_state, new_state, True)
 
-    def force_change_state(self, new_state: S) -> bool:
-        """Forcefully change state independent of the transition rules. Returns True if the
-        transition was legal, False otherwise. 
+    def force_change_state(self, new_state: S) -> StateChangeResult[S]:
+        """Forcefully change state independent of the transition rules. Return 
+        state change result object.
         
         This always transitions."""
 
         try:
-            self.change_state(new_state)
-            return True
+            return self.change_state(new_state)
         except ValueError:
+            prev_state = self._state
             self._state = new_state
-            return False    
+            return StateChangeResult(prev_state, new_state, False)
 
     def _ensure_mutable(self) -> None:
         """Raise an error if the FSM configuration is finalized."""

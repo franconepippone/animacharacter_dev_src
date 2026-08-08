@@ -262,7 +262,7 @@ class BaseHardwareController(ABC):
                 ))
             
             except ControllerError as e:
-                self.logger.error(f"Hardware crash in controller '{self.name}': {e}")
+                self.logger.error(f"Hardware error in controller '{self.name}': {e}")
                 self._set_initialized(False)
                 return LoopRequest(LoopAction.STOP, signal=Signal(
                     SIG_CONTROLLER_ERROR, 
@@ -285,7 +285,7 @@ class BaseHardwareController(ABC):
                 self._set_initialized(False)
                 return LoopRequest(LoopAction.STOP, signal=Signal(
                     SIG_CONTROLLER_GENERIC_EXCEPTION, 
-                    code=101, 
+                    code=0, 
                     note=str(e)
                 ))
 

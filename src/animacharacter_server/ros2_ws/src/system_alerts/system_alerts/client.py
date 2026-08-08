@@ -46,8 +46,8 @@ class SysAlertsClient:
     def raise_alert(
         self,
         level: int,
-        src: str,
         code: int,
+        src: str,
         ttl: float = math.inf,
         subcode: int = -1,
         brief: str = "",

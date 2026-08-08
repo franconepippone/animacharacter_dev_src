@@ -27,10 +27,9 @@ class LifecycleNodeSupervisor:
     """Simple remote API for interacting with a lifecycle-managed node. Ment to
     be instantiated by Supervisory nodes, passing 'self' as first argument."""
 
-    def __init__(self, host_node: Node, target_node_name: str, default_timeout: float = 5.0) -> None:
+    def __init__(self, host_node: Node, target_node_name: str) -> None:
         self.host_node: Node = host_node
         self.target_node_name: str = target_node_name
-        self.timeout = default_timeout
 
         group = ReentrantCallbackGroup()
         self._change_state_client = host_node.create_client(
@@ -42,7 +41,7 @@ class LifecycleNodeSupervisor:
             callback_group=group
         )
 
-    def wait_for_services(self, timeout_each: float) -> None:
+    def wait_readyness(self, timeout_each: float) -> None:
         """Block until both lifecycle services are available."""
         self._change_state_client.wait_for_service(timeout_sec=timeout_each)
         self._get_state_client.wait_for_service(timeout_sec=timeout_each)

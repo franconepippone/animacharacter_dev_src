@@ -1,4 +1,7 @@
-
+"""
+Container module for all exit codes of processes. Each number is unique among all the processes of the system.  
+A descriptive message of the cause can be acquired calling 'get_cause(exit_code)'.
+"""
 
 HWMNG_NO_CONFIG_FILES_SPECIFIED = 19
 HWMNG_CONFIG_LOAD_FAILED = 20

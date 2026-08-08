@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from rclpy.publisher import Publisher
 from interfaces.msg import SystemStatus
 
-from .fsm import FSM
+from .fsm import FSM, StateChangeResult
 
-from system_alerts.system_alerts import SysAlertsServer, Alert
-from system_alerts.system_alerts.alert import AlertActionType, Level
+from system_alerts import SysAlertsServer, Alert
+from system_alerts.alert import AlertActionType, Level
 from system_commons import alert_codes as acd
 
 
@@ -32,19 +32,6 @@ class StatusPublisher(Protocol):
             fault_alert: Alert,
             ) -> None:
         ...
-
-
-@dataclass(slots=True, frozen=True)
-class StateChangeResult:
-    """Result of a state change in the system FSM."""
-    prev_state: SystemState
-    new_state: SystemState
-    legal_transition: bool
-
-    @property
-    def changed(self) -> bool:
-        """Returns True if the state has changed, False otherwise."""
-        return self.prev_state != self.new_state
 
 
 class SystemFSM(FSM[SystemState]):
@@ -111,31 +98,30 @@ class SystemFSM(FSM[SystemState]):
     ### ============================
     
     
-    def _update_booting(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_booting(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
-    def _update_standby(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_standby(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         if action == AlertActionType.RAISE:
             if alert.code == acd.INF_SESSION_CREATION_REQUEST:
-                legal = self.force_change_state(SystemState.CONNECTING)
-                return legal
+                return self.force_change_state(SystemState.CONNECTING)
 
         # log if we reach here
-        return False
+        raise 
     
-    def _update_connecting(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_connecting(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
-    def _update_active(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_active(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
-    def _update_disconnecting(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_disconnecting(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
-    def _update_fault(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_fault(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
-    def _update_shutdown(self, action: AlertActionType, alert: Alert) -> bool:
+    def _update_shutdown(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
         ...
 
     def update_state(self, action: AlertActionType, alert: Alert) -> StateChangeResult:
@@ -151,25 +137,25 @@ class SystemFSM(FSM[SystemState]):
 
         # handle fatal alerts
         if len(self.alert_server.get_alerts_from_level(Level.FATAL)) > 0:
-            legal = self.force_change_state(SystemState.FAULT)
+            result = self.force_change_state(SystemState.FAULT)
             self.fault_ref_alert = alert
-            return StateChangeResult(prev_state, self.state, legal)
+            return result
 
         if self.state == SystemState.BOOTING:
-            legal = self._update_booting(action, alert)
+            res = self._update_booting(action, alert)
         elif self.state == SystemState.STANDBY:
-            legal = self._update_standby(action, alert)
+            res = self._update_standby(action, alert)
         elif self.state == SystemState.CONNECTING:
-            legal = self._update_connecting(action, alert)
+            res = self._update_connecting(action, alert)
         elif self.state == SystemState.ACTIVE:
-            legal = self._update_active(action, alert)
+            res = self._update_active(action, alert)
         elif self.state == SystemState.DISCONNECTING:
-            legal = self._update_disconnecting(action, alert)
+            res = self._update_disconnecting(action, alert)
         elif self.state == SystemState.FAULT:
-            legal = self._update_fault(action, alert)
+            res = self._update_fault(action, alert)
         elif self.state == SystemState.SHUTDOWN:
-            legal = self._update_shutdown(action, alert)
+            res = self._update_shutdown(action, alert)
         else:
             raise ValueError(f"Unknown system state: {self.state}")
 
-        return StateChangeResult(prev_state, self.state, legal)
+        return res
