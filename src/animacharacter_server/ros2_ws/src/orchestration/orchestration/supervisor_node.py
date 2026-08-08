@@ -18,6 +18,8 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from interfaces.msg import ProcessEvent, SystemStatus
+from system_commons import exit_codes as xc
+from system_commons import alert_codes as ac
 
 from system_alerts.system_alerts import SysAlertsServer, Level, Alert, AlertActionType
 from system_alerts.system_alerts.alert import empty_alert
@@ -35,7 +37,9 @@ SYSTEM_STATUS_TOPIC = "/system_status"
 
 SHUTDOWN_POSTPONE_TIME = 1.0 #seconds
 
-class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
+
+
+class Supervisor(BetterAsyncNode):
     def __init__(self):
         super().__init__("supervisor")
 
@@ -68,17 +72,8 @@ class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
 
 
         # -----------------
-        def publish_status_cb(state_id: SystemState, is_degraded: bool, fault_alert: Alert | None):
-            """Callback provided to the FSM to publish system status message"""
-            msg = SystemStatus()
-            msg.state_id = state_id.value
-            msg.is_degraded = is_degraded
-            msg.fault_ref = to_ros_alert(fault_alert if fault_alert is not None else empty_alert()) 
-
-            self.sys_status_pub.publish(msg)
-
         # System State machine rapresentation
-        self.fsm = SystemFSM(publish_status_cb, self.alert_server) 
+        self.fsm = SystemFSM(self.alert_server) 
 
         def imalive(): 
             self.get_logger().info("imalive")
@@ -89,7 +84,18 @@ class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
 
         self.get_logger().info('Master supervisor instantiated.')
 
+    ### ============================
+    ### UTILITY METHODS
+    ### ============================
 
+    def publish_system_status(self):
+        """Grabs status from FSM and publishes it to /system_status"""
+        msg = SystemStatus()
+        msg.state_id = self.fsm.state.value
+        msg.is_degraded = self.fsm.degraded
+        msg.fault_ref = to_ros_alert(self.fsm.fault_ref_alert if self.fsm.fault_ref_alert is not None else empty_alert()) 
+
+        self.sys_status_pub.publish(msg)
 
     ### ============================
     ### SYSTEM LIFECYCLE MANAGEMENT
@@ -106,7 +112,7 @@ class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
             await self.shutdown_system()
             return
 
-        self.fsm.force_change_state(SystemState.STANDBY)
+        self.fsm.change_state(SystemState.STANDBY)
 
         
           #  <--- CINTINUE FRO MHERE
@@ -190,30 +196,30 @@ class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
 
         await self.asleep(1.0)
 
-        rclpy.shutdown()
-        #raise SystemExit # exit the process, launch will react
-
-
+        rclpy.shutdown() # this releases executor.spin and exits process
 
     ### ============================
     ### CALLBACKS
     ### ============================
 
     def on_alert_change_cb(self, action: AlertActionType, alert: Alert):
+        """ Main trigger for updating the system state and FSM based on alerts. All system events (i.e. process events) are redirected to some kind
+        of alerts, meaning that this is the one and only entry point for updating the system state machine. 
+        """
 
-        self.fsm.update_state(action, alert)
+        result = self.fsm.update_state(action, alert)
+        if result.changed:
+            self.publish_system_status() # publish on topic
+
+            if not result.legal_transition:
+                self.get_logger().warning(f"Illegal state change forced from {result.prev_state.name} to {result.new_state.name}.")
+            else:
+                self.get_logger().info(f"System state changed from {result.prev_state.name} to {result.new_state.name}.")
 
 
-        # Handling of degraded flag
-        
-        if action == AlertActionType.RAISE and alert.level >= Level.FATAL:
-
-            self.fsm.change_state(SystemState.FAULT)
-
+        if self.fsm.state == SystemState.FAULT:
+            self.get_logger().error("System transitioned to FAULT state, scheduling shutdown.")
             self.create_one_shot_timer(0.5, self.shutdown_system)
-        
-        
-        
 
     
 
@@ -225,25 +231,30 @@ class Supervisor(BetterAsyncNode):#, AsyncUtilisMixin):
         self.get_logger().info(f"Got process event: {event}")
 
         """
-        IN here we check for all possible os process events (process crashes / exits / start). The goal is
-        to possibily redirect these changes to alarms, and let the alarm logic drive the FSM and /system_state 
+        We listen for process events and redirect them to the alert system. If a core process crashes, 
+        a FATAL alert is raised and shutdown is initiated.
+        
         """
-
-        # TODO
-        # differentiate exit codes of processes (i.e. hwmng) to log a more descriptive exit cause
-
 
         if pn.get_domain_from_proc_name(event.proc_name) == pn.DOMAIN_CORE:
             
             if evt_type in (SysEventType.EXIT, SysEventType.CRASH) :
                 action = 'crashed' if evt_type == SysEventType.CRASH else 'exited'
-                self.get_logger().error(f"The core process \"{event.proc_name}\" has {action} with code: {event.exit_code}, "
-                                        f"scheduling system shutdown in {SHUTDOWN_POSTPONE_TIME} seconds.")
-                self.create_one_shot_timer(
-                    SHUTDOWN_POSTPONE_TIME, 
-                    self.shutdown_system
+                exit_cause = xc.get_cause(event.exit_code)
+
+                self.get_logger().warning(f"The core process \"{event.proc_name}\" has {action} with code: {event.exit_code}, "
+                        f"Raising FATAL alert: {exit_cause}")
+
+                # turn this process event into an alert
+                ftl_alert = Alert(
+                    level=Level.FATAL,
+                    src = event.proc_name or "unknown-process",
+                    code = ac.FTL_CORE_PROC_CRASH,
+                    subcode = event.exit_code, # keep the original process exit code
+                    brief=f"Core process {action}",
+                    description=f"The core process \"{event.proc_name}\" has crashed with code: {event.exit_code}.\nCause: {exit_cause if exit_cause else 'unknown'}",
                 )
-                return
+                self.alert_server.raise_alert(ftl_alert)
 
         # non critical event
         else:

@@ -1,0 +1,18 @@
+"""
+In this file we define all alerts ids as python constants
+
+"""
+
+# session manager related
+INF_SESSION_CREATION_REQUEST = 100
+INF_SESSION_CLOSURE_REQUEST = 110
+INF_SESSION_CREATION_OK = 120
+INF_SESSION_CLOSURE_OK = 130
+INF_SESSION_CREATION_FAILED = 140
+INF_SESSION_CLOSURE_FAILED = 150
+
+
+
+
+# os fatal alerts
+FTL_CORE_PROC_CRASH = 200

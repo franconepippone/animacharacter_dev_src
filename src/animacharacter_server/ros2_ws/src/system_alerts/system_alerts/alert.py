@@ -83,13 +83,13 @@ class Alert:
 
 
 def empty_alert() -> Alert:
-    """Return a default empty alert."""
+    """Creates a default empty alert."""
     return Alert(
         level=Level.INFO,
         src="",
-        code=-1,
+        code=0,
         ttl=math.inf,
-        subcode=-1,
-        brief="",
+        subcode=0,
+        brief="empty alert",
         description="",
     )
