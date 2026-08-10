@@ -55,68 +55,59 @@ class LifecycleNodeSupervisor:
             and self._get_state_client.service_is_ready()
         )
 
-    async def get_state(self, timeout: float = 1000) -> Optional[int]:
+    # standardize both async and sync api
+
+    def get_state(self, timeout: float = 1000) -> Optional[int]:
         """Return the target node's current state id, or None if unavailable."""
+        return cast(Optional[int], self._call_get_state_sync(timeout))
 
-        if not self._get_state_client.service_is_ready():
-            self.logger.warning(f"get_state service not ready yet for {self.target_node_name}")
-            return None
-
-        request = GetState.Request()
-        resp = cast(
-            GetState.Response | None,
-            await wait_future(self.host_node, self._get_state_client.call_async(request), timeout)
-        ) 
-
-        if resp is None:
-            # timed out or service failed to respond
-            self.logger.debug(f"get_state call returned no response for {self.target_node_name}")
-            return None
-
-        return resp.current_state.id
-
-    async def change_state(self, transition_id: int, timeout: float = 1000) -> ChangeState.Response:
+    def change_state(self, transition_id: int, timeout: float = 1000) -> ChangeState.Response:
         """Request a lifecycle transition asynchronously and return the ROS future."""
+        return cast(ChangeState.Response, self._call_change_state_sync(transition_id, timeout))
 
-        if not self._change_state_client.service_is_ready():
-            self.logger.warning(f"change_state service not ready yet for {self.target_node_name}")
-            return _make_failed_response()
+    async def get_state_async(self, timeout: float = 1000) -> Optional[int]:
+        """Return the target node's current state id, or None if unavailable."""
+        return cast(Optional[int], await self._call_get_state_async(timeout))
 
-        request = ChangeState.Request()
-        request.transition.id = transition_id
+    async def change_state_async(self, transition_id: int, timeout: float = 1000) -> ChangeState.Response:
+        """Request a lifecycle transition asynchronously and return the ROS future."""
+        return cast(ChangeState.Response, await self._call_change_state_async(transition_id, timeout))
 
-        resp = cast(
-            ChangeState.Response | None,
-            await wait_future(self.host_node, self._change_state_client.call_async(request), timeout)
-        ) 
-
-        if resp is None:
-            # timed out or service failed to respond
-            self.logger.debug(f"change_state call returned no response for {self.target_node_name}")
-            return _make_failed_response()
-
-        return resp
-
-    async def configure(self, timeout: float = 1000):
-        """Request the CONFIGURE transition."""
-        resp = await self.change_state(Transition.TRANSITION_CONFIGURE, timeout)
+    def configure(self, timeout: float = 1000) -> bool:
+        """Request the CONFIGURE transition (sync)."""
+        resp = self.change_state(Transition.TRANSITION_CONFIGURE, timeout)
         return bool(resp.success)
 
-    async def activate(self, timeout: float = 1000):
-        """Request the ACTIVATE transition."""
-        resp = await self.change_state(Transition.TRANSITION_ACTIVATE, timeout)
+    async def configure_async(self, timeout: float = 1000):
+        """Request the CONFIGURE transition (async)."""
+        resp = await self.change_state_async(Transition.TRANSITION_CONFIGURE, timeout)
         return bool(resp.success)
-    
-    async def cleanup(self, timeout: float = 1000):
-        """Request the CLEANUP transition."""
-        resp = await self.change_state(Transition.TRANSITION_CLEANUP, timeout)
+
+    def activate(self, timeout: float = 1000) -> bool:
+        """Request the ACTIVATE transition (sync)."""
+        resp = self.change_state(Transition.TRANSITION_ACTIVATE, timeout)
+        return bool(resp.success)
+
+    async def activate_async(self, timeout: float = 1000):
+        """Request the ACTIVATE transition (async)."""
+        resp = await self.change_state_async(Transition.TRANSITION_ACTIVATE, timeout)
         return bool(resp.success)
     
-    async def shutdown(self, timeout_each: float = 1000):
-        """Request the appropriate SHUTDOWN transition for the current state.  
-        timeout_each is used both for get_state and change_state, meaning worst-case await time is double that.
+    def cleanup(self, timeout: float = 1000) -> bool:
+        """Request the CLEANUP transition (sync)."""
+        resp = self.change_state(Transition.TRANSITION_CLEANUP, timeout)
+        return bool(resp.success)
+
+    async def cleanup_async(self, timeout: float = 1000):
+        """Request the CLEANUP transition (async)."""
+        resp = await self.change_state_async(Transition.TRANSITION_CLEANUP, timeout)
+        return bool(resp.success)
+    
+    def shutdown(self, timeout_each: float = 1000) -> bool:
+        """Request the appropriate SHUTDOWN transition for the current state (sync).
+        `timeout_each` is used both for get_state and change_state, meaning worst-case call time is double that.
         """
-        state = await self.get_state(timeout_each)
+        state = self.get_state(timeout_each)
 
         if state is None:
             return False
@@ -133,5 +124,94 @@ class LifecycleNodeSupervisor:
             )
             return False
         
-        resp = await self.change_state(transition, timeout_each)
+        resp = self.change_state(transition, timeout_each)
         return bool(resp.success)
+
+    async def shutdown_async(self, timeout_each: float = 1000):
+        """Request the appropriate SHUTDOWN transition for the current state (async).
+        `timeout_each` is used both for get_state and change_state, meaning worst-case await time is double that.
+        """
+        state = await self.get_state_async(timeout_each)
+
+        if state is None:
+            return False
+
+        if state == State.PRIMARY_STATE_UNCONFIGURED:
+            transition = Transition.TRANSITION_UNCONFIGURED_SHUTDOWN
+        elif state == State.PRIMARY_STATE_INACTIVE:
+            transition = Transition.TRANSITION_INACTIVE_SHUTDOWN
+        elif state == State.PRIMARY_STATE_ACTIVE:
+            transition = Transition.TRANSITION_ACTIVE_SHUTDOWN
+        else:
+            self.logger.warning(
+                f"Cannot shutdown from lifecycle state {state}"
+            )
+            return False
+        
+        resp = await self.change_state_async(transition, timeout_each)
+        return bool(resp.success)
+
+    # --- internal helpers ---
+    def _call_get_state_sync(self, timeout: float = 1000):
+        if not self._get_state_client.service_is_ready():
+            self.logger.warning(f"get_state service not ready yet for {self.target_node_name}")
+            return None
+
+        request = GetState.Request()
+        resp = cast(GetState.Response | None, self._get_state_client.call(request, timeout))
+        if resp is None:
+            self.logger.debug(f"get_state call returned no response for {self.target_node_name}")
+            return None
+
+        return resp.current_state.id
+
+    async def _call_get_state_async(self, timeout: float = 1000):
+        if not self._get_state_client.service_is_ready():
+            self.logger.warning(f"get_state service not ready yet for {self.target_node_name}")
+            return None
+
+        request = GetState.Request()
+        resp = cast(
+            GetState.Response | None,
+            await wait_future(self.host_node, self._get_state_client.call_async(request), timeout)
+        )
+
+        if resp is None:
+            self.logger.debug(f"get_state call returned no response for {self.target_node_name}")
+            return None
+
+        return resp.current_state.id
+
+    def _call_change_state_sync(self, transition_id: int, timeout: float = 1000):
+        if not self._change_state_client.service_is_ready():
+            self.logger.warning(f"change_state service not ready yet for {self.target_node_name}")
+            return _make_failed_response()
+
+        request = ChangeState.Request()
+        request.transition.id = transition_id
+
+        resp = cast(ChangeState.Response | None, self._change_state_client.call(request, timeout))
+        if resp is None:
+            self.logger.debug(f"change_state call returned no response for {self.target_node_name}")
+            return _make_failed_response()
+
+        return resp
+
+    async def _call_change_state_async(self, transition_id: int, timeout: float = 1000):
+        if not self._change_state_client.service_is_ready():
+            self.logger.warning(f"change_state service not ready yet for {self.target_node_name}")
+            return _make_failed_response()
+
+        request = ChangeState.Request()
+        request.transition.id = transition_id
+
+        resp = cast(
+            ChangeState.Response | None,
+            await wait_future(self.host_node, self._change_state_client.call_async(request), timeout)
+        )
+
+        if resp is None:
+            self.logger.debug(f"change_state call returned no response for {self.target_node_name}")
+            return _make_failed_response()
+
+        return resp

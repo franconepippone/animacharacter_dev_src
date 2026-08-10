@@ -139,16 +139,16 @@ class Supervisor(BetterAsyncNode):
         self.hwmng_sup.wait_readyness(2)
         self.ssmng_sup.wait_readyness(2)
 
-        if not await self.hwmng_sup.configure():
+        if not await self.hwmng_sup.configure_async():
             # activation of hwmng is done by sessmng node
             self.get_logger().error("Could not configure hardware manager node, aborting spinup.")
             return False
         
-        if not await self.ssmng_sup.configure():
+        if not await self.ssmng_sup.configure_async():
             self.get_logger().error("Could not configure session manager node, aborting spinup.")
             return False
 
-        if not await self.ssmng_sup.activate():
+        if not await self.ssmng_sup.activate_async():
             self.get_logger().error("Could not activate session manager node, aborting spinup.")
             return False
 
@@ -196,8 +196,8 @@ class Supervisor(BetterAsyncNode):
         self.get_logger().warning('System shutdown initiated.')
 
         results = await self.agather(
-                    self.hwmng_sup.shutdown(),
-                    self.ssmng_sup.shutdown()
+                    self.hwmng_sup.shutdown_async(timeout_each=2),
+                    self.ssmng_sup.shutdown_async(timeout_each=2)
                 )
 
         ok = all(results)
@@ -212,7 +212,7 @@ class Supervisor(BetterAsyncNode):
         else:
             self.get_logger().warning(f'System state changed to SHUTDOWN state.')
 
-        await self.asleep(1.0)
+        await self.asleep(1.0) # let shutdown status publication propagate
 
         self.get_logger().warning(f'Destroying rclpy context.')
         rclpy.shutdown() # this releases executor.spin() and exits process
@@ -224,7 +224,7 @@ class Supervisor(BetterAsyncNode):
     def on_alert_change_cb(self, action: AlertActionType, alert: Alert):
         """Main trigger for updating the system state based on semantic alert events."""
 
-        self.get_logger().info(f"Got alert {action.name} request for alert: {alert}")
+        self.get_logger().debug(f"Got alert {action.name} request for alert: {alert}")
 
         event = map_alert_to_system_event(action, alert)
         if event is None:
@@ -264,7 +264,7 @@ class Supervisor(BetterAsyncNode):
 
         evt_type = SysEventType(event.event_type)
 
-        self.get_logger().info(f"Got process event: (name={event.proc_name}, type={evt_type.name}, code={event.exit_code})")
+        self.get_logger().debug(f"Got process event: (name={event.proc_name}, type={evt_type.name}, code={event.exit_code})")
 
         """
         We listen for process events and redirect them to the alert system. If a core process crashes, 

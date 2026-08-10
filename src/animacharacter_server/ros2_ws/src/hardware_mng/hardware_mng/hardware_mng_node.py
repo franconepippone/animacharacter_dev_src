@@ -233,7 +233,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- configure ---
     def on_configure(self, state: State):
-        self.get_logger().info("on_configure()")
+        self.get_logger().debug("on_configure()")
         
         self.reconciler.set_goal_all(
             ControllerState.INITIALIZED
@@ -243,7 +243,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- activate ---
     def on_activate(self, state: State):
-        self.get_logger().info("on_activate()")
+        self.get_logger().debug("on_activate()")
 
         self.reconciler.set_goal_all(
             ControllerState.RUNNING
@@ -254,7 +254,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- deactivate ---
     def on_deactivate(self, state: State):
-        self.get_logger().info("on_deactivate()")
+        self.get_logger().debug("on_deactivate()")
 
         self.reconciler.set_goal_all(
             ControllerState.INITIALIZED
@@ -265,7 +265,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- cleanup ---
     def on_cleanup(self, state: State):
-        self.get_logger().info("on_cleanup()")
+        self.get_logger().debug("on_cleanup()")
         
         self.reconciler.set_goal_all(
             ControllerState.UNINITIALIZED
@@ -275,7 +275,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- shutdown ---
     def on_shutdown(self, state: State):
-        self.get_logger().info("on_shutdown()")
+        self.get_logger().debug("on_shutdown()")
         self.reconciler.set_goal_all(
             ControllerState.UNINITIALIZED
         )
@@ -286,7 +286,7 @@ class HardwareManagerNode(LifecycleNode):
 
     # --- error ---
     def on_error(self, state: State):
-        self.get_logger().info("on_error()")
+        self.get_logger().debug("on_error()")
         return TransitionCallbackReturn.SUCCESS
 
 

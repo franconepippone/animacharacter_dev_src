@@ -74,7 +74,7 @@ class AnimacharacterSessionClient:
     handling session creation via HTTP requests to the authenticator server, and managing the underlying
     pynng and udp sockets for communication once a session is established.
     
-    This class should not be instantiated directly; instead, use the higher-level ACClient class that wraps this one
+    This class should not be instantiated by a user; instead, use the higher-level ACClient class that wraps this one
     """
     def __init__(self, auth_key: str, ip: str, port: int = 8000) -> None:
         self.ip = ip
@@ -120,7 +120,7 @@ class AnimacharacterSessionClient:
         data = ConfigurationPacket.encode(config)
         return self.peertpc.send(data)
 
-    def initiate_session(self):
+    def initiate_session(self) -> bool:
         udp_port = self.peerudp.local_address[1]
         self.session_data = send_session_request(
             self.url,
@@ -129,8 +129,8 @@ class AnimacharacterSessionClient:
         )
 
         if not self.session_data.success:
-            print("Failed to initiate session")
-            return
+            print("Failed to initiate session", self.session_data.msg)
+            return False
 
         self.peertpc.set_psk(self.session_data.token)
         self.peerudp.set_psk(self.session_data.token)
@@ -139,6 +139,7 @@ class AnimacharacterSessionClient:
         self.peerudp.dial(self.ip, self.session_data.udp_port)
 
         self._heartbeat_thread.start()
+        return True
 
 
 
@@ -148,7 +149,9 @@ if __name__ == "__main__":
     import time
     
     client = AnimacharacterSessionClient('supersecret-client-key', "127.0.0.1")
-    client.initiate_session()
+    ok = client.initiate_session()
+    if not ok:
+        exit()
 
     for _ in range(10):
         client.send_motionframe([(10, 0.5), (1, 1.5), (2, 2.3)])

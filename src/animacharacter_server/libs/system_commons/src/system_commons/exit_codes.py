@@ -29,4 +29,4 @@ EXIT_CAUSES = {
 
 def get_cause(exit_code: int) -> str:
     """Returns a human-readable description of the exit code."""
-    return EXIT_CAUSES.get(exit_code, "unknown_exit_code")
+    return EXIT_CAUSES.get(exit_code, f"unknown_exit_code ({exit_code})")

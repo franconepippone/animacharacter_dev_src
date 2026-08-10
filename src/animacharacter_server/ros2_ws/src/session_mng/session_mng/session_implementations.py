@@ -5,10 +5,11 @@ implementing the specific session logic for an animacharacter session.
 
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Awaitable
 import secrets
 import asyncio
 import time
+from rclpy.executors import Executor
 from interfaces.msg import MotionframeArray
 from std_msgs.msg import String
 
@@ -23,7 +24,7 @@ from commons.network.packet_schemas import (
 )
 
 
-from .session import SessionResourceManager, SessionRunner, SessionManager
+from .session import SessionResourceManager, SessionRunner, SessionManager, SessionCleanupCallable
 from .session.resource_manager import LoggerLike, SessionDestructionError, SessionCreationError
 
 
@@ -141,19 +142,25 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
     class params:
         HEARTBEAT_TIMEOUT_SEC = 10
 
-    def __init__(self, motionframe_publisher: Publisher, config_publisher: Publisher, logger: LoggerLike | None = None) -> None:
+    def __init__(self, 
+            motionframe_publisher: Publisher, 
+            config_publisher: Publisher, 
+            cleanup_cb: SessionCleanupCallable[ACSessionContext],
+            logger: LoggerLike | None = None,
+        ) -> None:
         super().__init__(logger=logger)
         self.motionframe_publisher = motionframe_publisher
         self.config_publisher = config_publisher
         self.metrics = MetricsTracker()
+        self.bind_session_cleanup(cleanup_cb)
 
     def run(self, ctx: ACSessionContext) -> None:
         """Core session logic, runs in a background thread. Should return when session ends."""
         asyncio.run(self._run_main(ctx), debug=True)
 
-    ####
-    #### --------------------------- SESSION IMPLEMENTATION ---------------------------
-    ####                              asyncio - based
+    ###
+    ### --------------------------- SESSION IMPLEMENTATION ---------------------------
+    ###                              asyncio - based
 
     # entrypoint
     async def _run_main(self, ctx: ACSessionContext):
@@ -268,10 +275,12 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
 
 
 def create_session_manager(
-        motionframe_publisher: Publisher, 
+        motionframe_publisher: Publisher,
         config_publisher: Publisher,
-        check_session_creation_criteria: Callable[[], bool],
-        logger_resource_manager: LoggerLike, 
+        check_session_creation_criteria: Callable[[], bool | Awaitable[bool]],
+        cleanup_cb: SessionCleanupCallable[ACSessionContext],
+        cleanup_executor_provider: Callable[[], Executor | None] | None,
+        logger_resource_manager: LoggerLike,
         logger_session_runner: LoggerLike
     ):
     """Utility method to build a configured session manager to run AC sessions."""
@@ -280,7 +289,9 @@ def create_session_manager(
         sess_runner=ACSessionRunner(
             motionframe_publisher, 
             config_publisher,
+            cleanup_cb=cleanup_cb,
             logger=logger_session_runner
         ),
-        session_creation_criteria=check_session_creation_criteria
+        session_creation_criteria=check_session_creation_criteria,
+        cleanup_executor_provider=cleanup_executor_provider,
     )

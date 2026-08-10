@@ -12,7 +12,7 @@ from interfaces.msg import AlertAction
 from system_alerts.alert import Alert, AlertActionType, Level
 from system_alerts.transport import build_message, decode_action_message
 
-from .async_utils import wait_for
+from orchestration.ros_async_utils import wait_future
 
 class SysAlertsServer:
     """Authoritative server that owns the active alert table.
@@ -88,7 +88,7 @@ class SysAlertsServer:
         self._change_waiters.append(future)
 
         try:
-            result = await wait_for(
+            result = await wait_future(
                 self.node,
                 future,
                 timeout,

@@ -14,6 +14,53 @@ T = TypeVar("T")
 cb_group = ReentrantCallbackGroup()
 
 
+
+### CONSIDER THIS METHOD OF PERFORMING BLOCKING WAITS
+
+##def call(
+#        self,
+#        request: SrvRequestT,
+#        timeout_sec: Optional[float] = None
+#    ) -> Optional[SrvResponseT]:
+#        """
+#        Make a service request and wait for the result.
+#
+#        .. warning:: Do not call this method in a callback, or a deadlock or timeout may occur.
+#
+#        :param request: The service request.
+#        :param timeout_sec: Seconds to wait. If ``None``, then wait forever.
+#        :return: The service response.
+#        :raises: TypeError if the type of the passed request isn't an instance
+#          of the Request type of the provided service when the client was
+#          constructed.
+#        :raises: TimeoutError if the response is not available within the timeout.
+#        """
+#        if not isinstance(request, self.srv_type.Request):
+#            raise TypeError()
+#
+#        event = threading.Event()
+#
+#        def unblock(future: Future[SrvResponseT]) -> None:
+#            nonlocal event
+#            event.set()
+#
+#        future = self.call_async(request)
+#        future.add_done_callback(unblock)
+#
+#        # Check future.done() before waiting on the event.
+#        # The callback might have been added after the future is completed,
+#        # resulting in the event never being set.
+#        if not future.done():
+#            if not event.wait(timeout_sec):
+#                # Timed out. remove_pending_request() to free resources
+#                self.remove_pending_request(future)
+#                raise TimeoutError()
+#
+#        exception = future.exception()
+#        if exception is not None:
+#            raise exception
+#        return future.result()
+
 async def asleep(
     node: Node,
     seconds: float,

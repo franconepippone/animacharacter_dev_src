@@ -156,7 +156,7 @@ def test_wait_readyness_and_is_ready(node, executor_thread):
 def test_get_state_returns_none_when_unready(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/no_such')
     # no services -> get_state should warn and return None
-    task = executor_thread.create_task(sup.get_state(timeout=0.05))
+    task = executor_thread.create_task(sup.get_state_async(timeout=0.05))
     deadline = time.monotonic() + 1.0
     while not task.done() and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -175,7 +175,7 @@ def test_get_state_success(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt2')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.get_state(timeout=1.0))
+    task = executor_thread.create_task(sup.get_state_async(timeout=1.0))
     res = None
     res = task.result() if task.done() else None
     # wait for result
@@ -195,7 +195,7 @@ def test_change_state_success(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt3')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0))
+    task = executor_thread.create_task(sup.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0))
     # wait
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
@@ -214,21 +214,21 @@ def test_configure_activate_cleanup_helpers(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt4')
     sup.wait_readyness(0.5)
 
-    t1 = executor_thread.create_task(sup.configure(timeout=1.0))
+    t1 = executor_thread.create_task(sup.configure_async(timeout=1.0))
     deadline = time.monotonic() + 2.0
     while not t1.done() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert t1.done()
     assert t1.result() is True
 
-    t2 = executor_thread.create_task(sup.activate(timeout=1.0))
+    t2 = executor_thread.create_task(sup.activate_async(timeout=1.0))
     deadline = time.monotonic() + 2.0
     while not t2.done() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert t2.done()
     assert t2.result() is True
 
-    t3 = executor_thread.create_task(sup.cleanup(timeout=1.0))
+    t3 = executor_thread.create_task(sup.cleanup_async(timeout=1.0))
     deadline = time.monotonic() + 2.0
     while not t3.done() and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -251,7 +251,7 @@ def test_shutdown_from_various_states(node, executor_thread):
         (State.PRIMARY_STATE_ACTIVE, True),
     ]:
         dn.set_state(st)
-        task = executor_thread.create_task(sup.shutdown(timeout_each=1.0))
+        task = executor_thread.create_task(sup.shutdown_async(timeout_each=1.0))
         # wait
         deadline = time.monotonic() + 2.0
         while not task.done() and time.monotonic() < deadline:
@@ -261,7 +261,7 @@ def test_shutdown_from_various_states(node, executor_thread):
 
     # unknown state
     dn.set_state(99)
-    task = executor_thread.create_task(sup.shutdown(timeout_each=1.0))
+    task = executor_thread.create_task(sup.shutdown_async(timeout_each=1.0))
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -278,7 +278,7 @@ def test_change_state_timeout(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt6')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.change_state(Transition.TRANSITION_CONFIGURE, timeout=0.01))
+    task = executor_thread.create_task(sup.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=0.01))
     # should complete with failed response due to timeout
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
@@ -297,7 +297,7 @@ def test_get_state_timeout(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt7')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.get_state(timeout=0.01))
+    task = executor_thread.create_task(sup.get_state_async(timeout=0.01))
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -320,7 +320,7 @@ def test_failed_transitions(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt8')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.configure(timeout=1.0))
+    task = executor_thread.create_task(sup.configure_async(timeout=1.0))
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
         time.sleep(0.01)
@@ -339,7 +339,7 @@ def test_multiple_supervisors_and_nodes(node, executor_thread):
         assert s.is_ready()
 
     # configure all nodes concurrently
-    tasks = [executor_thread.create_task(sup.change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0)) for sup in sups]
+    tasks = [executor_thread.create_task(sup.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0)) for sup in sups]
     # wait
     for t in tasks:
         deadline = time.monotonic() + 2.0
@@ -359,7 +359,7 @@ def test_race_condition_service_unavailable_during_call(node, executor_thread):
     sup.wait_readyness(0.5)
 
     # start a change_state and then destroy services mid-call to simulate race
-    task = executor_thread.create_task(sup.change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0))
+    task = executor_thread.create_task(sup.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0))
     # wait briefly and then remove services
     time.sleep(0.02)
     executor_thread.remove_node(dn)
@@ -381,7 +381,7 @@ def test_many_nodes_stress(node, executor_thread):
 
     tasks = []
     for i in range(count):
-        tasks.append(executor_thread.create_task(sups[i].change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0)))
+        tasks.append(executor_thread.create_task(sups[i].change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0)))
     # wait and assert
     for t in tasks:
         deadline = time.monotonic() + 5.0
@@ -402,9 +402,9 @@ def test_randomized_delays_and_retries(node, executor_thread):
     # perform randomized sequence of ops
     for _ in range(20):
         if random.random() < 0.5:
-            t = executor_thread.create_task(sup.get_state(timeout=0.5))
+            t = executor_thread.create_task(sup.get_state_async(timeout=0.5))
         else:
-            t = executor_thread.create_task(sup.change_state(Transition.TRANSITION_CONFIGURE, timeout=0.5))
+            t = executor_thread.create_task(sup.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=0.5))
         deadline = time.monotonic() + 2.0
         while not t.done() and time.monotonic() < deadline:
             time.sleep(0.01)
@@ -443,8 +443,8 @@ def test_interleaved_calls_between_nodes(node, executor_thread):
     s1.wait_readyness(0.5)
     s2.wait_readyness(0.5)
 
-    t1 = executor_thread.create_task(s1.change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0))
-    t2 = executor_thread.create_task(s2.change_state(Transition.TRANSITION_CONFIGURE, timeout=1.0))
+    t1 = executor_thread.create_task(s1.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0))
+    t2 = executor_thread.create_task(s2.change_state_async(Transition.TRANSITION_CONFIGURE, timeout=1.0))
 
     # wait
     for t in (t1, t2):
@@ -464,7 +464,7 @@ def test_invalid_transition_id_returns_false(node, executor_thread):
     sup = LifecycleNodeSupervisor(node, '/tgt_bad')
     sup.wait_readyness(0.5)
 
-    task = executor_thread.create_task(sup.change_state(9999, timeout=1.0))
+    task = executor_thread.create_task(sup.change_state_async(9999, timeout=1.0))
     deadline = time.monotonic() + 2.0
     while not task.done() and time.monotonic() < deadline:
         time.sleep(0.01)

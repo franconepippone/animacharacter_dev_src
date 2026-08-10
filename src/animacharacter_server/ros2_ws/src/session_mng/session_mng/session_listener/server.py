@@ -67,7 +67,7 @@ def auth(req: AuthRequest, rqst: Request):
         logger.info(f"Session created successfully, sending session data to remote client.")
         logger.debug(f"Session data: {sess_resp}")
     else:
-        logger.warning(f"Request to create a new session failed, sending failure response to remote client - Reason: {sess_resp.msg}")
+        logger.error(f"Request to create a new session failed, sending failure response to remote client - Reason: {sess_resp.msg}")
         logger.debug(f"Session failure response data: {sess_resp}")
 
     # send response to client
