@@ -71,9 +71,6 @@ class SessManagerNode(LifecycleNode):
             10,
         )
 
-
-        self.create_timer(10, lambda: rclpy.shutdown())
-
         ### ==============================
         ### SESSION MANAGEMENT OBJECTS
         ### ==============================
@@ -205,8 +202,5 @@ def main(args=None):
     node = SessManagerNode()
     rclpy.spin(node)
     node.destroy_node()
-
-    while True:
-        pass
 
     rclpy.shutdown()

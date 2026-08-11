@@ -22,6 +22,7 @@ from system_alerts import SysAlertsClient, Level
 from .utils import flatten_for_diagnostics
 from system_commons import exit_codes as xc
 from system_commons import alert_codes as ac
+from system_commons import proc_names as pn
 from .signals_definitions import (
     SIG_CONTOLLER_WARNING,
     SIG_CONTROLLER_ERROR,
@@ -29,6 +30,7 @@ from .signals_definitions import (
     SIG_CONTROLLER_GENERIC_EXCEPTION
 )
 
+from orchestration.heartbeats import HeartbeatGenerator
 
 
 # of type MotionframeArray
@@ -94,6 +96,11 @@ class HardwareManagerNode(LifecycleNode):
 
         self.diagnostic_timer = self.create_timer(1.0, self.updater.update) # update 
 
+
+        # ------------------------
+        # Heartbeat generation
+        self.hb = HeartbeatGenerator(self, 5, 5, pn.HARDWARE_MANAGER)
+
         # -------------------------
         # main subscription to input topic and configs
         # -------------------------
@@ -132,8 +139,8 @@ class HardwareManagerNode(LifecycleNode):
 
             self.alert_cli.raise_alert(
                 Level.FATAL,
-                ac.FTL_HW_CONTROLLER_FATAL,
                 self.get_name(),
+                ac.FTL_HW_CONTROLLER_FATAL,
                 subcode=signal.kwargs.get("code", 0),
                 brief=f"Fatal error in controller '{ctrl.name}'",
                 description=signal.kwargs.get("note", "no further description available")
