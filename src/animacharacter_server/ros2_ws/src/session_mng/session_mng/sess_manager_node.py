@@ -91,6 +91,8 @@ class SessManagerNode(LifecycleNode):
 
         self.get_logger().info("Session manager node initialized.")
 
+    # TODO note that an async cleanup can mean cleanup is running while another session is beginning. Maybe move the entire session handling system 
+    # to coroutines, make it general enough so that it can support any async framework (both ros executor and asyncio for future use?)
     async def cleanup_session(self, handle: SessionHandle[ACSessionContext]):
         """Method scheduled to run after a session ends, either intentionally or abruptly."""
 
