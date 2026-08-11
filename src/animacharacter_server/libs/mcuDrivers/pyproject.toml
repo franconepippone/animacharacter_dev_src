@@ -1,0 +1,36 @@
+[project]
+name = "mcudrivers"
+version = "0.1.0"
+description = "Packages containing all drivers classes for the animatronic hardware (talk to MCUs)"
+readme = "README.md"
+authors = [
+    { name = "Americo", email = "americo.cherubini2003@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pyserialdevice",
+]
+
+[project.scripts]
+mcudrivers = "mcudrivers:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+#pyserialdevice = { path = "../pySerialDevice", editable = true }
+mcudrivers = { workspace = true, editable = true }
+# in production it should install from github, no need for a local copy
+pyserialdevice = { git = "https://github.com/franconepippone/pySerialDevice" }
+
+
+[tool.uv.workspace]
+members = [
+    ".",
+]
+
+[dependency-groups]
+dev = [
+    "mcudrivers",
+]

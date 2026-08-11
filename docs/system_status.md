@@ -57,6 +57,7 @@ SystemStatus.msg
     state_id: (string) identificatore dello stato attuale
     is_degraded: (bool) Flag che indica la presenza di WARN o ERR non fatali.
     legal: (bool) Flag che indica se è avvenuta una transizione prevista dalla FSM (legale) o no (illegale). Se False, c'è probabilmente un bug.
+    timestamp: (int) timestamp globale dell'avvenimento
     fault_ref: (Alert Object). Se lo stato è FAULT, contiene un riferimento (*copia*) dell'alert che ha scatenato il blocco fatale.
 ```
 

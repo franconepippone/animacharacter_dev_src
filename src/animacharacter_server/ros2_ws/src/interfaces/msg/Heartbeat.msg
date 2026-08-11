@@ -1,0 +1,2 @@
+string name
+float32 next_within
