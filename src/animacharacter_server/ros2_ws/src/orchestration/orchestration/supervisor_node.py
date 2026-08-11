@@ -31,6 +31,7 @@ from . import proc_names as pn
 from .ros_async_utils import BetterAsyncNode
 from .state_machine.event_mapper import map_alert_to_system_event
 from .state_machine.system_fsm import SystemFSM, SystemState, SystemEvent
+from .heartbeats import HeartbeatListener
 
 PROCESS_EVENTS_TOPIC = "/process_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -72,6 +73,10 @@ class Supervisor(BetterAsyncNode):
         self.alert_server.on_alert_change(self.on_alert_change_cb)
 
         self.fault_ref_alert: Alert | None = None
+
+        # -----------------
+        # Heartbeat listener
+        self.hb = HeartbeatListener(self, self.on_heartbeat_timeout_cb)
 
         # -----------------
         # System State machine representation
@@ -256,9 +261,7 @@ class Supervisor(BetterAsyncNode):
                     self.shutdown_system,
                     callback_group=self.shutdown_cbg,
                 )
-
     
-
     def on_process_event_cb(self, event: ProcessEvent):
         # this is sketch code, needs testing
 
@@ -318,6 +321,8 @@ class Supervisor(BetterAsyncNode):
                 pass
                 # implement restart counter
             
+    def on_heartbeat_timeout_cb(self, hb_name: str) -> None:
+        ...
 
 
 

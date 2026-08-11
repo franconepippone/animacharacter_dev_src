@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ProcessEvent.msg"
   "msg/Alert.msg"
   "msg/AlertAction.msg"
+  "msg/Heartbeat.msg"
 )
 
 if(BUILD_TESTING)

@@ -9,6 +9,7 @@ from interfaces.msg import MotionframeArray
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from orchestration.lifecycle_sup_utility import LifecycleNodeSupervisor, State, Transition
+from orchestration.heartbeats import HeartbeatGenerator
 from system_alerts import SysAlertsClient, Level
 
 from system_commons import alert_codes as ac
@@ -48,8 +49,7 @@ class SessManagerNode(LifecycleNode):
         )
 
 
-        #heartbeat = HeartbeatGenerator(self)
-        #HeartbeatListener(self, require=('casdas', 'asda', 'adsa', 'asdsa'), miss_cb)
+        self.hb = HeartbeatGenerator(self, period=5, tolerance=5)
 
         # Alert client for raising alerts
         self.alert_cli = SysAlertsClient(self)
@@ -202,4 +202,5 @@ def main(args=None):
     node = SessManagerNode()
     rclpy.spin(node)
     node.destroy_node()
+
     rclpy.shutdown()
