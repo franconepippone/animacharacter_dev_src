@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, Callable
 
 import threading
 from dataclasses import dataclass, field
@@ -8,14 +8,16 @@ import time
 
 from .proto_logger import LoggerLike, StupidLogger
 
-SessCtxT = TypeVar("SessCtxT", contravariant=True)
+SessCtxT = TypeVar("SessCtxT", contravariant=True, )
+
+SessCtxOutT = TypeVar("SessCtxOutT", covariant=True)
 
 # makes sure runner and cleanup supports both run via callback assigment or via inheritance ovveride
 class SessionRunnerCallable(Protocol, Generic[SessCtxT]):
-    def __call__(self, ctx: SessCtxT) -> Any: ...
+    def __call__(self, ctx: SessCtxT, /) -> Any: ...
 
-class SessionCleanupCallable(Protocol, Generic[SessCtxT]):
-    def __call__(self, ctx: SessCtxT) -> Any: ...
+class SessionCleanupCallable(Protocol, Generic[SessCtxOutT]):
+    def __call__(self, handle: SessionHandle[SessCtxOutT], /) -> Any: ...
 
 # exception
 class SessionRunnerError(RuntimeError): ...
@@ -70,16 +72,18 @@ class SessionRunner(Generic[SessCtxT]):
         self.logger = logger if logger is not None else StupidLogger()
         if runner is not None:
             self.run = runner
+
+        self._cleanup_cbs: list[SessionCleanupCallable] = [self.cleanup]        
         if cleanup is not None:
-            self.cleanup = cleanup
+            self._cleanup_cbs.append(cleanup)
 
     def bind_session_runner(self, runner: SessionRunnerCallable[SessCtxT]) -> None:
         """Bind a session run callback."""
         self.run = runner
 
-    def bind_session_cleanup(self, cleanup: SessionCleanupCallable[SessCtxT]) -> None:
-        """Bind a session cleanup callback."""
-        self.cleanup = cleanup
+    def add_session_cleanup_cb(self, cleanup: SessionCleanupCallable[SessCtxT]) -> None:
+        """Add a session cleanup callback."""
+        self._cleanup_cbs.append(cleanup)
 
     def start(self, ctx: SessCtxT) -> SessionHandle[SessCtxT]:
         """Start a background thread to execute the session, returns a handle to the active session"""
@@ -101,18 +105,20 @@ class SessionRunner(Generic[SessCtxT]):
             handle.result_value = self.run(ctx)
         except BaseException as exc:
             handle.crash_exception = exc
-            self.logger.error(f"Session runner crashed: {exc}")
+            self.logger.error(f"Session runner crashed -> {exc}")
         finally:
-            self.logger.info("Session runner stopping")
-            try:
-                self.cleanup(ctx)
-            except Exception as exc:
-                self.logger.error(f"Session cleanup raised an exception: {exc}")
+            self.logger.info("Running session cleanup callbacks...")
+            for cln in self._cleanup_cbs:
+                try:
+                    cln(handle)
+                except Exception as exc:
+                    self.logger.error(f"Session cleanup raised an exception -> {exc}")
 
-    def run(self, ctx: SessCtxT) -> Any:
+    def run(self, ctx: SessCtxT, /) -> Any:
         """Default runner function, should be overridden by user or set via constructor."""
         raise NotImplementedError("'run' method was not assigned or overridden, cannot run session.")
 
-    def cleanup(self, ctx: SessCtxT) -> None:
-        """Default cleanup function, can be overridden by user or set via constructor."""
+    def cleanup(self, handle: SessionHandle[SessCtxT]) -> None:
+        """Default cleanup function, can be overridden by user or set via constructor. Multiple cleanup functions can be
+        added via "add_cleanup_cb" """
         pass

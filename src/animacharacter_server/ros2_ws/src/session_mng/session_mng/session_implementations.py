@@ -5,10 +5,12 @@ implementing the specific session logic for an animacharacter session.
 
 
 from dataclasses import dataclass
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Any
 import secrets
 import asyncio
 import time
+import inspect 
+
 from rclpy.executors import Executor
 from interfaces.msg import MotionframeArray
 from std_msgs.msg import String
@@ -24,7 +26,7 @@ from commons.network.packet_schemas import (
 )
 
 
-from .session import SessionResourceManager, SessionRunner, SessionManager, SessionCleanupCallable
+from .session import SessionResourceManager, SessionRunner, SessionManager, SessionCleanupCallable, SessionHandle
 from .session.resource_manager import LoggerLike, SessionDestructionError, SessionCreationError
 
 
@@ -152,7 +154,7 @@ class ACSessionRunner(SessionRunner[ACSessionContext]):
         self.motionframe_publisher = motionframe_publisher
         self.config_publisher = config_publisher
         self.metrics = MetricsTracker()
-        self.bind_session_cleanup(cleanup_cb)
+        self.add_session_cleanup_cb(cleanup_cb)
 
     def run(self, ctx: ACSessionContext) -> None:
         """Core session logic, runs in a background thread. Should return when session ends."""
@@ -279,11 +281,28 @@ def create_session_manager(
         config_publisher: Publisher,
         check_session_creation_criteria: Callable[[], bool | Awaitable[bool]],
         cleanup_cb: SessionCleanupCallable[ACSessionContext],
-        cleanup_executor_provider: Callable[[], Executor | None] | None,
+        executor_provider: Callable[[], Executor | None],
         logger_resource_manager: LoggerLike,
         logger_session_runner: LoggerLike
     ):
     """Utility method to build a configured session manager to run AC sessions."""
+
+
+    def _user_cleanup(handle: SessionHandle[ACSessionContext]) -> None:
+        result: Any = cleanup_cb(handle)
+
+        # in case callback was a coroutine, we schedule it
+        if inspect.isawaitable(result):
+            executor = executor_provider()
+            if executor is None:
+                raise RuntimeError('Executor is missing, cannot schedule cleanup cb')
+
+            async def _async_cleanup_wrapper() -> None:
+                await result
+
+            executor.create_task(_async_cleanup_wrapper)
+
+
     return SessionManager(
         sess_resource_manager=ACSessResourceMng(logger=logger_resource_manager),
         sess_runner=ACSessionRunner(
@@ -293,5 +312,5 @@ def create_session_manager(
             logger=logger_session_runner
         ),
         session_creation_criteria=check_session_creation_criteria,
-        cleanup_executor_provider=cleanup_executor_provider,
+        session_cleanup_cb=_user_cleanup
     )

@@ -98,6 +98,8 @@ class SystemFSM(FSM[SystemState]):
     def _handle_active(self, event: SystemEvent) -> StateChangeResult[SystemState]:
         if event is SystemEvent.DISCONNECT_REQUESTED:
             return self.change_state(SystemState.DISCONNECTING)
+        if event is SystemEvent.DISCONNECTED:
+            return self.force_change_state(SystemState.STANDBY)
         return self._noop()
 
     def _handle_disconnecting(self, event: SystemEvent) -> StateChangeResult[SystemState]:
@@ -106,4 +108,5 @@ class SystemFSM(FSM[SystemState]):
         return self._noop()
 
     def _noop(self) -> StateChangeResult[SystemState]:
+        print("no operation occurred")
         return StateChangeResult(self.state, self.state, True)

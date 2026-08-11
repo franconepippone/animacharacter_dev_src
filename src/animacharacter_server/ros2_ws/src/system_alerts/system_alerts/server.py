@@ -58,7 +58,7 @@ class SysAlertsServer:
 
     def clear_alert(self, code: int) -> None:
         """Clear the alert with the given code and publish the change to clients."""
-        self._apply_change(AlertActionType.CLEAR, Alert(level=Level.INFO, src="", code=code))
+        self._clear_alert_from_code(code)
 
     def get_active_alerts_table(self) -> dict[int, Alert]:
         """Return a copy of the server-authoritative active-alert table."""
@@ -161,7 +161,13 @@ class SysAlertsServer:
         ]
 
         for alert in expired_alerts:
-            self._apply_change(
-                AlertActionType.CLEAR,
-                alert,
-            )
+            # publish a standardized clear event for expired alerts
+            self._clear_alert_from_code(alert.code)
+
+    def _clear_alert_from_code(self, code: int) -> None:
+        if (alert := self._active_alerts.get(code, None)) is None:
+            return
+        self._apply_change(
+            AlertActionType.CLEAR,
+            alert,
+        )

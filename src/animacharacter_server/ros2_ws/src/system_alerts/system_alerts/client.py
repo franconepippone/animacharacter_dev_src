@@ -11,6 +11,17 @@ from system_alerts.alert import Alert, AlertActionType, Level
 from system_alerts.transport import decode_action_message, build_message
 
 
+def default_ttl(ttl: float | None, level: int):
+    if ttl is None:
+        if level == Level.INFO:
+            return 0.0
+        elif level == Level.FATAL:
+            return math.inf
+
+        raise ValueError('No TTL provided for alert raise action.')
+    else:
+        return ttl
+
 class SysAlertsClient:
     """Client-side mirror of the server-authoritative alert state.
 
@@ -48,17 +59,22 @@ class SysAlertsClient:
         level: int,
         src: str,
         code: int,
-        ttl: float = math.inf,
+        ttl: float | None = None,
         subcode: int = -1,
         brief: str = "",
         description: str = "",
     ) -> None:
-        """Send a raise request to the server for a new alert."""
+        """Send a raise request to the server for a new alert. 
+        
+        If not provided, TTL defaults to 0s (one-shot) if level is INFO,
+        and to INF (un-expirable alert) if level is FATAL. 
+        This method will raise if TTL is not provided for other levels.
+        """
         alert = Alert(
             level=level,
             src=src,
             code=code,
-            ttl=0.0 if level == Level.INFO else ttl,
+            ttl=default_ttl(ttl, level),
             subcode=subcode,
             brief=brief,
             description=description,

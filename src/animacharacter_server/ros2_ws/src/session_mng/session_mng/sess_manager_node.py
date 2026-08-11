@@ -9,8 +9,13 @@ from interfaces.msg import MotionframeArray
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from orchestration.lifecycle_sup_utility import LifecycleNodeSupervisor, State, Transition
+from system_alerts import SysAlertsClient, Level
 
-from .session_implementations import create_session_manager, ACSessionCreationArguments
+from system_commons import alert_codes as ac
+
+from .session_implementations import create_session_manager, ACSessionCreationArguments, SessionHandle, ACSessionContext
+
+
 
 from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
@@ -41,6 +46,13 @@ class SessManagerNode(LifecycleNode):
             self.create_session_srv_cb, # type: ignore
             callback_group=cbg
         )
+
+
+        #heartbeat = HeartbeatGenerator(self)
+        #HeartbeatListener(self, require=('casdas', 'asda', 'adsa', 'asdsa'), miss_cb)
+
+        # Alert client for raising alerts
+        self.alert_cli = SysAlertsClient(self)
 
         ### =========================
         ### PUBS FOR MOTION DATA AND CONFIGS
@@ -79,26 +91,28 @@ class SessManagerNode(LifecycleNode):
 
         self.get_logger().info("Session manager node initialized.")
 
-    async def cleanup_session(self, ctx):
+    async def cleanup_session(self, handle: SessionHandle[ACSessionContext]):
+        """Method scheduled to run after a session ends, either intentionally or abruptly."""
+
         state_resp = await self.hwmng_sup.change_state_async(Transition.TRANSITION_DEACTIVATE, timeout=5.0)
         if not state_resp.success:
-            self.get_logger().error("Hardware manager was unable to be configured during cleanup")
-            # ALERT
-            return False
+            self.get_logger().error("Hardware manager was unable to be deactivated during cleanup")
 
-        return True
+        if handle.crash_exception is not None:
+            pass
 
+        self.alert_cli.raise_alert(Level.INFO, self.get_name(), ac.INF_SESSION_CLOSURE_OK, 1.0,
+            brief="session terminated")
+        self.get_logger().info("Session cleaned up.")
 
     async def validate_session_request_criteria(self) -> bool:
         if not self.hwmng_sup.is_ready():
             self.get_logger().error("Hardware manager is not ready (lifecycle services unavailable)")
-            # ALERT
             return False
 
         state_resp = await self.hwmng_sup.change_state_async(Transition.TRANSITION_ACTIVATE, timeout=5.0)
         if not state_resp.success:
             self.get_logger().error("Hardware manager was unable to be activated")
-            # ALERT
             return False
 
         self.get_logger().info("hardware_manager activated successfully")
@@ -107,12 +121,19 @@ class SessManagerNode(LifecycleNode):
     # handler for session creation service
     async def create_session_srv_cb(self, request: CreateSessionRequest, response: CreateSessionResponse) -> CreateSessionResponse:
         self.get_logger().info(f"Received session creation request from {request.client_ip}.")
+        self.alert_cli.raise_alert(
+            Level.INFO, 
+            self.get_name(),
+            ac.INF_SESSION_CREATION_REQUEST, 
+            brief="New session creation was requested",
+            description=f"A session request from ip {request.client_ip} was made."
+        )
 
         if not self._is_active:
             response.success = False
             response.msg = "Session manager is not active"
             self.get_logger().warning("Create session rejected because the session manager node is not active.")
-            # ALERT
+            self._raise_session_fail_alert("Create session rejected because the session manager node is not active.") # alert
             return response
 
         create_args = ACSessionCreationArguments(
@@ -126,9 +147,16 @@ class SessManagerNode(LifecycleNode):
             response.success = False
             response.msg = result.error_msg if (result is not None and result.error_msg is not None) else "Unknown error"
             self.get_logger().warning(f"Session creation failed: {response.msg}")
+            self._raise_session_fail_alert(f"Session creation failed: {response.msg}")
             return response
 
         self.get_logger().info("Session began successfully.")
+        self.alert_cli.raise_alert(
+            Level.INFO, 
+            self.get_name(),
+            ac.INF_SESSION_CREATION_OK, 
+            brief='session began'
+        )
 
         context = result.handle.ctx
         response.success = True
@@ -156,6 +184,17 @@ class SessManagerNode(LifecycleNode):
     def on_error(self, state):
         self._is_active = False
         return TransitionCallbackReturn.ERROR
+
+    ### UTILITY
+
+    def _raise_session_fail_alert(self, reason: str = ''):
+        self.alert_cli.raise_alert(
+            level=Level.ERR,
+            src=self.get_name(),
+            code=ac.ERR_SESSION_CREATION_FAILED,
+            ttl=1.0,
+            brief=reason
+        )
 
 
 def main(args=None):
