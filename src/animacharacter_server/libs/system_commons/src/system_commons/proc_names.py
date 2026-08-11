@@ -2,8 +2,10 @@
 Container module for process global identifiers and utility functions.  
 A process name is usually <domain>:<id> where domain is a string that identifies the "type" of process, and id is a unique string that identifies the process within its domain.
 The whole <domain>:<id> string is used as the process name for comparisons.
+
+These names are used as uuids both for process level events and for heartbeats
 """
-# those are the unique string ids that identify processes in a /process_event message
+# those are the unique string ids that identify processes in a /process_event message or a heartbeat owner
 # they are contained here since they are shared between launch files and supervisor_node.py
 
 # domains for names

@@ -9,12 +9,9 @@ An onboard display panel node (or some other signaling tool) can subscribe to /s
 every node emits. Based on these events, the supervisor updates a local FSM model of the system, and publishes updates to /system_status. 
 
 """
-from typing import Callable, Any, cast
 import time
 
 import rclpy
-from rclpy.timer import Timer
-from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from interfaces.msg import ProcessEvent, SystemStatus
@@ -27,11 +24,12 @@ from system_alerts.transport import to_ros_alert, from_ros_alert
 
 from .lifecycle_sup_utility import LifecycleNodeSupervisor
 from .launch_utils import SysEventType
-from . import proc_names as pn
 from .ros_async_utils import BetterAsyncNode
 from .state_machine.event_mapper import map_alert_to_system_event
 from .state_machine.system_fsm import SystemFSM, SystemState, SystemEvent
 from .heartbeats import HeartbeatListener
+
+from system_commons import proc_names as pn
 
 PROCESS_EVENTS_TOPIC = "/process_events"
 SYSTEM_STATUS_TOPIC = "/system_status"
@@ -305,7 +303,7 @@ class Supervisor(BetterAsyncNode):
                         f"Raising ERR alert: {exit_cause}")
 
                 # turn this process event into an ERR alert
-                warn_alert = Alert(
+                err_alert = Alert(
                     level=Level.ERR,
                     src = event.proc_name or "unknown-process",
                     code = ac.ERR_NONCRITICAL_PROC_CRASH,
@@ -314,7 +312,7 @@ class Supervisor(BetterAsyncNode):
                     description=f"The non-critical process \"{event.proc_name}\" has crashed with code: {event.exit_code}.\nCause: {exit_cause}",
                     ttl = 30.0 # this alert is temporary, it will be cleared after 30 seconds
                 )
-                self.alert_server.raise_alert(warn_alert)
+                self.alert_server.raise_alert(err_alert)
 
 
             if evt_type == SysEventType.START:
@@ -322,9 +320,28 @@ class Supervisor(BetterAsyncNode):
                 # implement restart counter
             
     def on_heartbeat_timeout_cb(self, hb_name: str) -> None:
-        ...
+        if pn.get_domain_from_proc_name(hb_name) == pn.DOMAIN_CORE:
+            self.get_logger().warning(f"The core process \"{hb_name}\" heartbeat as timed out, raising fatal alert.")
 
+            ftl_alert = Alert(
+                level=Level.FATAL,
+                src = hb_name,
+                code = ac.HEARTBEAT_TIMEOUT,
+                brief=f"Heartbeat {hb_name} has timed out",
+                description=f"The core process \"{hb_name}\" heartbeat has timed out.",
+            )
+            self.alert_server.raise_alert(ftl_alert)
 
+        else:
+            self.get_logger().warning(f"The process \"{hb_name}\" heartbeat as timed out, raising WRN alert.")
+            alrt = Alert(
+                level=Level.WARN,
+                src = hb_name,
+                code = ac.HEARTBEAT_TIMEOUT,
+                brief=f"Heartbeat {hb_name} has timed out",
+                description=f"The non critical process \"{hb_name}\" heartbeat has timed out.",
+            )
+            self.alert_server.raise_alert(alrt)
 
 
 

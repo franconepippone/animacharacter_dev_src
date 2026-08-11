@@ -13,6 +13,7 @@ from orchestration.heartbeats import HeartbeatGenerator
 from system_alerts import SysAlertsClient, Level
 
 from system_commons import alert_codes as ac
+from system_commons import proc_names as pn
 
 from .session_implementations import create_session_manager, ACSessionCreationArguments, SessionHandle, ACSessionContext
 
@@ -48,8 +49,8 @@ class SessManagerNode(LifecycleNode):
             callback_group=cbg
         )
 
-
-        self.hb = HeartbeatGenerator(self, period=5, tolerance=5)
+        # hb automatic generator
+        self.hb = HeartbeatGenerator(self, period=5, tolerance=5, name=pn.SESSION_MANAGER)
 
         # Alert client for raising alerts
         self.alert_cli = SysAlertsClient(self)
@@ -70,6 +71,8 @@ class SessManagerNode(LifecycleNode):
             10,
         )
 
+
+        self.create_timer(10, lambda: rclpy.shutdown())
 
         ### ==============================
         ### SESSION MANAGEMENT OBJECTS
@@ -202,5 +205,8 @@ def main(args=None):
     node = SessManagerNode()
     rclpy.spin(node)
     node.destroy_node()
+
+    while True:
+        pass
 
     rclpy.shutdown()

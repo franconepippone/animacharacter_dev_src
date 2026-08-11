@@ -9,6 +9,8 @@ from rclpy.node import Node
 from interfaces.srv import CreateSession  # replace with your service type
 from rclpy.executors import SingleThreadedExecutor
 
+from system_commons import proc_names as pn
+from orchestration.heartbeats import HeartbeatGenerator
 
 if TYPE_CHECKING:
     from interfaces.srv._create_session import CreateSession_Request as CreateSessionRequest
@@ -35,6 +37,7 @@ class RosServiceNode(Node):
     def __init__(self):
         super().__init__('session_request_listener')
         self.cli = self.create_client(CreateSession, SERVICE_NAME)
+        self.hb = HeartbeatGenerator(self, period=5, tolerance=5, name=pn.SESSION_CONNECTION_SERVER)
 
     def make_session_creation_request(self, args: RequestArguments, timeout_sec: float = 5) -> SessionCreationHttpResponse: 
         """

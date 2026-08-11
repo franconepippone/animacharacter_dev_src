@@ -7,7 +7,7 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 from orchestration.launch_utils import on_process_exit, on_process_start, SysEventType
-from orchestration.proc_names import HARDWARE_MANAGER
+from system_commons.proc_names import HARDWARE_MANAGER
 
 """
 Here we handle the launch of the 'core' subsystem of the ros2 system. Crash of any of these processes
