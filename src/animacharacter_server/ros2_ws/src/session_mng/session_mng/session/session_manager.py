@@ -76,7 +76,7 @@ class SessionManager(Generic[SessCtxT]):
         self._lock = threading.Lock()
 
     async def new_session(self, args) -> SessionStartResult[SessCtxT]:
-        """Create and start a new session if no active session is running."""
+        """Create and start a new session if no active session is running. Must be awaited."""
         with self._lock:
             if self.active_session is not None:
                 return SessionStartResult(

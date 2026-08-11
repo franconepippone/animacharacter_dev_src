@@ -72,7 +72,7 @@ def test_client_state_is_updated_from_server_change():
     alert = Alert(level=Level.WARN, src="motor", code=7, brief="overtemp")
     server.raise_alert(alert)
 
-    assert client.get_active_alerts()[alert.code] == alert
+    assert client.get_active_alerts_table()[alert.code] == alert
 
 
 def test_clear_alert_is_reflected_once_server_publishes_change():
@@ -85,7 +85,7 @@ def test_clear_alert_is_reflected_once_server_publishes_change():
     server.raise_alert(alert)
     client.clear_alert(alert.code)
 
-    assert alert.code not in client.get_active_alerts()
+    assert alert.code not in client.get_active_alerts_table()
 
 
 def test_callbacks_receive_server_updates():
@@ -110,8 +110,8 @@ def test_client_raise_alert_is_processed_by_server_and_mirrored_locally():
 
     client.raise_alert(Level.WARN, "motor", 99, brief="hot")
 
-    assert server.get_active_alerts()[99].code == 99
-    assert client.get_active_alerts()[99].code == 99
+    assert server.get_active_alerts_table()[99].code == 99
+    assert client.get_active_alerts_table()[99].code == 99
 
 
 def _spin_until(
@@ -161,13 +161,13 @@ def test_ros2_nodes_propagate_alerts_across_topics():
         client.raise_alert(Level.WARN, "motor", 123, brief="hot")
 
         _spin_until(
-            lambda: 123 in client.get_active_alerts(),
+            lambda: 123 in client.get_active_alerts_table(),
             timeout=5.0,
             interval=0.1,
             executor=executor,
         )
 
-        assert 123 in client.get_active_alerts()
+        assert 123 in client.get_active_alerts_table()
         assert received_actions == [(AlertActionType.RAISE, 123)]
     finally:
         if rclpy.ok():
@@ -187,7 +187,7 @@ def test_ros2_nodes_propagate_clear_actions():
 
         client.raise_alert(Level.ERR, "driver", 456, brief="fault")
         _spin_until(
-            lambda: 456 in client.get_active_alerts(),
+            lambda: 456 in client.get_active_alerts_table(),
             timeout=5.0,
             interval=0.1,
             executor=executor,
@@ -195,14 +195,14 @@ def test_ros2_nodes_propagate_clear_actions():
 
         client.clear_alert(456)
         _spin_until(
-            lambda: 456 not in client.get_active_alerts(),
+            lambda: 456 not in client.get_active_alerts_table(),
             timeout=5.0,
             interval=0.1,
             executor=executor,
         )
 
-        assert 456 not in client.get_active_alerts()
-        assert server.get_active_alerts() == {}
+        assert 456 not in client.get_active_alerts_table()
+        assert server.get_active_alerts_table() == {}
     finally:
         if rclpy.ok():
             rclpy.shutdown()
@@ -221,7 +221,7 @@ def test_ros2_nodes_handle_repeated_raise_updates():
 
         client.raise_alert(Level.WARN, "motor", 789, brief="first")
         _spin_until(
-            lambda: 789 in client.get_active_alerts(),
+            lambda: 789 in client.get_active_alerts_table(),
             timeout=5.0,
             interval=0.1,
             executor=executor,
@@ -229,14 +229,14 @@ def test_ros2_nodes_handle_repeated_raise_updates():
 
         client.raise_alert(Level.ERR, "motor", 789, brief="second")
         _spin_until(
-            lambda: client.get_active_alerts()[789].brief == "second",
+            lambda: client.get_active_alerts_table()[789].brief == "second",
             timeout=5.0,
             interval=0.1,
             executor=executor,
         )
 
-        assert client.get_active_alerts()[789].brief == "second"
-        assert server.get_active_alerts()[789].brief == "second"
+        assert client.get_active_alerts_table()[789].brief == "second"
+        assert server.get_active_alerts_table()[789].brief == "second"
     finally:
         if rclpy.ok():
             rclpy.shutdown()
@@ -253,12 +253,12 @@ def test_server_auto_expires_alerts_when_ttl_is_reached():
     deadline = time.time() + 0.5
     while time.time() < deadline:
         server._expire_alerts()
-        if 321 not in server.get_active_alerts():
+        if 321 not in server.get_active_alerts_table():
             break
         time.sleep(0.01)
 
-    assert 321 not in server.get_active_alerts()
-    assert 321 not in client.get_active_alerts()
+    assert 321 not in server.get_active_alerts_table()
+    assert 321 not in client.get_active_alerts_table()
 
 
 def _start_alert_change_waiter(
@@ -461,14 +461,7 @@ def test_wait_alert_change_clear_event():
 
         executor.spin_until_future_complete(future)
 
-        assert future.result() == (
-            AlertActionType.CLEAR,
-            Alert(
-                level=Level.INFO,
-                src="",
-                code=alert.code,
-            ),
-        )
+        assert future.result() == (AlertActionType.CLEAR, alert)
 
     finally:
         if rclpy.ok():
@@ -555,7 +548,7 @@ def test_wait_alert_change_ignores_identical_raise():
         executor.spin_until_future_complete(waiter)
 
         assert waiter.result() == (None, None)
-        assert server.get_active_alerts() == {alert.code: alert}
+        assert server.get_active_alerts_table() == {alert.code: alert}
         assert server._change_waiters == []
     finally:
         if rclpy.ok():
@@ -580,11 +573,8 @@ def test_wait_alert_change_receives_ttl_expiry_clear():
         server._expire_alerts()
         executor.spin_until_future_complete(waiter)
 
-        assert waiter.result() == (
-            AlertActionType.CLEAR,
-            Alert(level=Level.INFO, src="", code=alert.code),
-        )
-        assert server.get_active_alerts() == {}
+        assert waiter.result() == (AlertActionType.CLEAR, alert)
+        assert server.get_active_alerts_table() == {}
         assert server._change_waiters == []
     finally:
         if rclpy.ok():

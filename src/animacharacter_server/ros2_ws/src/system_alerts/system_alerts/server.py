@@ -152,16 +152,16 @@ class SysAlertsServer:
 
     def _expire_alerts(self) -> None:
         now = time.monotonic()
-        expired_codes = [
-            code
+        expired_alerts = [
+            alert
             for code, alert in self._active_alerts.items()
             if alert.ttl != math.inf
             and code in self._alert_started_at
             and now - self._alert_started_at[code] >= alert.ttl
         ]
 
-        for code in expired_codes:
+        for alert in expired_alerts:
             self._apply_change(
                 AlertActionType.CLEAR,
-                Alert(level=Level.INFO, src="", code=code),
+                alert,
             )

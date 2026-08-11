@@ -46,8 +46,8 @@ class SysAlertsClient:
     def raise_alert(
         self,
         level: int,
-        code: int,
         src: str,
+        code: int,
         ttl: float = math.inf,
         subcode: int = -1,
         brief: str = "",
@@ -69,9 +69,13 @@ class SysAlertsClient:
         """Send a clear request to the server for the alert identified by code."""
         self._publish_action(AlertActionType.CLEAR, Alert(level=Level.INFO, src="", code=code))
 
-    def get_active_alerts(self) -> dict[int, Alert]:
-        """Return a copy of the locally mirrored active-alert table."""
-        return dict(self._active_alerts)
+    def get_active_alerts_table(self) -> dict[int, Alert]:
+            """Return a copy of the server-authoritative active-alert table."""
+            return dict(self._active_alerts)
+
+    def get_active_alerts(self) -> tuple[Alert, ...]:
+        """Returns a tuple of all the currently active alerts"""
+        return tuple(self._active_alerts.values())
 
     def on_alert_change(self, callback: Callable[[AlertActionType, Alert], None]) -> None:
         """Register a callback invoked for every server-published alert change."""
