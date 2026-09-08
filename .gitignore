@@ -6,6 +6,18 @@ dist/
 wheels/
 *.egg-info
 
+# Mypy
+.mpypy*
+.mypy_cache/
+.mypy_cache
+out/
+out
+
+# In case colon is ran from here
+build
+log
+install
+
 # Virtual environments
 .venv
 

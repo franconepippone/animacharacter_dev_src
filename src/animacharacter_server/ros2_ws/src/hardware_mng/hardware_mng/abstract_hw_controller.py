@@ -19,11 +19,11 @@ from .signals_definitions import (
     SIG_CONTROLLER_GENERIC_EXCEPTION
 )
 
-SPECIAL_PATH_CHARS = {'@'}
+_SPECIAL_PATH_CHARS = {'@'}
 
 # ensures format of config path is correct
 def _cleanup_path(path: str) -> Tuple[str, ...]:
-    invalid = set(path) & SPECIAL_PATH_CHARS
+    invalid = set(path) & _SPECIAL_PATH_CHARS
     if invalid:
         raise ValueError(f"Path contains invalid characters: {invalid}")
     parts = path.split('/')
