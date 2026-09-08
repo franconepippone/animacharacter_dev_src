@@ -1,7 +1,7 @@
 from typing import Dict, Callable, Any
 from collections.abc import Iterable
 
-from animaengine.controllers import BaseHardwareController, MotionCommand
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
 
 from mcudrivers.head_driver import Axis, HeadMcuDriver
 

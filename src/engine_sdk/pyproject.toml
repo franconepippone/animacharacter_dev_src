@@ -1,0 +1,12 @@
+[project]
+name = "animaengine"
+version = "0.1.0"
+description = "SDK library for behavior and controller plugins for the animacharacter engine."
+readme = "README.md"
+authors = []
+requires-python = ">=3.12.3"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"
