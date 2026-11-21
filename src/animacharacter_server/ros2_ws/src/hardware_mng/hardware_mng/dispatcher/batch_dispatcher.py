@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Callable, Iterable, Dict, Set, List, Tuple, Optional, Any, ContextManager
+from typing import TypeVar, Generic, Callable, Iterable, Set, List, Tuple, Optional, Any, ContextManager
 
 from .dispatcher import Dispatcher
 from .utils import HooksContext

@@ -1,28 +1,35 @@
-from typing import Dict, Callable, Any, Tuple, Optional
-from collections.abc import Iterable
-from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
-import socket
 import select
+import socket
 import struct
+from typing import Optional, Tuple
+
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
+from lifecycle_pkg import FaultContext, RecoveryResult, State, TransitionResult
+
 
 class PeerUDP:
     """Simple UDP peer class to send packets to a peer
     """
 
     def __init__(self, peer_addr: Tuple[str, int]):
-        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.s.bind(("", 0))
-        #self.s.setblocking(True)
-
-        self.host_addr = self.s.getsockname()
+        self.s: socket.socket | None = None
         self.peer_addr = peer_addr
 
+    def open(self) -> None:
+        if self.s is not None:
+            return
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.s.bind(("", 0))
+        self.host_addr = self.s.getsockname()
+
     def send(self, packet: bytes) -> None:
-        #print("sending", packet, "to", self.peer_addr)
+        if self.s is None:
+            raise RuntimeError("UDP peer is not open")
         self.s.sendto(packet, self.peer_addr)
 
     def recv(self, timeout: float = 0) -> Optional[bytes]:
-        # Wait for readability
+        if self.s is None:
+            raise RuntimeError("UDP peer is not open")
         ready, _, _ = select.select([self.s], [], [], timeout)
         if not ready:
             return None
@@ -36,6 +43,11 @@ class PeerUDP:
             return packet
 
         return None
+
+    def close(self) -> None:
+        if self.s is not None:
+            self.s.close()
+            self.s = None
 
 
 # found address by running iside WSL:
@@ -88,11 +100,31 @@ class BaseControllerSim(BaseHardwareController):
             return True
         return False
 
-    def initialize_hw(self) -> bool:
-        return self._ping()
+    def on_awake(self) -> TransitionResult:
+        self.peer.open()
+        return (
+            TransitionResult.SUCCESS
+            if self._ping()
+            else TransitionResult.FAIL_RETRY
+        )
 
-    def deinitialize_hw(self) -> bool:
-        return True
+    def on_activate(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_deactivate(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_shutdown(self) -> TransitionResult:
+        self.peer.close()
+        return TransitionResult.SUCCESS
+
+    def on_recover(self, fault: FaultContext) -> RecoveryResult:
+        self.peer.close()
+        return RecoveryResult.success(
+            State.UNCONFIGURED
+            if fault.state_from == State.UNCONFIGURED
+            else State.INACTIVE
+        )
     
     def control(self, commands: list[MotionCommand]):
         # controls the simulated head hardware

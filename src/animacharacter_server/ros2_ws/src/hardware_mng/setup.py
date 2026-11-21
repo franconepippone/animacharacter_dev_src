@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'hardware_mng'
 
@@ -10,6 +12,15 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+
+        (os.path.join('share', package_name, 'launch'),
+            glob('launch/*.launch.py')),
+
+        # (optional) config files
+        (os.path.join('share', package_name, 'config'),
+            glob('config/*') + [
+                'hardware_mng/builtin_plugins/hw_configs.yaml',
+            ]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

@@ -1,10 +1,10 @@
-from typing import Dict, Callable, Any
-from collections.abc import Iterable, Sized
-from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, HardwareCrash
-
 from random import random
 
-# simulate failures during init and deinit
+from lifecycle_pkg import FaultContext, RecoveryResult, TransitionResult
+
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
+
+# Simulate lifecycle failures.
 def faultytrue(fault_chance: float, msg: str) -> bool:
     ok = random() > fault_chance
     print(msg, ok)
@@ -16,11 +16,21 @@ class A_Controller(BaseHardwareController):
         self.subscribe_to_command_group([1,2,3])
         self.faulty_cnt = 0
 
-    def initialize_hw(self) -> bool: 
+    def on_awake(self) -> TransitionResult:
         self.faulty_cnt += 1
-        return self.faulty_cnt > 5 and faultytrue(0.5, "Initializing A:")
+        return (
+            TransitionResult.SUCCESS
+            if self.faulty_cnt > 5 and faultytrue(0.5, "Initializing A:")
+            else TransitionResult.FAIL_RETRY
+        )
     
-    def deinitialize_hw(self) -> bool: return faultytrue(0.5, "Deinitializing A:")
+    def on_activate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_deactivate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_shutdown(self) -> TransitionResult:
+        return TransitionResult.SUCCESS if faultytrue(0.5, "Shutting down A:") else TransitionResult.FAIL_RETRY
+    def on_recover(self, fault: FaultContext) -> RecoveryResult:
+        return RecoveryResult.success(fault.state_from)
+
     def control(self, commands: list[MotionCommand]): print(f"controlling A, got {len(commands)} commands")
 
 
@@ -29,8 +39,15 @@ class B_Controller(BaseHardwareController):
         super().__init__("B", flush_freq=1.0)
         self.subscribe_to_command_group([4,5,6])
     
-    def initialize_hw(self) -> bool: return faultytrue(0.6, "Initializing B:")
-    def deinitialize_hw(self) -> bool: return faultytrue(0.7, "Deinitializing B:")
+    def on_awake(self) -> TransitionResult:
+        return TransitionResult.SUCCESS if faultytrue(0.6, "Initializing B:") else TransitionResult.FAIL_RETRY
+    def on_activate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_deactivate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_shutdown(self) -> TransitionResult:
+        return TransitionResult.SUCCESS if faultytrue(0.7, "Shutting down B:") else TransitionResult.FAIL_RETRY
+    def on_recover(self, fault: FaultContext) -> RecoveryResult:
+        return RecoveryResult.success(fault.state_from)
+
     def control(self, commands: list[MotionCommand]): print(f"controlling B, got {len(commands)} commands")
 
 
@@ -39,9 +56,16 @@ class C_Controller(BaseHardwareController):
         super().__init__("C", flush_freq=1.0)
         self.subscribe_to_command_group([7,8,9])
 
-    def initialize_hw(self) -> bool: return faultytrue(0.5, "Initializing C:")
-    def deinitialize_hw(self) -> bool: return faultytrue(0.2, "Deinitializing C:")
+    def on_awake(self) -> TransitionResult:
+        return TransitionResult.SUCCESS if faultytrue(0.5, "Initializing C:") else TransitionResult.FAIL_RETRY
+    def on_activate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_deactivate(self) -> TransitionResult: return TransitionResult.SUCCESS
+    def on_shutdown(self) -> TransitionResult:
+        return TransitionResult.SUCCESS if faultytrue(0.2, "Shutting down C:") else TransitionResult.FAIL_RETRY
+    def on_recover(self, fault: FaultContext) -> RecoveryResult:
+        return RecoveryResult.success(fault.state_from)
+
     def control(self, commands: list[MotionCommand]): print(f"controlling C, got {len(commands)} commands")
     def read(self):
         if not faultytrue(0.2, "testing read C:"):
-            raise HardwareCrash("C controller became unresponsive")
+            raise RuntimeError("C controller became unresponsive")

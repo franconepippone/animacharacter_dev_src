@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List, Callable, Any
+import warnings
 
 from rclpy.logging import RcutilsLogger
 
@@ -41,6 +42,11 @@ class HWControllerStateReconciler:
             looper: LoopSupervisor, 
             logger: RcutilsLogger
         ):
+        warnings.warn(
+            "HWControllerStateReconciler is deprecated; use lifecycle_pkg runners.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.signal_handler = signal_handler
         self.looper = looper
         self.logger = logger

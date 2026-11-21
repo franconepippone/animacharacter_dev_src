@@ -1,70 +1,87 @@
-"""
-Helper module for runtime plugin parsing / loading.
+from __future__ import annotations
 
-"""
-
-
-from typing import Type
-from types import ModuleType
 import importlib
+import inspect
 import sys
-import yaml
-import os
+from dataclasses import dataclass
+from pathlib import Path
+from types import ModuleType
+from typing import Type
 
-def last_existing_path(paths):
-    """
-    Returns the last existing file path from the given list.
-    If none exist, returns an empty string.
-    """
-    for path in reversed(paths):
-        if os.path.exists(path):
-            return path
-    return ""
+from .abstract_hw_controller import BaseHardwareController
+from .databus import Databus
 
-def register_plugin_dirs(plugin_dirs: list[str]) -> None:
-    """ Adds list of directories to sys.path so python can imports the modules contained in them """
-    for d in plugin_dirs:
-        if d not in sys.path:
-            sys.path.insert(0, d)
 
-def load_yaml_file(path: str) -> dict:
-    """ Loads a yaml file """
+@dataclass(frozen=True)
+class PluginLoadIssue:
+    """A controller path or plugin directory that could not be loaded."""
+
+    source: str
+    message: str
+
+
+def register_plugin_dirs(plugin_dirs: list[str]) -> list[PluginLoadIssue]:
+    """Add existing plugin directories to the Python module search path."""
+    issues: list[PluginLoadIssue] = []
+    for directory in plugin_dirs:
+        path = Path(directory).expanduser()
+        if not path.is_dir():
+            issues.append(
+                PluginLoadIssue(directory, "plugin directory does not exist")
+            )
+            continue
+        resolved = str(path.resolve())
+        if resolved not in sys.path:
+            sys.path.insert(0, resolved)
+    return issues
+
+
+def import_module(path: str) -> ModuleType:
+    """Import a controller module by its Python module path."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-    except FileNotFoundError:
-        raise RuntimeError(f"YAML file not found: {path}")
-    except yaml.YAMLError as e:
-        raise RuntimeError(f"Invalid YAML in {path}: {e}")
-
-    if data is None:
-        return {}  # or raise, depending on your needs
-
-    return data
+        return importlib.import_module(path)
+    except Exception as error:
+        raise RuntimeError(
+            f"Failed to import hardware controller module '{path}': {error}"
+        ) from error
 
 
-def import_class(path: str) -> Type:
-    """ Imports class from module at runtime """
-    try:
-        modulename, classname = path.split(":")
-    except ValueError as e:
-        raise RuntimeError(f"Invalid class path '{path}', use 'path.to.module:class' syntax.")
-    
-    module = import_module(modulename)
-    try:
-        _class = getattr(module, classname)
-    except AttributeError:
-        raise RuntimeError(f"class '{classname}' not found in module {modulename}")
-    
-    return _class
-    
+def import_class(path: str) -> Type[BaseHardwareController]:
+    """Import a controller class using ``module.path:ClassName`` syntax."""
+    module_path, separator, class_name = path.partition(":")
+    if not separator or not module_path or not class_name or ":" in class_name:
+        raise ValueError(
+            f"Invalid controller path '{path}'; expected 'module.path:ClassName'"
+        )
 
-def import_module(path: str) -> ModuleType | None:
-    """ Attempts import of module at runtime """
-    # NOTE for now this only works with a symlink install
-    try:
-        hw_controller_class = importlib.import_module(path)
-        return hw_controller_class
-    
-    except Exception as e:
-        raise RuntimeError(f"Failed to import hardware controller '{path}': {e}.")
+    module = import_module(module_path)
+    controller_class = getattr(module, class_name, None)
+    if not inspect.isclass(controller_class):
+        raise TypeError(
+            f"'{class_name}' in module '{module_path}' is not a class"
+        )
+    if not issubclass(controller_class, BaseHardwareController):
+        raise TypeError(
+            f"'{path}' is not a subclass of BaseHardwareController"
+        )
+    return controller_class
+
+
+def load_controllers(
+    controller_paths: list[str],
+    plugin_dirs: list[str],
+    databus: Databus,
+) -> tuple[list[BaseHardwareController], list[PluginLoadIssue]]:
+    """Load valid controller plugins, returning per-path failures."""
+    issues = register_plugin_dirs(plugin_dirs)
+    BaseHardwareController._databus = databus
+    controllers: list[BaseHardwareController] = []
+
+    for path in controller_paths:
+        try:
+            controller_class = import_class(path)
+            controllers.append(controller_class())
+        except Exception as error:
+            issues.append(PluginLoadIssue(path, str(error)))
+
+    return controllers, issues

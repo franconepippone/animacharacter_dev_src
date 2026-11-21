@@ -1,13 +1,8 @@
 from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler, EmitEvent, LogInfo
-from launch.event_handlers import OnProcessExit, OnProcessStart
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-
-from orchestration.launch_utils import on_process_exit, on_process_start, SysEventType
-from system_commons.proc_names import HARDWARE_MANAGER
 
 """
 Here we handle the launch of the 'core' subsystem of the ros2 system. Crash of any of these processes
@@ -30,7 +25,10 @@ As a reminder: this is done so that the supervisor node can react to system-wide
 
 
 def generate_launch_description():
-    
+    config_file_default = PathJoinSubstitution(
+        [FindPackageShare("hardware_mng"), "config", "hw_configs.yaml"]
+    )
+
     # session manager process (process events callbacks already bound)
     session_manager_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -42,17 +40,58 @@ def generate_launch_description():
         ),
         launch_arguments=None
     )
-    
-    hardware_manager = Node(
-        package='hardware_mng',
-        executable='hardware_mng',
-        output="screen" # TODO what is this?
+    hardware_manager_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [
+                    FindPackageShare("hardware_mng"),
+                    "launch",
+                    "manager.launch.py",
+                ]
+            )
+        ),
+        launch_arguments={
+            "controller_config_file": LaunchConfiguration(
+                "controller_config_file"
+            ),
+            "controller_config_name": LaunchConfiguration(
+                "controller_config_name"
+            ),
+            "plugin_dirs": LaunchConfiguration("plugin_dirs"),
+            "strict_mode": LaunchConfiguration("strict_mode"),
+            "controller_shutdown_timeout": LaunchConfiguration(
+                "controller_shutdown_timeout"
+            ),
+        }.items(),
     )
 
     return LaunchDescription([
-        hardware_manager,
-        RegisterEventHandler(on_process_start(hardware_manager, HARDWARE_MANAGER)),
-        RegisterEventHandler(on_process_exit(hardware_manager, HARDWARE_MANAGER)),
+        DeclareLaunchArgument(
+            "controller_config_file",
+            default_value=config_file_default,
+            description="YAML controller configurations file",
+        ),
+        DeclareLaunchArgument(
+            "controller_config_name",
+            default_value="",
+            description="Named controller configuration; defaults from YAML",
+        ),
+        DeclareLaunchArgument(
+            "plugin_dirs",
+            default_value="",
+            description="Colon-separated plugin import directories",
+        ),
+        DeclareLaunchArgument(
+            "strict_mode",
+            default_value="false",
+            description="Fail node initialization if any controller plugin fails",
+        ),
+        DeclareLaunchArgument(
+            "controller_shutdown_timeout",
+            default_value="10.0",
+            description="Seconds to wait for controller runner threads to stop",
+        ),
+        hardware_manager_launch,
 
         session_manager_launch
     ])

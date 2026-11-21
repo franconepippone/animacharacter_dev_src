@@ -1,13 +1,32 @@
-from typing import Dict, Callable, Any, TypedDict
-from collections.abc import Iterable, Sized
-from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand, ControllerError, ControllerFatal
+from typing import TypedDict
+from random import choice
 
-from random import random, choice
+from lifecycle_pkg import FaultContext, RecoveryResult, TransitionResult
+
+from hardware_mng.abstract_hw_controller import BaseHardwareController, MotionCommand
 
 
 messages = 'hellothere', 'this is a test', 'yes definetly a test', 'hi', 'noway!'
 
-class A_Controller(BaseHardwareController):
+
+class _DatabusController(BaseHardwareController):
+    def on_awake(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_activate(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_deactivate(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_shutdown(self) -> TransitionResult:
+        return TransitionResult.SUCCESS
+
+    def on_recover(self, fault: FaultContext) -> RecoveryResult:
+        return RecoveryResult.success(fault.state_from)
+
+
+class A_Controller(_DatabusController):
     def __init__(self):
         super().__init__("A", flush_freq=1)
         self.subscribe_to_command_group([1,2,3])
@@ -18,8 +37,6 @@ class A_Controller(BaseHardwareController):
             0.0
         )
 
-    def initialize_hw(self) -> bool: return True
-    def deinitialize_hw(self) -> bool: return True
     def control(self, commands: list[MotionCommand]):
         self.writer.write(choice(messages)) 
         print(f"controlling A, got {len(commands)} commands")
@@ -34,7 +51,7 @@ class ConfigType(TypedDict):
     flag: bool
     more: dict | None
 
-class B_Controller(BaseHardwareController):
+class B_Controller(_DatabusController):
     def __init__(self):
         super().__init__("B", flush_freq=1.0)
         self.subscribe_to_command_group([4,5,6])
@@ -48,14 +65,12 @@ class B_Controller(BaseHardwareController):
     def callback_test(self, obj: ConfigType):
         self.logger.info(f"recevied {obj}")
     
-    def initialize_hw(self) -> bool: return True
-    def deinitialize_hw(self) -> bool: return True
     def control(self, commands: list[MotionCommand]): print(f"controlling B, got {len(commands)} commands")
     def read(self):
         msg = self.reader.read()
         print("B ctrl read bus, got", msg)
 
-class C_Controller(BaseHardwareController):
+class C_Controller(_DatabusController):
     def __init__(self):
         super().__init__("C", flush_freq=1.0)
         self.subscribe_to_command_group([7,8,9])
@@ -64,8 +79,6 @@ class C_Controller(BaseHardwareController):
         
         self.reader2 = self.create_databus_reader('A/state/x', float)
 
-    def initialize_hw(self) -> bool: return True
-    def deinitialize_hw(self) -> bool: return True
     def control(self, commands: list[MotionCommand]): print(f"controlling C, got {len(commands)} commands")
     def read(self):
         msg = self.reader2.read()
