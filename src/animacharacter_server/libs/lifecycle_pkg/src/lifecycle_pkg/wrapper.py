@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 from .hooks import Lifecyclable, get_hook_from_transition_id
@@ -35,9 +36,21 @@ class LifecyclableWrapper:
 
     def __init__(self, lifecyclable_object: Lifecyclable) -> None:
         """Initialize an unconfigured wrapper."""
-        self.state: State = State.UNCONFIGURED
+        self._state_lock = threading.Lock()
+        self._state = State.UNCONFIGURED
         self.target: Lifecyclable = lifecyclable_object
         self.current_fault: LifecyclableWrapper.FaultData | None = None
+
+    @property
+    def state(self) -> State:
+        """Return the current lifecycle state safely across threads."""
+        with self._state_lock:
+            return self._state
+
+    @state.setter
+    def state(self, value: State) -> None:
+        with self._state_lock:
+            self._state = value
 
     def _set_faulted(
         self, transition_id: TransitionId, cause_exception: Exception | None

@@ -154,6 +154,26 @@ def test_runner_rejects_faulted_as_target_state(device: RecordedDevice) -> None:
         runner.set_target_state(State.FAULTED)
 
 
+def test_get_live_state_tracks_runner_progress(device: RecordedDevice) -> None:
+    runner = LifecycleRunner(device, initial_target=State.INACTIVE)
+    assert runner.get_live_state() == State.UNCONFIGURED
+
+    thread = threading.Thread(target=runner.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 1.0
+    while (
+        runner.get_live_state() != State.INACTIVE
+        and time.monotonic() < deadline
+    ):
+        time.sleep(0.005)
+
+    assert runner.get_live_state() == State.INACTIVE
+    runner.set_target_state(State.FINALIZED)
+    thread.join(timeout=2.0)
+    assert not thread.is_alive()
+    assert runner.get_live_state() == State.FINALIZED
+
+
 def test_runner_emits_target_state_changes(device: RecordedDevice) -> None:
     sink = RecordingEventSink()
     runner = LifecycleRunner(

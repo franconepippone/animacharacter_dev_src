@@ -7,6 +7,7 @@ import threading
 
 from .events import (
     EventSink,
+    LogEvent,
     FaultEnteredEvent,
     LifecycleEvent,
     LogLevel,
@@ -34,12 +35,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class LifecycleRunner:
-    """Drive a lifecycle component toward a thread-safe target state."""
+    """Drive a lifecycle component toward a target state in a thread-safe way."""
 
     def __init__(
         self,
         lifecyclable: Lifecyclable,
-        initial_target: State = State.ACTIVE,
+        initial_target: State = State.UNCONFIGURED,
         backoff_config: BackoffConfig = DEFAULT_BACKOFF_CONFIG,
         event_sink: EventSink | None = None,
     ) -> None:
@@ -74,7 +75,7 @@ class LifecycleRunner:
                 event = TargetStateChangedEvent(
                     previous_target=previous_target,
                     new_target=target_state,
-                    message="Target state changed",
+                    message=f"Target state changed to {target_state.name}",
                 )
         if event is not None:
             self._emit(event)
@@ -83,6 +84,10 @@ class LifecycleRunner:
         """Return the current target state."""
         with self._cond:
             return self._target_state
+
+    def get_live_state(self) -> State:
+        """Return the current lifecycle state in a thread-safe snapshot."""
+        return self.lc.state
 
     def _wait_for_target_change(
         self, observed_version: int, timeout: float | None = None
@@ -127,7 +132,7 @@ class LifecycleRunner:
                             ),
                             new_state=self.lc.state if recovered else None,
                             message=(
-                                "Recovery succeeded"
+                                f"Recovery succeeded (now at {self.lc.state.name})"
                                 if recovered
                                 else "Recovery failed"
                             ),
@@ -143,7 +148,20 @@ class LifecycleRunner:
                     self._wait_for_target_change(version)
                     continue
 
-                transition_id = NEXT_TRANSITION_MAP[(state, target)]
+                transition_id = NEXT_TRANSITION_MAP.get((state, target))
+                if transition_id is None:
+                    self._emit(
+                        LogEvent(
+                            level=LogLevel.ERROR,
+                            message=(
+                                f"Target {target.name} is unreachable from {state.name}; "
+                                "waiting for a new target state"
+                            ),
+                        )
+                    )
+                    self._wait_for_target_change(version, timeout=5.0)
+                    continue
+
                 outcome = reconcile_step(
                     self.lc, target, self.backoff_config
                 )
@@ -167,8 +185,8 @@ class LifecycleRunner:
         finally:
             self._emit(
                 RunnerExitedEvent(
-                    final_state=self.lc.state,
                     message="Lifecycle runner exited",
+                    final_state=self.lc.state,
                 )
             )
 
@@ -197,7 +215,7 @@ class LifecycleRunner:
                 state_to=state_to,
                 result=result,
                 exception=fault.exception if fault is not None else None,
-                message=f"{transition_id.name} transition completed",
+                message=f"{transition_id.name} transition completed ({result.name})"
             )
         )
 
