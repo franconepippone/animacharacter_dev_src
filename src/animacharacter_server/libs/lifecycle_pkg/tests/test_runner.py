@@ -24,7 +24,7 @@ def test_runner_reaches_active_runs_and_exits_on_finalized(
     runner = LifecycleRunner(
         device,
         initial_target=State.ACTIVE,
-        backoff=BackoffConfig(retry_base_delay=0.0, recover_base_delay=0.0, fault_entry_delay=0.0),
+        backoff_config=BackoffConfig(retry_base_delay=0.0, recover_base_delay=0.0, fault_entry_delay=0.0),
     )
 
     thread = threading.Thread(target=runner.run, daemon=True)
@@ -80,7 +80,7 @@ def test_runner_recovers_from_fault_and_continues_to_target(
     runner = LifecycleRunner(
         device,
         initial_target=State.INACTIVE,
-        backoff=BackoffConfig(retry_base_delay=0.0, recover_base_delay=0.0, fault_entry_delay=0.0),
+        backoff_config=BackoffConfig(retry_base_delay=0.0, recover_base_delay=0.0, fault_entry_delay=0.0),
     )
 
     # Intercept recover call to signal completion

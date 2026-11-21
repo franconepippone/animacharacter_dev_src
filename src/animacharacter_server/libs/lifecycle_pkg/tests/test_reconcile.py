@@ -93,6 +93,9 @@ def test_reconcile_step_applies_configured_retry_and_recovery_backoffs(
 
     # Successful recovery advances state
     device.recover_results = [RecoveryResult.success(State.INACTIVE)]
+    out_rec3 = reconcile_step(wrapper, State.INACTIVE, backoff=cfg)
+    assert out_rec3.progressed is True
+    assert out_rec3.retry_delay == 0.0
     assert wrapper.state == State.INACTIVE
 
 

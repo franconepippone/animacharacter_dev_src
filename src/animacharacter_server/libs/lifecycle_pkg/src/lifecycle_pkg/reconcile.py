@@ -89,15 +89,12 @@ def reconcile_step(
     _validate_reachable_target(current, target_state)
 
     if current == State.FAULTED:
-        fault = wrapper.current_fault
-        result = wrapper.run_recover()
+        attempt = wrapper.current_fault.current_n if wrapper.current_fault else 1
+        wrapper.run_recover()
         if wrapper.state != State.FAULTED:
-            return ReconcileOutcome(progressed=True)
-        attempt = fault.current_n if fault is not None else 1
-        return ReconcileOutcome(
-            progressed=False,
-            retry_delay=backoff.recover_delay_for(attempt),
-        )
+            return ReconcileOutcome(progressed=True, retry_delay=0.0)
+        delay = backoff.recover_delay_for(attempt)
+        return ReconcileOutcome(progressed=False, retry_delay=delay)
 
     if current == target_state:
         return ReconcileOutcome(progressed=False)
