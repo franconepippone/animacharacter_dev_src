@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import queue
 import threading
 
 from .events import (
@@ -31,59 +30,7 @@ from .types import RecoveryResultStatus, State, TransitionId, TransitionResult
 from .wrapper import LifecyclableWrapper, Lifecyclable
 
 
-_EVENT_QUEUE_SIZE = 256
-_EVENT_WORKER_IDLE_TIMEOUT = 0.1
 _LOGGER = logging.getLogger(__name__)
-
-
-class _EventDispatcher:
-    """Deliver events off-thread so sinks cannot stall lifecycle work."""
-
-    def __init__(self, sink: EventSink) -> None:
-        self._sink = sink
-        self._queue: queue.Queue[LifecycleEvent] = queue.Queue(
-            maxsize=_EVENT_QUEUE_SIZE
-        )
-        self._lock = threading.Lock()
-        self._worker: threading.Thread | None = None
-        self.dropped_events = 0
-
-    def emit(self, event: LifecycleEvent) -> None:
-        """Enqueue without waiting; events are dropped if the queue is full."""
-        if isinstance(self._sink, NullEventSink):
-            return
-        try:
-            self._queue.put_nowait(event)
-            with self._lock:
-                if self._worker is None or not self._worker.is_alive():
-                    self._worker = threading.Thread(
-                        target=self._dispatch,
-                        name="lifecycle-event-sink",
-                        daemon=True,
-                    )
-                    self._worker.start()
-        except queue.Full:
-            self.dropped_events += 1
-        except Exception:
-            _LOGGER.exception("Unable to queue lifecycle event")
-
-    def _dispatch(self) -> None:
-        while True:
-            try:
-                event = self._queue.get(timeout=_EVENT_WORKER_IDLE_TIMEOUT)
-            except queue.Empty:
-                with self._lock:
-                    if self._queue.empty():
-                        self._worker = None
-                        return
-                continue
-
-            try:
-                self._sink.emit(event)
-            except Exception:
-                _LOGGER.exception("Lifecycle event sink failed")
-            finally:
-                self._queue.task_done()
 
 
 class LifecycleRunner:
@@ -100,7 +47,7 @@ class LifecycleRunner:
         self.lc = LifecyclableWrapper(lifecyclable)
         _validate_reachable_target(self.lc.state, initial_target)
         self.backoff_config = backoff_config
-        self._event_dispatcher = _EventDispatcher(
+        self._event_sink = (
             event_sink if event_sink is not None else NullEventSink()
         )
         self._cond = threading.Condition()
@@ -117,19 +64,20 @@ class LifecycleRunner:
     def set_target_state(self, target_state: State) -> None:
         """Update the target state and wake the runner."""
         _validate_reachable_target(self.lc.state, target_state)
+        event: TargetStateChangedEvent | None = None
         with self._cond:
             if target_state != self._target_state:
                 previous_target = self._target_state
                 self._target_state = target_state
                 self._target_version += 1
                 self._cond.notify_all()
-                self._emit(
-                    TargetStateChangedEvent(
-                        previous_target=previous_target,
-                        new_target=target_state,
-                        message="Target state changed",
-                    )
+                event = TargetStateChangedEvent(
+                    previous_target=previous_target,
+                    new_target=target_state,
+                    message="Target state changed",
                 )
+        if event is not None:
+            self._emit(event)
 
     def get_target_state(self) -> State:
         """Return the current target state."""
@@ -225,7 +173,10 @@ class LifecycleRunner:
             )
 
     def _emit(self, event: LifecycleEvent) -> None:
-        self._event_dispatcher.emit(event)
+        try:
+            self._event_sink.emit(event)
+        except Exception:
+            _LOGGER.exception("Lifecycle event sink failed")
 
     def _emit_transition(
         self,

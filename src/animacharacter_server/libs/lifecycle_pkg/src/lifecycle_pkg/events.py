@@ -78,10 +78,10 @@ class RunnerExitedEvent(LifecycleEvent):
 
 @runtime_checkable
 class EventSink(Protocol):
-    """Protocol implemented by any logger, console, or event bus consumer."""
+    """Non-blocking sink called synchronously by the lifecycle runner."""
 
     def emit(self, event: LifecycleEvent) -> None:
-        """Consume a log or lifecycle event."""
+        """Consume an event quickly without blocking lifecycle work."""
         ...
 
 

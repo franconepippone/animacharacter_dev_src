@@ -228,35 +228,21 @@ def test_runner_emits_progress_fault_recovery_and_exit_events(
     assert sink.matching(RunnerExitedEvent)[0].final_state == State.FINALIZED
 
 
-def test_blocking_event_sink_does_not_block_runner(device: RecordedDevice) -> None:
-    entered_sink = threading.Event()
-    release_sink = threading.Event()
+def test_runner_emits_events_directly_to_sink(device: RecordedDevice) -> None:
+    emitting_threads: list[threading.Thread] = []
 
-    class BlockingSink:
+    class ThreadRecordingSink:
         def emit(self, event: LifecycleEvent) -> None:
-            entered_sink.set()
-            release_sink.wait(timeout=2.0)
+            emitting_threads.append(threading.current_thread())
 
     runner = LifecycleRunner(
         device,
         initial_target=State.INACTIVE,
-        event_sink=BlockingSink(),
+        event_sink=ThreadRecordingSink(),
     )
-    assert entered_sink.wait(timeout=1.0)
+    runner.set_target_state(State.FINALIZED)
 
-    thread = threading.Thread(target=runner.run, daemon=True)
-    thread.start()
-    try:
-        deadline = time.monotonic() + 1.0
-        while runner.lc.state != State.INACTIVE and time.monotonic() < deadline:
-            time.sleep(0.005)
-        assert runner.lc.state == State.INACTIVE
-        runner.set_target_state(State.FINALIZED)
-        thread.join(timeout=1.0)
-        assert not thread.is_alive()
-    finally:
-        release_sink.set()
-        thread.join(timeout=1.0)
+    assert emitting_threads == [threading.current_thread()] * 2
 
 
 def test_failing_event_sink_does_not_disrupt_runner(
