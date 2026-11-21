@@ -263,6 +263,7 @@ class BaseHardwareController(ABC):
             
             except ControllerError as e:
                 self.logger.error(f"Hardware error in controller '{self.name}': {e}")
+                # TODO must deinitialize first
                 self._set_initialized(False)
                 return LoopRequest(LoopAction.STOP, signal=Signal(
                     SIG_CONTROLLER_ERROR, 

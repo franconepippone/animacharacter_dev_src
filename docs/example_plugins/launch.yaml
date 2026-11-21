@@ -1,0 +1,11 @@
+#
+# Here we select what groups to launch and other launch specific configuration
+#
+#
+
+controller_group: "asdadasdas"
+behaviour_group: "asdadada"
+
+code_remappings:
+  ciccio: "C2"
+  pino: "C3"

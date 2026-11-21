@@ -1,0 +1,13 @@
+.venv
+/plugins <-- mount this
+	launch.yaml <-- contiene le configurazioni di lancio finali
+   /controllers
+	controllers.py
+	configuration.yaml
+   /behaviours
+	behaviours.py
+	/behaviour_pack
+		...
+	configuration.yaml
+README.md
+.gitignore

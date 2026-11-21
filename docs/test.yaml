@@ -23,9 +23,9 @@ groups:
 
   ciccio:
     # builtins group is assigned to behaviors at definition time @behavior(name="ac_builtin_axis_remapper", groups=["ac_builtins"])
-    - include: [ac_builtins, /absolute/path/to/config.yaml@group2, anastasio]
-    - mydevice1
+    include: [ac_builtins, /absolute/path/to/config.yaml@group2, anastasio]
+    - mydevice
     - mydevice2
 
-
-launch_group: ciccio
+# spostato in launch.yaml
+#launch_group: ciccio

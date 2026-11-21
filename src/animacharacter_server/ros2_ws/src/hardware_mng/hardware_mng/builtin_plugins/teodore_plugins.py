@@ -10,6 +10,10 @@ class HeadController(BaseHardwareController):
     def __init__(self):
         super().__init__("head", flush_freq=30.0)
 
+        self.use_alertcode_domain(code='X', id='userdefined')
+
+        self.ALERT_A = self.declare_alert(CODE_A, Severity., )
+
         # helper class to drive the hardware
         self.driver = HeadMcuDriver("COM3", self.logger)
 
