@@ -7,9 +7,9 @@ from lifecycle_pkg import (
     LifecyclableWrapper,
     RecoveryResult,
     State,
-    TransitionResult,
-    reconcile_step,
+    TransitionResult
 )
+from lifecycle_pkg.reconcile import reconcile_step
 from tests.conftest import RecordedDevice
 
 

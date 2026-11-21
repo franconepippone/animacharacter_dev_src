@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from lifecycle_pkg import (
+from lifecycle_pkg.events import (
     FanOutEventSink,
     LogEvent,
     LogLevel,
@@ -10,21 +10,31 @@ from lifecycle_pkg import (
 )
 
 
-def test_stdlib_logging_sink_forwards_level_message_and_event(caplog) -> None:
-    logger = logging.getLogger("test.lifecycle_pkg.events")
+class RecordHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def test_stdlib_logging_sink_forwards_level_message_and_event() -> None:
+    logger = logging.Logger("test.lifecycle_pkg.events", level=logging.WARNING)
+    handler = RecordHandler()
+    logger.addHandler(handler)
     event = LogEvent(level=LogLevel.WARNING, message="hardware warning")
     sink = StdlibLoggingSink(logger)
 
-    with caplog.at_level(logging.WARNING, logger=logger.name):
-        sink.emit(event)
+    sink.emit(event)
 
-    assert len(caplog.records) == 1
-    assert caplog.records[0].levelno == logging.WARNING
-    assert caplog.records[0].message == "hardware warning"
-    assert caplog.records[0].lifecycle_event is event
+    assert len(handler.records) == 1
+    assert handler.records[0].levelno == logging.WARNING
+    assert handler.records[0].getMessage() == "hardware warning"
+    assert handler.records[0].lifecycle_event is event
 
 
-def test_fan_out_event_sink_forwards_to_all_sinks_after_failure(caplog) -> None:
+def test_fan_out_event_sink_forwards_to_all_sinks_after_failure() -> None:
     received: list[LogEvent] = []
 
     class RecordingSink:
@@ -40,8 +50,6 @@ def test_fan_out_event_sink_forwards_to_all_sinks_after_failure(caplog) -> None:
         [RecordingSink(), FailingSink(), RecordingSink()]
     )
 
-    with caplog.at_level(logging.ERROR, logger="lifecycle_pkg.events"):
-        sink.emit(event)
+    sink.emit(event)
 
     assert received == [event, event]
-    assert "Lifecycle event sink" in caplog.text

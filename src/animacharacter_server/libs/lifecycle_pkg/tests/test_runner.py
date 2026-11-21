@@ -4,19 +4,20 @@ import threading
 import time
 
 import pytest
-
-from lifecycle_pkg import (
-    BackoffConfig,
+from lifecycle_pkg.events import (
     FaultEnteredEvent,
     LifecycleEvent,
-    LifecycleRunner,
     RecoveryAttemptEvent,
-    RecoveryResult,
-    RecoveryResultStatus,
     RunnerExitedEvent,
-    State,
     TargetStateChangedEvent,
     TransitionCompletedEvent,
+)
+from lifecycle_pkg import (
+    BackoffConfig,
+    LifecycleRunner,
+    RecoveryResult,
+    RecoveryResultStatus,
+    State,
     TransitionResult,
 )
 from tests.conftest import RecordedDevice

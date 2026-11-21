@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from lifecycle_pkg import (
+from lifecycle_pkg.reconcile import (
     NEXT_TRANSITION_MAP,
     State,
-    TransitionId,
-    VALID_TARGET_STATES,
 )
+from lifecycle_pkg.routing import TransitionId, VALID_TARGET_STATES
 from lifecycle_pkg.routing import _validate_reachable_target, _validate_target_state
 
 
