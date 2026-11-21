@@ -35,7 +35,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'hardware_mng = hardware_mng.entrypoint:main',
+            'hardware_mng = hardware_mng.hardware_mng_node:main',
             'mock_client = hardware_mng.mock_client.client_node:main'
         ],
     },

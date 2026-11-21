@@ -15,6 +15,7 @@ from lifecycle_pkg.events import (
 from lifecycle_pkg import (
     BackoffConfig,
     LifecycleRunner,
+    LifecycleThreadedRunner,
     RecoveryResult,
     RecoveryResultStatus,
     State,
@@ -289,3 +290,31 @@ def test_failing_event_sink_does_not_disrupt_runner(
     runner.set_target_state(State.FINALIZED)
     thread.join(timeout=1.0)
     assert not thread.is_alive()
+
+
+def test_threaded_runner_owns_and_joins_its_worker(
+    device: RecordedDevice,
+) -> None:
+    tick_started = threading.Event()
+    allow_tick_to_finish = threading.Event()
+    device.on_run_started = tick_started
+    device.allow_run_tick = allow_tick_to_finish
+    runner = LifecycleThreadedRunner(
+        device,
+        initial_target=State.ACTIVE,
+        thread_name="test-lifecycle-runner",
+    )
+
+    runner.start()
+    assert tick_started.wait(timeout=2.0)
+    assert runner.is_alive()
+    assert runner.join(timeout=0.01) is False
+
+    runner.set_target_state(State.FINALIZED)
+    allow_tick_to_finish.set()
+    assert runner.join(timeout=2.0)
+    assert not runner.is_alive()
+    assert runner.get_live_state() == State.FINALIZED
+
+    with pytest.raises(RuntimeError, match="finalized"):
+        runner.start()

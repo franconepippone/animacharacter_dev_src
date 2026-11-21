@@ -23,3 +23,8 @@ events. Events are emitted synchronously on the calling thread, so sinks must
 return quickly and must not block lifecycle work. Sink exceptions are logged and
 do not interrupt the runner. Use `NullEventSink` (the default),
 `StdlibLoggingSink`, or `FanOutEventSink` to select how events are consumed.
+
+`LifecycleRunner` is not threaded by itself. Use `LifecycleThreadedRunner`
+when the reconciliation loop should run on an owned background thread; it exposes
+`start()`, `join()`, and `is_alive()` while retaining the same target-state
+controls.

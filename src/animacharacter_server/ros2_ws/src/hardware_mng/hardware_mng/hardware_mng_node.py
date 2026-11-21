@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import json
+import rclpy
 import threading
 import time
-from queue import Empty, SimpleQueue
+from typing import Callable, cast
 
 from diagnostic_msgs.msg import DiagnosticStatus
 from diagnostic_updater import DiagnosticStatusWrapper, Updater
 from interfaces.msg import MotionframeArray
-from lifecycle_pkg.events import (
-    FanOutEventSink,
-    LifecycleEvent,
-    State as ControllerState,
-)
-from lifecycle_pkg import LifecycleRunner
+from lifecycle_pkg import LifecycleThreadedRunner
+from lifecycle_pkg.events import FanOutEventSink, LifecycleEvent, State as ControllerState
 from rclpy.lifecycle import (
     LifecycleNode,
     State as RosLifecycleState,
@@ -28,7 +25,11 @@ from system_commons import proc_names as process_names
 from .abstract_hw_controller import BaseHardwareController, MotionCommand
 from .databus import Databus, DatabusError
 from .dispatcher import Dispatcher
-from .event_sinks import ControllerEventSink, RcutilsEventSink
+from .event_sinks import (
+    ControllerEventSink,
+    ExecutorEventQueue,
+    RcutilsEventSink,
+)
 from .plugins_loader import PluginLoadIssue, load_controllers
 
 
@@ -82,13 +83,13 @@ class HardwareManagerNode(LifecycleNode):
                     command_id, controller.enqueue_command
                 )
 
-        self._controller_events: SimpleQueue[
+        self._controller_events: ExecutorEventQueue[
             tuple[str, LifecycleEvent]
-        ] = SimpleQueue()
+        ] = ExecutorEventQueue()
         self._last_controller_events: dict[str, LifecycleEvent] = {}
-        self._controller_runners: list[LifecycleRunner] = []
-        self._controller_threads: list[threading.Thread] = []
-        self._runners_by_name: dict[str, LifecycleRunner] = {}
+        self._event_consumer_started = False
+        self._controller_runners: list[LifecycleThreadedRunner] = []
+        self._runners_by_name: dict[str, LifecycleThreadedRunner] = {}
         self._controller_lock = threading.RLock()
         self._is_active = False
 
@@ -101,7 +102,6 @@ class HardwareManagerNode(LifecycleNode):
                     status, ctrl
                 ),
             )
-        self.create_timer(0.1, self._consume_controller_events)
         self.create_timer(1.0, self.updater.update)
         self.hb = HeartbeatGenerator(
             self, 5, 5, process_names.HARDWARE_MANAGER
@@ -132,7 +132,9 @@ class HardwareManagerNode(LifecycleNode):
         if len(set(names)) != len(names):
             raise ValueError("Controller plugin names must be unique")
 
-    def _make_runner(self, controller: BaseHardwareController) -> LifecycleRunner:
+    def _make_runner(
+        self, controller: BaseHardwareController
+    ) -> LifecycleThreadedRunner:
         controller_logger = self.get_logger().get_child(controller.name)
         event_sink = FanOutEventSink(
             [
@@ -140,15 +142,16 @@ class HardwareManagerNode(LifecycleNode):
                 ControllerEventSink(controller.name, self._controller_events),
             ]
         )
-        return LifecycleRunner(
+        return LifecycleThreadedRunner(
             controller,
             initial_target=ControllerState.INACTIVE,
             event_sink=event_sink,
+            thread_name=f"lifecycle-{controller.name}",
         )
 
     def _start_controller_runners(self) -> bool:
         with self._controller_lock:
-            if any(thread.is_alive() for thread in self._controller_threads):
+            if any(runner.is_alive() for runner in self._controller_runners):
                 self.get_logger().error(
                     "Cannot configure while controller runner threads are alive"
                 )
@@ -162,25 +165,17 @@ class HardwareManagerNode(LifecycleNode):
                 )
                 return False
 
-            runners: list[LifecycleRunner] = []
-            threads: list[threading.Thread] = []
+            runners: list[LifecycleThreadedRunner] = []
             try:
                 for controller in self.loaded_hw_controllers:
                     runner = self._make_runner(controller)
-                    thread = threading.Thread(
-                        target=runner.run,
-                        name=f"lifecycle-{controller.name}",
-                        daemon=True,
-                    )
-                    thread.start()
+                    runner.start()
                     runners.append(runner)
-                    threads.append(thread)
             except RuntimeError as error:
                 self.get_logger().error(
                     f"Failed to start controller runners: {error}"
                 )
                 self._controller_runners = runners
-                self._controller_threads = threads
                 self._runners_by_name = {
                     controller.name: runner
                     for controller, runner in zip(
@@ -191,7 +186,6 @@ class HardwareManagerNode(LifecycleNode):
                 return False
 
             self._controller_runners = runners
-            self._controller_threads = threads
             self._runners_by_name = {
                 controller.name: runner
                 for controller, runner in zip(
@@ -212,13 +206,13 @@ class HardwareManagerNode(LifecycleNode):
                     return False
 
             deadline = time.monotonic() + self.controller_shutdown_timeout
-            for thread in self._controller_threads:
-                thread.join(timeout=max(0.0, deadline - time.monotonic()))
+            for runner in self._controller_runners:
+                runner.join(timeout=max(0.0, deadline - time.monotonic()))
 
             alive = [
-                thread.name
-                for thread in self._controller_threads
-                if thread.is_alive()
+                runner.thread_name
+                for runner in self._controller_runners
+                if runner.is_alive()
             ]
             unfinished = [
                 runner
@@ -235,7 +229,6 @@ class HardwareManagerNode(LifecycleNode):
             for controller in self.loaded_hw_controllers:
                 controller.clear_pending_work()
             self._controller_runners.clear()
-            self._controller_threads.clear()
             self._runners_by_name.clear()
             return True
 
@@ -251,13 +244,24 @@ class HardwareManagerNode(LifecycleNode):
                 return False
         return True
 
-    def _consume_controller_events(self) -> None:
+    async def _consume_controller_events(self) -> None:
         while True:
-            try:
-                controller_name, event = self._controller_events.get_nowait()
-            except Empty:
-                return
-            self._last_controller_events[controller_name] = event
+            controller_name, event = await self._controller_events.get()
+            with self._controller_lock:
+                self._last_controller_events[controller_name] = event
+
+    def _start_event_consumer(self) -> None:
+        if self._event_consumer_started:
+            return
+        executor = self.executor
+        if executor is None:
+            raise RuntimeError(
+                "Hardware manager must be attached to a ROS executor before configure"
+            )
+        self._controller_events.attach_executor(executor)
+        # rclpy tasks accept coroutine objects, though create_task is typed for callbacks.
+        executor.create_task(cast(Callable[[], None], self._consume_controller_events()))
+        self._event_consumer_started = True
 
     def _check_controller_status(
         self,
@@ -292,7 +296,8 @@ class HardwareManagerNode(LifecycleNode):
 
         status.add("live_state", live_state.name)
         status.add("target_state", target_state.name)
-        event = self._last_controller_events.get(controller.name)
+        with self._controller_lock:
+            event = self._last_controller_events.get(controller.name)
         if event is not None:
             status.add("last_event", event.message or type(event).__name__)
         return status
@@ -322,6 +327,7 @@ class HardwareManagerNode(LifecycleNode):
         self, state: RosLifecycleState
     ) -> TransitionCallbackReturn:
         self.get_logger().debug("Configuring hardware controllers")
+        self._start_event_consumer()
         if not self._start_controller_runners():
             return TransitionCallbackReturn.FAILURE
         return TransitionCallbackReturn.SUCCESS
@@ -371,10 +377,30 @@ class HardwareManagerNode(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
         return TransitionCallbackReturn.SUCCESS
 
-    def destroy_node(self) -> bool:
+    def destroy_node(self) -> None:
         self._is_active = False
         if not self._stop_controller_runners():
             self.get_logger().error(
                 "Some controller threads remain alive during node destruction"
             )
-        return super().destroy_node()
+        super().destroy_node()
+
+
+def main(args: list[str] | None = None) -> None:
+    """Initialize ROS and spin the hardware manager lifecycle node."""
+    rclpy.init(args=args)
+    node: HardwareManagerNode | None = None
+    try:
+        node = HardwareManagerNode()
+        rclpy.spin(node)
+    finally:
+        try:
+            if node is not None:
+                node.destroy_node()
+        finally:
+            if rclpy.ok():
+                rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

@@ -61,7 +61,7 @@ from .reconcile import (
     BackoffConfig,
     DEFAULT_BACKOFF_CONFIG
 )
-from .runner import LifecycleRunner
+from .runner import LifecycleRunner, LifecycleThreadedRunner
 from .types import (
     FaultContext,
     RecoveryResult,
@@ -84,5 +84,6 @@ __all__ = [
     "LifecyclableWrapper",
     "BackoffConfig",
     "DEFAULT_BACKOFF_CONFIG",
-    "LifecycleRunner"
+    "LifecycleRunner",
+    "LifecycleThreadedRunner",
 ]

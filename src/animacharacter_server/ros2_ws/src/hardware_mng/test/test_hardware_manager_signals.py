@@ -4,7 +4,6 @@ from lifecycle_pkg import FaultContext, RecoveryResult, TransitionResult
 
 from hardware_mng.abstract_hw_controller import (
     BaseHardwareController,
-    ControllerError,
     MotionCommand,
 )
 from hardware_mng.databus import Databus
@@ -73,11 +72,6 @@ def test_on_run_propagates_hook_errors_for_lifecycle_recovery():
 
     with pytest.raises(RuntimeError, match="controller failed"):
         controller.on_run()
-
-
-def test_controller_specific_exceptions_are_deprecated():
-    with pytest.warns(DeprecationWarning, match="deprecated"):
-        ControllerError(1, "legacy exception")
 
 
 def test_plugin_loader_loads_valid_controller_classes():

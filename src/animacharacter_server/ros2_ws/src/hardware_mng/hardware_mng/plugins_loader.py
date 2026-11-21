@@ -6,7 +6,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Type
+from typing import Callable, cast
 
 from .abstract_hw_controller import BaseHardwareController
 from .databus import Databus
@@ -46,8 +46,8 @@ def import_module(path: str) -> ModuleType:
         ) from error
 
 
-def import_class(path: str) -> Type[BaseHardwareController]:
-    """Import a controller class using ``module.path:ClassName`` syntax."""
+def import_class(path: str) -> Callable[[], BaseHardwareController]:
+    """Import a no-argument controller class using ``module:ClassName`` syntax."""
     module_path, separator, class_name = path.partition(":")
     if not separator or not module_path or not class_name or ":" in class_name:
         raise ValueError(
@@ -64,7 +64,7 @@ def import_class(path: str) -> Type[BaseHardwareController]:
         raise TypeError(
             f"'{path}' is not a subclass of BaseHardwareController"
         )
-    return controller_class
+    return cast(Callable[[], BaseHardwareController], controller_class)
 
 
 def load_controllers(
@@ -72,7 +72,11 @@ def load_controllers(
     plugin_dirs: list[str],
     databus: Databus,
 ) -> tuple[list[BaseHardwareController], list[PluginLoadIssue]]:
-    """Load valid controller plugins, returning per-path failures."""
+    """Load no-argument controller plugins, returning per-path failures.
+
+    Plugin classes must define ``__init__(self)`` and initialize their base
+    controller with its name and run frequency.
+    """
     issues = register_plugin_dirs(plugin_dirs)
     BaseHardwareController._databus = databus
     controllers: list[BaseHardwareController] = []

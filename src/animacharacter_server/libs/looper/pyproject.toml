@@ -1,0 +1,14 @@
+[project]
+name = "legacy-looper"
+version = "0.1.0"
+description = "Legacy threaded loop utilities retained for compatibility"
+requires-python = ">=3.12.3"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "looper"
+module-root = "src"

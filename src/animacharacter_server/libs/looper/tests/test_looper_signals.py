@@ -1,13 +1,16 @@
 import time
 
-from hardware_mng.looper import LoopAction, LoopActionRequest, LoopSupervisor
+from looper import LoopAction, LoopRequest, LoopSupervisor, Signal
 
 
 def test_loop_signal_handler_is_called_for_stop_requests():
     seen = []
 
     def job(_input_queue, _output_queue):
-        return LoopActionRequest(action=LoopAction.STOP, signal="shutdown")
+        return LoopRequest(
+            action=LoopAction.STOP,
+            signal=Signal("shutdown"),
+        )
 
     def on_signal(signal):
         seen.append(signal)
@@ -19,4 +22,4 @@ def test_loop_signal_handler_is_called_for_stop_requests():
         loop._thread.join(timeout=0.5)
 
     time.sleep(0.05)
-    assert seen == ["shutdown"]
+    assert [signal.name for signal in seen] == ["shutdown"]

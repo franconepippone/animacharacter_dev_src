@@ -234,3 +234,72 @@ class LifecycleRunner:
                     message=f"Fault entered during {fault.transition_id.name}",
                 )
             )
+
+
+class LifecycleThreadedRunner(LifecycleRunner):
+    """Run a lifecycle runner on an owned background thread."""
+
+    def __init__(
+        self,
+        lifecyclable: Lifecyclable,
+        initial_target: State = State.UNCONFIGURED,
+        backoff_config: BackoffConfig = DEFAULT_BACKOFF_CONFIG,
+        event_sink: EventSink | None = None,
+        *,
+        thread_name: str | None = None,
+        daemon: bool = True,
+    ) -> None:
+        super().__init__(
+            lifecyclable,
+            initial_target=initial_target,
+            backoff_config=backoff_config,
+            event_sink=event_sink,
+        )
+        self._thread_name = thread_name or (
+            f"lifecycle-{type(lifecyclable).__name__}"
+        )
+        self._daemon = daemon
+        self._thread_lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+
+    @property
+    def thread_name(self) -> str:
+        """Return the configured worker thread name."""
+        return self._thread_name
+
+    def start(self) -> None:
+        """Start the reconciliation loop on the owned thread."""
+        with self._thread_lock:
+            if self._thread is not None and self._thread.is_alive():
+                raise RuntimeError("Lifecycle runner thread is already running")
+            if self.get_live_state() == State.FINALIZED:
+                raise RuntimeError("A finalized lifecycle runner cannot be restarted")
+
+            thread = threading.Thread(
+                target=self.run,
+                name=self._thread_name,
+                daemon=self._daemon,
+            )
+            self._thread = thread
+            try:
+                thread.start()
+            except RuntimeError:
+                self._thread = None
+                raise
+
+    def join(self, timeout: float | None = None) -> bool:
+        """Wait up to ``timeout`` seconds; return whether the thread stopped."""
+        if timeout is not None and timeout < 0:
+            raise ValueError("timeout cannot be negative")
+        with self._thread_lock:
+            thread = self._thread
+        if thread is None:
+            return True
+
+        thread.join(timeout)
+        return not thread.is_alive()
+
+    def is_alive(self) -> bool:
+        """Return whether the owned reconciliation thread is running."""
+        with self._thread_lock:
+            return self._thread is not None and self._thread.is_alive()

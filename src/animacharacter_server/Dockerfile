@@ -70,21 +70,8 @@ RUN source /opt/ros/kilted/setup.bash && \
 COPY start.sh /usr/local/bin/start
 RUN chmod +x /usr/local/bin/start
 
-# ---------------------------------------------------------
-# Runtime environment
-# ---------------------------------------------------------
-ENV CONTROLLER_BUILTIN_PLUGINS_DIR=/app/ros2_ws/src/hardware_mng/hardware_mng/builtin_plugins
-
-# register both builtin plugins dir and folder reserved to user plugins (can be mounted)
-# Other user specified folders where hardware plugins will be searcehd can be added here
-ENV CONTROLLERS_PLUGIN_DIRS=/app/plugins/hardware_controllers:${CONTROLLER_BUILTIN_PLUGINS_DIR}
-
-# List of possible configuration files. The last one found in the list will be used.
-ENV CONTROLLERS_CONFIG_FILES=${BUILTIN_PLUGINS_DIR}/hw_configs.yaml:/app/plugins/hardware_controllers/hw_configs.yaml
-ENV HWM_INPUT_CONFIG=""
-ENV HWM_STRICT_MODE="true"
-
-# Users who want to add plugins can mount this directory and place them there directly
+# User plugins can be mounted here and selected with the launch-time
+# ``plugin_dirs`` argument.
 RUN mkdir -p /app/plugins/hardware_controllers
 
 RUN echo "source /opt/ros/kilted/setup.bash" >> /etc/bash.bashrc && \

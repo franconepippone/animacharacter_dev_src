@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import time
-import warnings
 from abc import abstractmethod
 from collections.abc import Callable, Iterable
 from queue import Empty, Queue
@@ -43,45 +42,31 @@ def _fetch_dict_deep(
     return True, current
 
 
-class ControllerException(Exception):
-    """Deprecated base class for legacy controller-specific exceptions."""
-
-    def __init__(self, code: int, description: str, *args: object) -> None:
-        warnings.warn(
-            "Controller-specific exceptions are deprecated; raise standard "
-            "exceptions and use lifecycle recovery instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.code = code
-        self.description = description
-        super().__init__(*args)
-
-
-class ControllerWarning(ControllerException):
-    """Deprecated controller warning exception."""
-
-
-class ControllerError(ControllerException):
-    """Deprecated controller error exception."""
-
-
-class ControllerFatal(ControllerException):
-    """Deprecated controller fatal exception."""
-
-
 class MotionCommand(NamedTuple):
     id: int
     value: float
 
 
 class BaseHardwareController(Lifecyclable):
-    """Lifecycle-managed interface for a hardware controller plugin.
+    """Lifecycle-managed base class for a hardware controller plugin.
 
-    Plugins implement ``on_awake``, ``on_activate``, ``on_deactivate``,
-    ``on_shutdown``, and ``on_recover``. Runtime work is performed by
-    ``on_run``, which calls ``read``, config handlers, and ``control`` at
-    ``flush_freq``.
+    Each loaded plugin must be a concrete subclass with a no-argument
+    ``__init__``. The subclass should call ``super().__init__(name, flush_freq)``
+    to set its unique name and run frequency. Implement ``on_awake``,
+    ``on_activate``, ``on_deactivate``, ``on_shutdown``, and ``on_recover`` for
+    lifecycle transitions, plus ``control`` for queued motion commands.
+
+    The manager creates one shared :class:`Databus` before constructing plugins
+    and finalizes its topology before starting their lifecycle runners. Create
+    databus readers and writers in the plugin constructor with
+    ``create_databus_reader`` and ``create_databus_writer``. Each topic has one
+    writer; readers must request the writer's data type. Use the bus to exchange
+    immutable state between controllers. 
+    
+    Note: Runtime work runs on the controller's
+    lifecycle thread: ``on_run`` dispatches queued configuration updates, calls
+    ``read`` and ``control``, then waits as needed to maintain ``flush_freq``. See
+    :class:`Lifecyclable` for more details.
     """
 
     _databus: Databus | None = None
