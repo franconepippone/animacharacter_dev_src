@@ -1,0 +1,3 @@
+- [line 183](hardware_mng/abstract_hw_controller.py) Add per call exception handling
+- use a custom underlying event sink for alert events.
+- add bonds (ditch custom hearthbeat)

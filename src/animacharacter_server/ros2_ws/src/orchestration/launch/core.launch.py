@@ -59,8 +59,8 @@ def generate_launch_description():
             ),
             "plugin_dirs": LaunchConfiguration("plugin_dirs"),
             "strict_mode": LaunchConfiguration("strict_mode"),
-            "controller_shutdown_timeout": LaunchConfiguration(
-                "controller_shutdown_timeout"
+            'controller_operation_timeout': LaunchConfiguration(
+                'controller_operation_timeout'
             ),
         }.items(),
     )
@@ -87,9 +87,12 @@ def generate_launch_description():
             description="Fail node initialization if any controller plugin fails",
         ),
         DeclareLaunchArgument(
-            "controller_shutdown_timeout",
+            'controller_operation_timeout',
             default_value="10.0",
-            description="Seconds to wait for controller runner threads to stop",
+            description=(
+                'Seconds to wait for controller lifecycle state '
+                'reconciliation and runner shutdown'
+            ),
         ),
         hardware_manager_launch,
 

@@ -85,7 +85,7 @@ class BaseHardwareController(Lifecyclable):
         self._config_handlers: dict[tuple[str, ...], ConfigHandler] = {}
         self._input_commands: Queue[MotionCommand] = Queue()
         self._cfg_updates_queue: Queue[dict[str, Any]] = Queue()
-        self.logger = RcutilsLogger(f"HWController-{self.name}")
+        self.logger = RcutilsLogger(f"HWC-{self.name}")
 
     def create_databus_writer(
         self, topic: str, data_type: type[T], initial: T
@@ -179,6 +179,8 @@ class BaseHardwareController(Lifecyclable):
                 commands.append(self._input_commands.get_nowait())
             except Empty:
                 break
+
+        # TODO isolate these methods, so that an exception in one does not crash the whole things
 
         self._execute_queued_config_updates()
         self.read()

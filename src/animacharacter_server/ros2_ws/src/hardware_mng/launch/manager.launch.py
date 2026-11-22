@@ -24,14 +24,14 @@ def _launch_manager(context: Any) -> list[Any]:
     config_name = LaunchConfiguration("controller_config_name").perform(context)
     plugin_dirs_arg = LaunchConfiguration("plugin_dirs").perform(context)
     strict_mode_arg = LaunchConfiguration("strict_mode").perform(context).lower()
-    shutdown_timeout = float(
-        LaunchConfiguration("controller_shutdown_timeout").perform(context)
+    operation_timeout = float(
+        LaunchConfiguration('controller_operation_timeout').perform(context)
     )
 
     if strict_mode_arg not in {"true", "false"}:
         raise ValueError("strict_mode must be 'true' or 'false'")
-    if shutdown_timeout < 0:
-        raise ValueError("controller_shutdown_timeout cannot be negative")
+    if operation_timeout < 0:
+        raise ValueError('controller_operation_timeout cannot be negative')
 
     with open(config_path, encoding="utf-8") as config_file:
         config: Any = yaml.safe_load(config_file)
@@ -68,7 +68,7 @@ def _launch_manager(context: Any) -> list[Any]:
                 "controller_paths": controller_paths,
                 "plugin_dirs": plugin_dirs,
                 "strict_mode": strict_mode_arg == "true",
-                "controller_shutdown_timeout": shutdown_timeout,
+                'controller_operation_timeout': operation_timeout,
             }
         ],
     )
@@ -106,9 +106,12 @@ def generate_launch_description() -> LaunchDescription:
                 description="Fail node initialization if any controller plugin fails",
             ),
             DeclareLaunchArgument(
-                "controller_shutdown_timeout",
+                'controller_operation_timeout',
                 default_value="10.0",
-                description="Seconds to wait for controller runner threads to stop",
+                description=(
+                    'Seconds to wait for controller lifecycle state '
+                    'reconciliation and runner shutdown'
+                ),
             ),
             OpaqueFunction(function=_launch_manager),
         ]
